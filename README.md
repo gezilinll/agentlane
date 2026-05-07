@@ -20,6 +20,22 @@ It should be possible to answer:
 - Which approvals, audits, policies, and lifecycle rules apply?
 - How do we safely create, test, publish, monitor, roll back, and retire agentic work?
 
+## Operating Model
+
+Agentlane treats an Agent Network as multiple coordinated paths, not one giant agent:
+
+- **Personal request path**: people or teams start work from personal, team, DingTalk, document, scheduled, or system-event entry points. A Personal Work Agent carries profile, responsibility tags, preference memory, and permission policy. Ambiguous or cross-domain work can be routed through the Semantic Coordinator, then answered by reusable Domain Agents and executed by the Runtime Fabric.
+- **Fixed workflow path**: scheduled or event-driven workflows can run directly when their trigger, steps, outputs, and recipients are already known. They reuse Domain Agents and Runtime Fabric without forcing every run through semantic orchestration.
+- **Governance feedback path**: quality, permission, stability, cost, and abnormal-output signals flow into governance, escalation, fix/re-run, decision records, and policy or knowledge updates.
+
+The boundary is intentional:
+
+- **Domain Agents** provide domain judgment: definitions, attribution, explanation, and recommendations.
+- **Workflows** define fixed triggers, steps, outputs, recipients, retries, and lifecycle.
+- **Semantic Coordinator** handles route, plan, escalation, and cross-domain reasoning. It does not dispatch machines.
+- **Runtime / Execution Fabric** handles task queue, multi-machine dispatch, concurrency, retry, health checks, capacity, session routing, and failover. It does not decide semantic intent.
+- **Registry / Catalog** records metadata such as owner, permissions, inputs, outputs, evals, and lifecycle. It is referenced by runtime, but does not execute work itself.
+
 ## What Agentlane Manages
 
 Agentlane is not a chatbot UI and not a single-agent framework. It is a product layer for managing an Agent Network:
@@ -48,6 +64,8 @@ Agentlane is not a chatbot UI and not a single-agent framework. It is a product 
 | **Run** | A full execution instance with route plan, tasks, logs, outputs, approvals, and audit records. |
 | **Governance** | Cross-cutting rules for permission, audit, cost, safety, eval, stability, memory, and lifecycle. |
 
+Every formal object should have at least: `name`, `type`, `purpose`, `owner slot`, `inputs / outputs`, `trigger`, `permission`, `eval`, and `lifecycle`.
+
 ## Runtime Terms
 
 `Running Runs` and `Task Queue` intentionally describe different levels:
@@ -65,6 +83,8 @@ Agentlane is currently in the product definition and UI/UX design phase.
 The first product design package is available here:
 
 - [Product UI/UX Design](docs/product/ui-design.md)
+- [Agent Network Runtime Panorama](docs/product/agent-network-runtime-panorama.png)
+- [Agent Network Build Object Map](docs/product/agent-network-build-objects.png)
 - [Product UI Assets](assets/product-ui)
 
 ## Design Preview
