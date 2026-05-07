@@ -87,6 +87,14 @@ The first product design package is available here:
 - [Agent Network Build Object Map](docs/product/agent-network-build-objects.png)
 - [Product UI Assets](assets/product-ui)
 
+## Engineering Workflow
+
+Coding agents and contributors should start from [AGENTS.md](AGENTS.md). The current lightweight repository check is:
+
+```sh
+./scripts/verify.sh
+```
+
 ## Design Preview
 
 ![Agentlane Command Center](assets/product-ui/01-command-center.png)
