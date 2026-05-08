@@ -24,9 +24,11 @@
     "test:e2e:install": "npm run setup:e2e"
   },
   "dependencies": {
+    "@types/ws": "^8.18.1",
     "lucide-react": "^1.14.0",
     "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "react-dom": "^19.2.6",
+    "ws": "^8.20.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0",

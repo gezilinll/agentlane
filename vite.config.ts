@@ -1,7 +1,9 @@
 import { configDefaults, defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
-import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Plugin } from "vite";
+import { WebSocketServer } from "ws";
+import { createRuntimeControlChannel, type RuntimeControlSocket } from "./src/server/runtime-control-channel";
+import { createRuntimeHttpApiHandler } from "./src/server/runtime-http-api";
 import { createRuntimeInventoryStore } from "./src/server/runtime-inventory-store";
 
 export default defineConfig({
@@ -16,70 +18,47 @@ export default defineConfig({
 
 function runtimeInventoryApiPlugin(): Plugin {
   const store = createRuntimeInventoryStore();
+  const controlChannel = createRuntimeControlChannel({ store });
+  const httpHandler = createRuntimeHttpApiHandler({ store, controlChannel });
+  const webSocketServer = new WebSocketServer({ noServer: true });
 
   return {
     name: "agentlane-runtime-inventory-api",
     configureServer(server) {
-      server.middlewares.use(async (request, response, next) => {
+      server.middlewares.use((request, response, next) => {
+        void httpHandler(request, response, next);
+      });
+
+      server.httpServer?.on("upgrade", (request, socket, head) => {
         const requestUrl = new URL(request.url || "/", "http://agentlane.local");
+        if (requestUrl.pathname !== "/api/device-control/ws") return;
 
-        if (request.method === "GET" && requestUrl.pathname === "/api/runtime-inventory/latest") {
-          const snapshot = store.readLatestSnapshot();
-          if (!snapshot) {
-            sendJson(response, 404, { error: "not_found" });
-            return;
-          }
-          sendJson(response, 200, snapshot);
-          return;
-        }
-
-        if (request.method === "POST" && requestUrl.pathname === "/api/device-snapshots") {
-          try {
-            const snapshot = store.writeLatestSnapshot(await readJsonBody(request));
-            sendJson(response, 201, {
-              ok: true,
-              deviceId: snapshot.device.id,
-              observedAt: snapshot.observedAt,
-            });
-          } catch (error) {
-            sendJson(response, 400, {
-              error: error instanceof Error ? error.message : "invalid snapshot",
-            });
-          }
-          return;
-        }
-
-        next();
+        webSocketServer.handleUpgrade(request, socket, head, (webSocket) => {
+          const controlSocket: RuntimeControlSocket = {
+            send(data) {
+              if (webSocket.readyState === webSocket.OPEN) webSocket.send(data);
+            },
+          };
+          controlChannel.attach(controlSocket);
+          webSocket.on("message", (message) => {
+            try {
+              controlChannel.receive(controlSocket, message.toString());
+            } catch (error) {
+              controlSocket.send(JSON.stringify({
+                type: "error",
+                error: error instanceof Error ? error.message : "invalid control message",
+              }));
+            }
+          });
+          webSocket.on("close", () => {
+            controlChannel.detach(controlSocket, "socket closed");
+          });
+          webSocket.on("error", () => {
+            controlChannel.detach(controlSocket, "socket error");
+          });
+          webSocketServer.emit("connection", webSocket, request);
+        });
       });
     },
   };
-}
-
-function readJsonBody(request: IncomingMessage): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    let body = "";
-
-    request.setEncoding("utf8");
-    request.on("data", (chunk) => {
-      body += chunk;
-      if (body.length > 2_000_000) {
-        reject(new Error("request body too large"));
-        request.destroy();
-      }
-    });
-    request.on("end", () => {
-      try {
-        resolve(JSON.parse(body || "{}"));
-      } catch {
-        reject(new Error("invalid json body"));
-      }
-    });
-    request.on("error", reject);
-  });
-}
-
-function sendJson(response: ServerResponse, statusCode: number, payload: unknown): void {
-  response.statusCode = statusCode;
-  response.setHeader("content-type", "application/json; charset=utf-8");
-  response.end(JSON.stringify(payload));
 }
