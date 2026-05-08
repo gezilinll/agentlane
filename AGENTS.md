@@ -11,8 +11,10 @@ Current source of truth:
 - `README.md`: public project overview and operating model.
 - `docs/product/ui-design.md`: product object model, information architecture, pages, flows, and implementation priorities.
 - `docs/product/catalog-page-spec.md`: TinySpec for the first Catalog / Registry page.
+- `docs/product/runtime-device-registration-spec.md`: TinySpec for v1 device registration, collector, runtime adapters, and runtime inventory snapshots.
 - `src/catalog/catalog-object.ts`: initial TypeScript source of truth for Catalog Object shape.
 - `src/catalog/catalog-seed.ts`: first reviewable seed data for the Catalog page.
+- `src/runtime/runtime-normalize.ts`: TypeScript source of truth for v1 runtime inventory normalization.
 - `e2e/catalog-workflow.spec.ts`: browser-level user workflow harness for the Catalog page.
 - `e2e/catalog-layout.spec.ts`: browser-level responsive layout harness for the Catalog page.
 - `docs/product/agent-network-runtime-panorama.png`: runtime panorama.
@@ -49,6 +51,7 @@ Current spec and harness mapping:
 | Catalog page behavior | `docs/product/catalog-page-spec.md` | `src/App.test.tsx`, `npm run check:quick` |
 | Catalog user workflow | `docs/product/catalog-page-spec.md` | `e2e/catalog-workflow.spec.ts`, `npm run check:e2e` |
 | Catalog responsive layout | `docs/product/catalog-page-spec.md` | `e2e/catalog-layout.spec.ts`, `npm run check:e2e` |
+| Runtime device registration | `docs/product/runtime-device-registration-spec.md`, `src/runtime/runtime-normalize.ts` | `src/runtime/runtime-normalize.test.ts`, `src/runtime/device-collector-script.test.ts`, `npm run check:runtime`, `npm run check:quick` |
 | Repo context and docs | `AGENTS.md`, `README.md`, `docs/product/ui-design.md` | `npm run check:repo` |
 
 When a user points out a missed behavior or review gap, decide whether it should become:
@@ -76,7 +79,7 @@ Extend this guide and `./scripts/verify.sh` only when a real project surface app
 - Frontend code: add frontend commands and checks; keep browser layout checks in Playwright when jsdom cannot prove behavior.
 - Backend service: add API, schema, migration, and contract checks.
 - Catalog object models: document the schema source of truth and generated-file policy if any.
-- Runtime / Execution Fabric: add worker setup, sandbox, queue, health-check, and artifact rules.
+- Runtime / Execution Fabric: add worker setup, collector registration, runtime adapter, sandbox, queue, health-check, and artifact rules.
 - PR or release flow: add the smallest useful gates for owner review, approval boundary, audit evidence, and rollback notes.
 
 Do not add empty `specs/`, `evals/`, `harnesses/`, service directories, heavyweight spec frameworks, or generic agent platform rules before Agentlane has an Agentlane-specific need.
@@ -103,6 +106,7 @@ Current harness scripts:
 |---|---|---|
 | `npm run setup:e2e` | Install the current Playwright Chromium browser. | Once per local machine, or when Playwright asks for browser installation. |
 | `npm run check:repo` | Required source-of-truth paths and local Markdown links. | Docs, assets, agent context, or product spec changes. |
+| `npm run check:runtime` | Focused Runtime / Device Registration unit and script harness. | Runtime inventory model, collector, installer, fixture, or adapter changes. |
 | `npm run check:quick` | TypeScript typecheck plus Vitest unit/component tests. | Catalog model, query logic, React behavior, labels, or seed data changes. |
 | `npm run check:build` | Production TypeScript/Vite build. | Frontend, dependency, Vite, TypeScript, or package changes. |
 | `npm run check:e2e` | Playwright browser harness for core user workflow and responsive layout. | UI interaction paths, layout, toolbar, responsive behavior, navigation shell, or visual regression risk. |

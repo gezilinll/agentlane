@@ -1,0 +1,61 @@
+{
+  "observedAt": "2026-05-08T08:00:01.000Z",
+  "collector": {
+    "version": "0.1.0",
+    "status": "online"
+  },
+  "device": {
+    "id": "fixture-mac",
+    "name": "Fixture Mac",
+    "hostname": "fixture-mac.local",
+    "os": "darwin",
+    "architecture": "arm64",
+    "status": "online",
+    "connectionMode": "collector",
+    "lastSeenAt": "2026-05-08T08:00:01.000Z"
+  },
+  "runtimes": [
+    {
+      "id": "fixture-mac:openclaw:gateway-18789",
+      "deviceId": "fixture-mac",
+      "kind": "openclaw",
+      "name": "OpenClaw Gateway",
+      "status": "online",
+      "version": "2026.4.27",
+      "capabilities": ["health", "status", "tasks"],
+      "lastSeenAt": "2026-05-08T08:00:01.000Z",
+      "sourceRefs": [{ "source": "openclaw", "externalId": "gateway-18789", "label": "OpenClaw Gateway" }]
+    },
+    {
+      "id": "fixture-mac:slock:slock-daemon",
+      "deviceId": "fixture-mac",
+      "kind": "slock",
+      "name": "Slock daemon",
+      "status": "online",
+      "capabilities": ["agent:start", "agent:deliver"],
+      "lastSeenAt": "2026-05-08T08:00:01.000Z",
+      "sourceRefs": [{ "source": "slock", "externalId": "slock-daemon", "label": "Slock daemon" }]
+    }
+  ],
+  "agents": [
+    {
+      "id": "fixture-mac:openclaw:gateway-18789:agent:main",
+      "runtimeId": "fixture-mac:openclaw:gateway-18789",
+      "name": "main",
+      "origin": "openclaw",
+      "status": "active",
+      "channelBindings": [{ "kind": "dingtalk", "label": "DingTalk default", "status": "enabled" }],
+      "sourceRefs": [{ "source": "openclaw", "externalId": "main", "label": "main" }]
+    },
+    {
+      "id": "fixture-mac:slock:slock-daemon:agent:tester",
+      "runtimeId": "fixture-mac:slock:slock-daemon",
+      "name": "tester",
+      "origin": "slock",
+      "status": "active",
+      "channelBindings": [{ "kind": "slock", "label": "Slock", "status": "enabled" }],
+      "sourceRefs": [{ "source": "slock", "externalId": "tester", "label": "tester" }]
+    }
+  ],
+  "reports": []
+}
