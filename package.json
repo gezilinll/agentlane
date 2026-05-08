@@ -1,0 +1,43 @@
+{
+  "name": "agentlane",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -b && vite build",
+    "setup:e2e": "playwright install chromium",
+    "verify": "./scripts/verify.sh",
+    "check": "npm run verify",
+    "check:full": "npm run verify",
+    "check:repo": "./scripts/check-repo.sh",
+    "check:quick": "npm run typecheck && npm run test:run",
+    "check:build": "npm run build",
+    "check:e2e": "npm run test:e2e",
+    "harness": "npm run check:full",
+    "typecheck": "tsc -b --pretty false",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:e2e": "env -u NO_COLOR playwright test",
+    "test:e2e:install": "npm run setup:e2e"
+  },
+  "dependencies": {
+    "lucide-react": "^1.14.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.57.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^22.19.18",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "jsdom": "^29.1.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.11",
+    "vitest": "^4.1.5"
+  }
+}

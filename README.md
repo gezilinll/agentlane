@@ -78,7 +78,7 @@ A single Run may contain multiple Tasks. For example, one Workflow Run may creat
 
 ## Current Status
 
-Agentlane is currently in the product definition and UI/UX design phase.
+Agentlane is in product definition and early engineering. The first implemented surface is a Chinese-first Catalog / Registry page backed by the initial TypeScript Catalog Object model and seed data.
 
 The first product design package is available here:
 
@@ -87,13 +87,9 @@ The first product design package is available here:
 - [Agent Network Build Object Map](docs/product/agent-network-build-objects.png)
 - [Product UI Assets](assets/product-ui)
 
-## Engineering Workflow
+## For Contributors
 
-Coding agents and contributors should start from [AGENTS.md](AGENTS.md). The current lightweight repository check is:
-
-```sh
-./scripts/verify.sh
-```
+Coding agents and contributors should start from [AGENTS.md](AGENTS.md). That guide contains the current development rules, spec and harness workflow, local commands, and verification expectations.
 
 ## Design Preview
 

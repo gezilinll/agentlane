@@ -1,0 +1,545 @@
+:root {
+  color: #102047;
+  background: #f5f8fc;
+  font-family:
+    Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui,
+    sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 0;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.appShell {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: 100vh;
+  background:
+    linear-gradient(180deg, rgba(224, 237, 250, 0.7), rgba(247, 250, 253, 0.9)),
+    #f5f8fc;
+}
+
+.sideNav {
+  border-right: 1px solid #d8e2f0;
+  background: #ffffff;
+  padding: 18px 14px;
+}
+
+.brandMark {
+  align-items: center;
+  color: #0b2378;
+  display: flex;
+  font-size: 18px;
+  font-weight: 800;
+  gap: 10px;
+  height: 42px;
+  margin-bottom: 20px;
+}
+
+.navList {
+  display: grid;
+  gap: 4px;
+}
+
+.navItem {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #445574;
+  display: flex;
+  gap: 10px;
+  height: 38px;
+  padding: 0 10px;
+  text-align: left;
+}
+
+.navItemActive {
+  background: #eef6ff;
+  border-color: #b9d8ff;
+  color: #0b4fb3;
+  font-weight: 700;
+}
+
+.workspace {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 22px;
+}
+
+.pageHeader,
+.toolbar,
+.metricGrid,
+.contentGrid {
+  min-width: 0;
+  width: 100%;
+}
+
+.pageHeader {
+  align-items: start;
+  display: flex;
+  justify-content: space-between;
+}
+
+.eyebrow {
+  color: #1f8b57;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  margin: 0 0 6px;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  color: #071943;
+  font-size: 28px;
+  line-height: 1.2;
+  margin-bottom: 6px;
+}
+
+.pageSubtitle {
+  color: #5a6a85;
+  margin-bottom: 0;
+}
+
+.primaryButton {
+  align-items: center;
+  background: #0958d9;
+  border: 1px solid #0958d9;
+  border-radius: 6px;
+  color: #fff;
+  display: flex;
+  gap: 8px;
+  height: 38px;
+  padding: 0 14px;
+}
+
+.toolbar {
+  align-items: end;
+  background: #ffffff;
+  border: 1px solid #d9e4f2;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(360px, 1fr) 210px 210px 244px;
+  padding: 12px;
+}
+
+.toolbarField {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.controlLabel {
+  color: #5f6e87;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.searchBox {
+  align-items: center;
+  border: 1px solid #c9d8ea;
+  border-radius: 6px;
+  display: flex;
+  gap: 8px;
+  height: 42px;
+  padding: 0 10px;
+  width: 100%;
+}
+
+.searchBox input {
+  border: 0;
+  color: #102047;
+  outline: 0;
+  width: 100%;
+}
+
+.toolbarField select {
+  background: #fff;
+  border: 1px solid #c9d8ea;
+  border-radius: 6px;
+  color: #102047;
+  height: 42px;
+  padding: 0 10px;
+  width: 100%;
+}
+
+.segmentedControl {
+  align-items: center;
+  background: #eef3f9;
+  border: 1px solid #c9d8ea;
+  border-radius: 6px;
+  display: flex;
+  height: 42px;
+  padding: 3px;
+}
+
+.segmentedControl button {
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: #52617a;
+  flex: 1 1 0;
+  height: 34px;
+  min-width: 0;
+  padding: 0 12px;
+}
+
+.segmentedControl .segmentActive {
+  background: #ffffff;
+  color: #0b4fb3;
+  font-weight: 700;
+}
+
+.metricGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.metricCard {
+  background: #ffffff;
+  border: 1px solid #d9e4f2;
+  border-left: 4px solid #2f6feb;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+}
+
+.metricCard span {
+  color: #63718a;
+  font-size: 13px;
+}
+
+.metricCard strong {
+  color: #071943;
+  font-size: 24px;
+}
+
+.metricgreen {
+  border-left-color: #1f9d5a;
+}
+
+.metricorange {
+  border-left-color: #f59f00;
+}
+
+.metricpurple {
+  border-left-color: #7c58d3;
+}
+
+.contentGrid {
+  align-items: start;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(680px, 1fr) 360px;
+}
+
+.tablePanel,
+.detailPanel {
+  background: #ffffff;
+  border: 1px solid #d9e4f2;
+  border-radius: 8px;
+  box-shadow: 0 12px 30px rgba(17, 42, 81, 0.06);
+}
+
+.tablePanel {
+  overflow: hidden;
+}
+
+.tableSummary {
+  border-bottom: 1px solid #e4ebf5;
+  color: #5c6b84;
+  font-size: 13px;
+  padding: 10px 14px;
+}
+
+.objectTable {
+  display: grid;
+}
+
+.tableRow {
+  align-items: center;
+  background: #fff;
+  border: 0;
+  border-bottom: 1px solid #edf2f8;
+  color: #16294d;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(260px, 1.9fr) 120px 140px 106px 80px 70px;
+  min-height: 58px;
+  padding: 0 14px;
+  text-align: left;
+  width: 100%;
+}
+
+.tableHeader {
+  background: #f7faff;
+  color: #5e6e87;
+  font-size: 12px;
+  font-weight: 800;
+  min-height: 40px;
+}
+
+button.tableRow:hover,
+.tableRowActive {
+  background: #eef6ff;
+}
+
+.nameCell {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.nameCell strong,
+.nameCell small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nameCell small {
+  color: #66758c;
+  font-size: 12px;
+}
+
+.badge,
+.lifecycleBadge,
+.refPill {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 24px;
+  padding: 0 9px;
+}
+
+.badge {
+  background: #eef6ff;
+  color: #0b4fb3;
+}
+
+.lifecycleBadge {
+  background: #edf8f2;
+  color: #1f8b57;
+}
+
+.lifecycle-draft,
+.lifecycle-review {
+  background: #fff7e8;
+  color: #ba6b00;
+}
+
+.lifecycle-pilot {
+  background: #f2efff;
+  color: #6544c2;
+}
+
+.lifecycle-retired,
+.lifecycle-replaced {
+  background: #f2f4f7;
+  color: #667085;
+}
+
+.detailPanel {
+  max-height: calc(100vh - 180px);
+  overflow: auto;
+  padding: 16px;
+}
+
+.detailHeader {
+  align-items: start;
+  border-bottom: 1px solid #e4ebf5;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+}
+
+.detailHeader h2 {
+  color: #071943;
+  font-size: 20px;
+  margin-bottom: 0;
+}
+
+.detailBlock {
+  border-bottom: 1px solid #edf2f8;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+}
+
+.detailBlock h3 {
+  color: #30425f;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.detailBlock p,
+.detailBlock li {
+  color: #52617a;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.detailBlock ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.refList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.refPill {
+  background: #f1f5fb;
+  color: #405371;
+}
+
+.mutedText {
+  color: #8b98aa;
+}
+
+.emptyState {
+  align-items: center;
+  display: grid;
+  min-height: 320px;
+  padding: 24px;
+  text-align: center;
+}
+
+.emptyState h2 {
+  color: #071943;
+  margin-bottom: 8px;
+}
+
+.emptyState p {
+  color: #65758d;
+  margin: 0;
+}
+
+.srOnly {
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  position: absolute;
+  width: 1px;
+}
+
+@media (max-width: 1120px) {
+  .appShell {
+    grid-template-columns: 1fr;
+  }
+
+  .sideNav {
+    border-bottom: 1px solid #d8e2f0;
+    border-right: 0;
+    overflow-x: auto;
+    padding: 12px 14px;
+  }
+
+  .brandMark {
+    margin-bottom: 10px;
+  }
+
+  .navList {
+    display: flex;
+    gap: 6px;
+    min-width: max-content;
+  }
+
+  .navItem {
+    flex: 0 0 auto;
+  }
+
+  .workspace {
+    padding: 16px;
+  }
+
+  .toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .toolbarSearch,
+  .ownerFilter {
+    grid-column: 1 / -1;
+  }
+
+  .metricGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .contentGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .tablePanel {
+    overflow-x: auto;
+  }
+
+  .objectTable {
+    min-width: 840px;
+  }
+
+  .detailPanel {
+    max-height: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .pageHeader {
+    display: grid;
+    gap: 12px;
+  }
+
+  .primaryButton {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .toolbar,
+  .metricGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .toolbarSearch,
+  .ownerFilter {
+    grid-column: auto;
+  }
+
+  .segmentedControl button {
+    flex: 1 1 0;
+    padding: 0 8px;
+  }
+}
