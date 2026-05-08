@@ -162,6 +162,7 @@ export function RuntimeFleetPage() {
         <div className="runtimeStack">
           <DevicePanel snapshot={snapshot} onSelect={() => setSelection({ kind: "device", id: result.device.id })} />
           <RuntimeTable
+            deviceName={snapshot.device.name}
             runtimes={result.runtimes}
             selectedId={selection?.kind === "runtime" ? selection.id : undefined}
             onSelect={(runtime) => setSelection({ kind: "runtime", id: runtime.id })}
@@ -219,10 +220,12 @@ function DevicePanel({
 }
 
 function RuntimeTable({
+  deviceName,
   runtimes,
   selectedId,
   onSelect,
 }: {
+  deviceName: string;
   runtimes: AgentlaneRuntime[];
   selectedId?: string;
   onSelect: (runtime: AgentlaneRuntime) => void;
@@ -243,8 +246,9 @@ function RuntimeTable({
           <div className="assetRow assetHeader runtimeTableRow" role="row">
             <span role="columnheader">名称</span>
             <span role="columnheader">Kind</span>
+            <span role="columnheader">所属设备</span>
             <span role="columnheader">状态</span>
-            <span role="columnheader">能力</span>
+            <span role="columnheader">最近同步</span>
           </div>
           {runtimes.map((runtime) => (
             <button
@@ -265,11 +269,14 @@ function RuntimeTable({
               <span role="cell">
                 <Badge>{runtimeKindLabels[runtime.kind]}</Badge>
               </span>
+              <span className="mutedAssetText" role="cell">
+                {deviceName}
+              </span>
               <span role="cell">
                 <StatusBadge label={runtimeHealthLabels[runtime.status]} status={runtime.status} />
               </span>
               <span className="mutedAssetText" role="cell">
-                {runtime.capabilities.length ? runtime.capabilities.join(", ") : "暂无"}
+                {runtime.lastSeenAt ?? "未知"}
               </span>
             </button>
           ))}
@@ -307,9 +314,8 @@ function AgentTable({
         <div className="assetTable agentTable" role="table" aria-label="Agent 列表">
           <div className="assetRow assetHeader agentTableRow" role="row">
             <span role="columnheader">名称</span>
-            <span role="columnheader">来源</span>
-            <span role="columnheader">Runtime</span>
-            <span role="columnheader">Channel</span>
+            <span role="columnheader">归属 Runtime</span>
+            <span role="columnheader">可用渠道</span>
             <span role="columnheader">状态</span>
           </div>
           {agents.map((agent) => (
@@ -327,9 +333,6 @@ function AgentTable({
               <span className="nameCell" role="cell">
                 <strong>{agent.name}</strong>
                 <small>{agent.id}</small>
-              </span>
-              <span role="cell">
-                <Badge>{sourceLabel(agent.origin)}</Badge>
               </span>
               <span className="mutedAssetText" role="cell">
                 {runtimeNameById.get(agent.runtimeId) ?? agent.runtimeId}
@@ -367,14 +370,12 @@ function RuntimeDetail({ detail }: { detail: RuntimeFleetDetail | null }) {
           <p className="eyebrow">{detail.kind}</p>
           <h2>{detail.title}</h2>
         </div>
-        <StatusBadge label={detail.statusLabel} status={detail.statusLabel} />
+        <StatusBadge label={detail.statusLabel} status={detail.status} />
       </div>
-      <DetailBlock title="说明">{detail.subtitle}</DetailBlock>
-      {detail.kind === "agent" ? <DetailBlock title="Runtime">{detail.runtimeName}</DetailBlock> : null}
-      {detail.kind === "runtime" ? <DetailList title="能力" items={detail.capabilities} /> : null}
-      <DetailList title="Channel" items={detail.channelLabels} emptyLabel="暂无 Channel" />
-      <DetailList title="来源" items={detail.sourceLabels} emptyLabel="暂无来源" />
-      <DetailList title="事实" items={detail.facts} />
+      <DetailBlock title="概览">{detail.subtitle}</DetailBlock>
+      {detail.sections.map((section) => (
+        <DetailList key={section.title} title={section.title} items={section.items} />
+      ))}
     </aside>
   );
 }
@@ -427,10 +428,6 @@ function Badge({ children }: { children: string }) {
 
 function StatusBadge({ label, status }: { label: string; status: string }) {
   return <span className={`statusBadge status-${status}`}>{label}</span>;
-}
-
-function sourceLabel(source: ManagedRuntimeAgent["origin"]): string {
-  return source === "manual" ? "Manual" : runtimeKindLabels[source];
 }
 
 function runtimeCompactLabel(runtime: AgentlaneRuntime): string {

@@ -85,67 +85,45 @@ export interface RuntimeFleetSummary {
 }
 
 /** Detail panel model for device, runtime, or agent selections. */
+export interface RuntimeFleetDetailSection {
+  /** Section title rendered in the detail panel. */
+  title: string;
+  /** Human-readable rows in this section. */
+  items: string[];
+}
+
+interface RuntimeFleetDetailBase {
+  /** Stable object id. */
+  id: string;
+  /** Main detail title. */
+  title: string;
+  /** Detail subtitle. */
+  subtitle: string;
+  /** Normalized status used for badge styling and automation. */
+  status: RuntimeHealthStatus | ManagedAgentStatus;
+  /** Human-readable status label. */
+  statusLabel: string;
+  /** Sectioned details for display. */
+  sections: RuntimeFleetDetailSection[];
+}
+
 export type RuntimeFleetDetail =
-  | {
+  | (RuntimeFleetDetailBase & {
       /** Detail object kind. */
       kind: "device";
-      /** Stable object id. */
-      id: string;
-      /** Main detail title. */
-      title: string;
-      /** Detail subtitle. */
-      subtitle: string;
-      /** Human-readable status label. */
-      statusLabel: string;
-      /** Runtime/channel labels related to this device. */
-      channelLabels: string[];
-      /** Source references related to this object. */
-      sourceLabels: string[];
-      /** Short detail facts for display. */
-      facts: string[];
-    }
-  | {
+    })
+  | (RuntimeFleetDetailBase & {
       /** Detail object kind. */
       kind: "runtime";
-      /** Stable object id. */
-      id: string;
-      /** Main detail title. */
-      title: string;
-      /** Detail subtitle. */
-      subtitle: string;
       /** Runtime kind label. */
       runtimeKindLabel: string;
-      /** Human-readable status label. */
-      statusLabel: string;
-      /** Channel labels from agents attached to this runtime. */
-      channelLabels: string[];
-      /** Source references related to this object. */
-      sourceLabels: string[];
-      /** Runtime capabilities. */
-      capabilities: string[];
-      /** Short detail facts for display. */
-      facts: string[];
-    }
-  | {
+    })
+  | (RuntimeFleetDetailBase & {
       /** Detail object kind. */
       kind: "agent";
-      /** Stable object id. */
-      id: string;
-      /** Main detail title. */
-      title: string;
-      /** Detail subtitle. */
-      subtitle: string;
       /** Runtime name that owns this agent. */
       runtimeName: string;
-      /** Human-readable status label. */
-      statusLabel: string;
-      /** Channel labels where this agent can be used. */
-      channelLabels: string[];
-      /** Source references related to this object. */
-      sourceLabels: string[];
-      /** Short detail facts for display. */
-      facts: string[];
-    };
+    });
 
 /** Summarize one device snapshot for Runtime Fleet cards. */
 export function summarizeRuntimeFleet(snapshot: RuntimeInventorySnapshot): RuntimeFleetSummary {
@@ -229,14 +207,32 @@ export function getRuntimeFleetDetail(
       kind: "device",
       id: snapshot.device.id,
       title: snapshot.device.name,
-      subtitle: snapshot.device.hostname,
+      subtitle: `最近同步 ${snapshot.device.lastSeenAt ?? snapshot.observedAt}`,
+      status: snapshot.device.status,
       statusLabel: runtimeHealthLabels[snapshot.device.status],
-      channelLabels: labelsForAgents(snapshot.agents),
-      sourceLabels: snapshot.runtimes.flatMap((runtime) => sourceLabels(runtime.sourceRefs)),
-      facts: [
-        `OS: ${snapshot.device.os}`,
-        snapshot.device.architecture ? `Arch: ${snapshot.device.architecture}` : "Arch: unknown",
-        `Collector: ${snapshot.collector.version}`,
+      sections: [
+        {
+          title: "身份信息",
+          items: [
+            `Device ID: ${snapshot.device.id}`,
+            `Hostname: ${snapshot.device.hostname}`,
+            `OS: ${snapshot.device.os}`,
+            `Arch: ${snapshot.device.architecture ?? "unknown"}`,
+          ],
+        },
+        {
+          title: "连接状态",
+          items: [
+            "连接方式: Collector",
+            `设备状态: ${runtimeHealthLabels[snapshot.device.status]}`,
+            `最近同步: ${snapshot.device.lastSeenAt ?? snapshot.observedAt}`,
+            `Collector: ${snapshot.collector.version}`,
+          ],
+        },
+        {
+          title: "平台注册",
+          items: platformRegistrationLabels(snapshot.runtimes),
+        },
       ],
     };
   }
@@ -250,16 +246,31 @@ export function getRuntimeFleetDetail(
       kind: "runtime",
       id: runtime.id,
       title: runtime.name,
-      subtitle: runtime.endpoint ?? runtime.id,
+      subtitle: `${runtimeKindLabels[runtime.kind]} · ${runtimeHealthLabels[runtime.status]}`,
       runtimeKindLabel: runtimeKindLabels[runtime.kind],
+      status: runtime.status,
       statusLabel: runtimeHealthLabels[runtime.status],
-      channelLabels: labelsForAgents(agents),
-      sourceLabels: sourceLabels(runtime.sourceRefs),
-      capabilities: runtime.capabilities,
-      facts: [
-        `Kind: ${runtimeKindLabels[runtime.kind]}`,
-        runtime.version ? `Version: ${runtime.version}` : "Version: unknown",
-        `Agents: ${agents.length}`,
+      sections: [
+        {
+          title: "身份信息",
+          items: [
+            `Runtime ID: ${runtime.id}`,
+            `Kind: ${runtimeKindLabels[runtime.kind]}`,
+            `Version: ${runtime.version ?? "unknown"}`,
+          ],
+        },
+        {
+          title: "归属关系",
+          items: [`所属设备: ${snapshot.device.name}`, `Agent 数量: ${agents.length}`],
+        },
+        {
+          title: "运行入口",
+          items: [runtime.endpoint ?? "暂无运行入口"],
+        },
+        {
+          title: "健康状态",
+          items: runtimeHealthItems(runtime),
+        },
       ],
     };
   }
@@ -273,15 +284,27 @@ export function getRuntimeFleetDetail(
       kind: "agent",
       id: agent.id,
       title: agent.name,
-      subtitle: `Origin: ${sourceLabel(agent.origin)}`,
+      subtitle: `${sourceLabel(agent.origin)} · ${managedAgentStatusLabels[agent.status]}`,
       runtimeName: runtime?.name ?? agent.runtimeId,
+      status: agent.status,
       statusLabel: managedAgentStatusLabels[agent.status],
-      channelLabels: agent.channelBindings.map((binding) => binding.label || channelKindLabels[binding.kind]),
-      sourceLabels: sourceLabels(agent.sourceRefs),
-      facts: [
-        `Runtime: ${runtime?.name ?? agent.runtimeId}`,
-        `Origin: ${sourceLabel(agent.origin)}`,
-        `Channels: ${agent.channelBindings.length}`,
+      sections: [
+        {
+          title: "身份信息",
+          items: [`Agent ID: ${agent.id}`, `来源平台: ${sourceLabel(agent.origin)}`, `状态: ${managedAgentStatusLabels[agent.status]}`],
+        },
+        {
+          title: "归属关系",
+          items: [`所属 Runtime: ${runtime?.name ?? agent.runtimeId}`, `所属设备: ${snapshot.device.name}`],
+        },
+        {
+          title: "可用渠道",
+          items: labelsForAgent(agent),
+        },
+        {
+          title: "负载状态",
+          items: agentLoadItems(agent),
+        },
       ],
     };
   }
@@ -332,6 +355,11 @@ function agentMatches(agent: ManagedRuntimeAgent, query: string): boolean {
   );
 }
 
+function labelsForAgent(agent: ManagedRuntimeAgent): string[] {
+  const labels = agent.channelBindings.map((binding) => binding.label || channelKindLabels[binding.kind]);
+  return labels.length ? labels : ["暂无可用渠道"];
+}
+
 function labelsForAgents(agents: ManagedRuntimeAgent[]): string[] {
   return Array.from(
     new Set(
@@ -342,8 +370,32 @@ function labelsForAgents(agents: ManagedRuntimeAgent[]): string[] {
   ).sort();
 }
 
-function sourceLabels(refs: Array<{ source: string; externalId: string; label?: string }>): string[] {
-  return refs.map((ref) => `${ref.source}: ${ref.label ?? ref.externalId}`);
+function platformRegistrationLabels(runtimes: AgentlaneRuntime[]): string[] {
+  const labels = runtimes.flatMap((runtime) =>
+    runtime.sourceRefs.map((ref) => `${sourceLabel(ref.source)}: ${ref.label ?? ref.externalId}`),
+  );
+  return labels.length ? Array.from(new Set(labels)).sort() : ["暂无平台注册"];
+}
+
+function runtimeHealthItems(runtime: AgentlaneRuntime): string[] {
+  return [
+    `状态: ${runtimeHealthLabels[runtime.status]}`,
+    `最近同步: ${runtime.lastSeenAt ?? "unknown"}`,
+    runtime.health?.activeTasks === undefined ? "" : `活跃任务: ${runtime.health.activeTasks}`,
+    runtime.health?.queueDepth === undefined ? "" : `队列深度: ${runtime.health.queueDepth}`,
+    runtime.health?.activeSessions === undefined ? "" : `活跃会话: ${runtime.health.activeSessions}`,
+    runtime.health?.lastError ? `最近错误: ${runtime.health.lastError}` : "",
+  ].filter(Boolean);
+}
+
+function agentLoadItems(agent: ManagedRuntimeAgent): string[] {
+  if (!agent.load) return ["暂无负载数据"];
+  return [
+    agent.load.activeTasks === undefined ? "" : `活跃任务: ${agent.load.activeTasks}`,
+    agent.load.queueDepth === undefined ? "" : `队列深度: ${agent.load.queueDepth}`,
+    agent.load.activeSessions === undefined ? "" : `活跃会话: ${agent.load.activeSessions}`,
+    agent.load.maxConcurrentTasks === undefined ? "" : `最大并发: ${agent.load.maxConcurrentTasks}`,
+  ].filter(Boolean);
 }
 
 function sourceLabel(source: RuntimeSource): string {

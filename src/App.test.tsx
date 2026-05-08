@@ -82,9 +82,11 @@ describe("Catalog page", () => {
     await user.click(screen.getByRole("button", { name: "Runtime Fleet" }));
 
     expect(screen.getByRole("heading", { name: "运行资产" })).toBeInTheDocument();
-    expect(screen.getByText("Fixture Mac")).toBeInTheDocument();
+    expect(within(screen.getByLabelText("设备")).getByText("Fixture Mac")).toBeInTheDocument();
     expect(screen.getByText("OpenClaw Gateway")).toBeInTheDocument();
     expect(screen.getByText("tester")).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "所属设备" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "归属 Runtime" })).toBeInTheDocument();
   });
 
   it("loads Runtime Fleet from the latest backend snapshot when available", async () => {
@@ -106,7 +108,7 @@ describe("Catalog page", () => {
 
     await user.click(screen.getByRole("button", { name: "Runtime Fleet" }));
 
-    expect(await screen.findByText("Backend Fixture Mac")).toBeInTheDocument();
+    expect((await screen.findAllByText("Backend Fixture Mac")).length).toBeGreaterThan(0);
     expect(vi.mocked(globalThis.fetch).mock.calls[0]?.[0]?.toString()).toContain(
       "/api/runtime-inventory/latest",
     );
@@ -127,7 +129,12 @@ describe("Catalog page", () => {
 
     const detail = screen.getByRole("complementary", { name: "运行资产详情" });
     expect(within(detail).getByRole("heading", { name: "tester" })).toBeInTheDocument();
+    expect(within(detail).getByText("归属关系")).toBeInTheDocument();
+    expect(within(detail).getByText("所属 Runtime: Slock daemon")).toBeInTheDocument();
+    expect(within(detail).getByText("所属设备: Fixture Mac")).toBeInTheDocument();
+    expect(within(detail).getByText("可用渠道")).toBeInTheDocument();
     expect(within(detail).getByText("Slock")).toBeInTheDocument();
-    expect(within(detail).getByText("slock: tester")).toBeInTheDocument();
+    expect(within(detail).queryByText("slock: tester")).not.toBeInTheDocument();
+    expect(within(detail).queryByText("事实")).not.toBeInTheDocument();
   });
 });

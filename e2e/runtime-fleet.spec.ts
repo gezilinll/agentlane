@@ -27,16 +27,22 @@ test.describe("Runtime Fleet", () => {
 
     await page.getByRole("button", { name: "Runtime Fleet" }).click();
     await expect(page.getByRole("heading", { name: "运行资产" })).toBeVisible();
-    await expect(page.getByText("Backend Fixture Mac")).toBeVisible();
+    await expect(page.getByLabel("设备").getByText("Backend Fixture Mac")).toBeVisible();
     await expect(page.getByRole("table", { name: "Runtime 列表" })).toContainText("OpenClaw Gateway");
     await expect(page.getByRole("table", { name: "Agent 列表" })).toContainText("tester");
+    await expect(page.getByRole("table", { name: "Runtime 列表" })).toContainText("所属设备");
+    await expect(page.getByRole("table", { name: "Agent 列表" })).toContainText("归属 Runtime");
 
     await page.getByLabel("Channel").selectOption("slock");
     await expect(page.getByRole("table", { name: "Agent 列表" })).toContainText("tester");
     await expect(page.getByRole("table", { name: "Agent 列表" })).not.toContainText("main");
 
     await page.getByRole("row", { name: /tester/ }).click();
-    await expect(page.getByRole("complementary", { name: "运行资产详情" })).toContainText("slock: tester");
+    const detail = page.getByRole("complementary", { name: "运行资产详情" });
+    await expect(detail).toContainText("归属关系");
+    await expect(detail).toContainText("所属 Runtime: Slock daemon");
+    await expect(detail).toContainText("可用渠道");
+    await expect(detail).not.toContainText("slock: tester");
 
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.getByRole("heading", { name: "运行资产" })).toBeVisible();
