@@ -14,6 +14,7 @@ function parseArgs(argv) {
     configPath: "",
     fixturePath: "",
     serverUrl: "",
+    wsUrl: "",
     deviceId: "",
     deviceName: "",
     intervalMs: DEFAULT_INTERVAL_MS,
@@ -32,6 +33,7 @@ function parseArgs(argv) {
     else if (arg === "--config") args.configPath = next();
     else if (arg === "--fixture") args.fixturePath = next();
     else if (arg === "--server-url") args.serverUrl = next();
+    else if (arg === "--ws-url") args.wsUrl = next();
     else if (arg === "--device-id") args.deviceId = next();
     else if (arg === "--device-name") args.deviceName = next();
     else if (arg === "--interval-ms") args.intervalMs = Number(next());
@@ -55,6 +57,7 @@ Options:
   --config <path>        Read collector config JSON
   --fixture <path>       Load a fixture snapshot instead of probing the host
   --server-url <url>     Agentlane server URL
+  --ws-url <url>         Agentlane device control WebSocket URL
   --device-id <id>       Override device id
   --device-name <name>   Override device name
   --interval-ms <ms>     Collection interval when not using --once
@@ -523,6 +526,167 @@ async function runOnce(config, args) {
   const serverUrl = args.serverUrl || config.serverUrl || "";
   if (serverUrl && !args.printOnly) await postSnapshot(serverUrl, snapshot);
   if (args.printOnly || !serverUrl) console.log(JSON.stringify(snapshot, null, 2));
+  return snapshot;
+}
+
+function resolveServerUrl(config, args) {
+  return args.serverUrl || config.serverUrl || "";
+}
+
+function resolveWsUrl(config, args) {
+  const explicitWsUrl = args.wsUrl || config.wsUrl || "";
+  if (explicitWsUrl) return explicitWsUrl;
+  const serverUrl = resolveServerUrl(config, args);
+  if (!serverUrl) return "";
+  try {
+    const url = new URL("/api/device-control/ws", serverUrl);
+    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
+function sendControlMessage(socket, message) {
+  if (socket.readyState !== WebSocket.OPEN) return;
+  socket.send(JSON.stringify({ sentAt: isoNow(), ...message }));
+}
+
+function heartbeatPayload(config, args) {
+  const observedAt = isoNow();
+  const device = createControlDevice(config, args, observedAt);
+  return {
+    type: "heartbeat",
+    deviceId: device.id,
+    deviceName: device.name,
+    hostname: device.hostname,
+    collectorVersion: COLLECTOR_VERSION,
+  };
+}
+
+function mergedControlConfig(config, args) {
+  return {
+    ...config,
+    ...(args.deviceId ? { deviceId: args.deviceId } : {}),
+    ...(args.deviceName ? { deviceName: args.deviceName } : {}),
+  };
+}
+
+function createControlDevice(config, args, observedAt) {
+  if (args.fixturePath) {
+    try {
+      return applyDeviceOverrides(readJsonFile(args.fixturePath), mergedControlConfig(config, args)).device;
+    } catch {
+      // Fall back to local device identity when the fixture cannot be read.
+    }
+  }
+  return createDevice(mergedControlConfig(config, args), observedAt);
+}
+
+async function handleControlMessage(socket, rawMessage, config, args, seenCommandIds) {
+  let message;
+  try {
+    message = JSON.parse(String(rawMessage));
+  } catch {
+    sendControlMessage(socket, { type: "error", error: "invalid control message json" });
+    return;
+  }
+
+  if (message.type !== "inventory.refresh") return;
+  if (!message.commandId) {
+    sendControlMessage(socket, { type: "error", error: "inventory.refresh missing commandId" });
+    return;
+  }
+  if (seenCommandIds.has(message.commandId)) {
+    sendControlMessage(socket, {
+      type: "command.result",
+      commandId: message.commandId,
+      deviceId: message.deviceId || config.deviceId || args.deviceId,
+      status: "succeeded",
+      result: { duplicate: true },
+    });
+    return;
+  }
+
+  seenCommandIds.add(message.commandId);
+  sendControlMessage(socket, {
+    type: "command.accepted",
+    commandId: message.commandId,
+    deviceId: message.deviceId || config.deviceId || args.deviceId,
+  });
+
+  try {
+    const snapshot = await runOnce(config, args);
+    sendControlMessage(socket, {
+      type: "command.result",
+      commandId: message.commandId,
+      deviceId: snapshot.device.id,
+      status: "succeeded",
+      result: { observedAt: snapshot.observedAt },
+    });
+  } catch (error) {
+    sendControlMessage(socket, {
+      type: "command.result",
+      commandId: message.commandId,
+      deviceId: message.deviceId || config.deviceId || args.deviceId,
+      status: "failed",
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+function startControlChannel(config, args) {
+  const wsUrl = resolveWsUrl(config, args);
+  if (!wsUrl || typeof WebSocket === "undefined") return;
+
+  const serverUrl = resolveServerUrl(config, args);
+  if (!serverUrl && !args.printOnly) return;
+
+  const seenCommandIds = new Set();
+  let heartbeatTimer;
+  let reconnectTimer;
+  let closed = false;
+
+  const connect = () => {
+    if (closed) return;
+    const socket = new WebSocket(wsUrl);
+
+    socket.addEventListener("open", () => {
+      const observedAt = isoNow();
+      const device = createControlDevice(config, args, observedAt);
+      sendControlMessage(socket, {
+        type: "hello",
+        deviceId: device.id,
+        deviceName: device.name,
+        hostname: device.hostname,
+        collectorVersion: COLLECTOR_VERSION,
+      });
+      sendControlMessage(socket, heartbeatPayload(config, args));
+      heartbeatTimer = setInterval(() => {
+        sendControlMessage(socket, heartbeatPayload(config, args));
+      }, Math.min(Number(args.intervalMs || config.intervalMs || DEFAULT_INTERVAL_MS), 30_000));
+    });
+
+    socket.addEventListener("message", (event) => {
+      void handleControlMessage(socket, event.data, config, args, seenCommandIds);
+    });
+
+    socket.addEventListener("close", () => {
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      if (!closed) reconnectTimer = setTimeout(connect, 5_000);
+    });
+
+    socket.addEventListener("error", () => {
+      // Close will schedule reconnect. Keep logs quiet so API keys in process args are never echoed.
+    });
+  };
+
+  connect();
+  return () => {
+    closed = true;
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+  };
 }
 
 async function main() {
@@ -535,6 +699,7 @@ async function main() {
   }
 
   await runOnce(config, args);
+  startControlChannel(config, args);
   setInterval(() => {
     runOnce(config, args).catch((error) => {
       console.error(`[agentlane-device-collector] ${error instanceof Error ? error.message : String(error)}`);

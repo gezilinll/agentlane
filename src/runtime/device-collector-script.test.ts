@@ -4,6 +4,7 @@ import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { WebSocketServer } from "ws";
 import { describe, expect, it } from "vitest";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -41,6 +42,8 @@ describe("device collector scripts", () => {
       "test-device",
       "--device-name",
       "Test Device",
+      "--ws-url",
+      "ws://agentlane.local/api/device-control/ws",
       "--once",
       "--no-service",
       "--fixture",
@@ -53,7 +56,11 @@ describe("device collector scripts", () => {
     const snapshot = JSON.parse(output.slice(output.indexOf("{")));
 
     expect(existsSync(installedCollector)).toBe(true);
-    expect(config).toMatchObject({ deviceId: "test-device", deviceName: "Test Device" });
+    expect(config).toMatchObject({
+      deviceId: "test-device",
+      deviceName: "Test Device",
+      wsUrl: "ws://agentlane.local/api/device-control/ws",
+    });
     expect(snapshot.device.id).toBe("test-device");
     expect(snapshot.device.name).toBe("Test Device");
   });
@@ -134,6 +141,44 @@ describe("device collector scripts", () => {
       expect((snapshot.runtimes as Array<{ kind: string }>).map((runtime) => runtime.kind)).toContain("slock");
     } finally {
       server.close();
+    }
+  });
+
+  it("connects to the control channel and handles inventory refresh commands in daemon mode", async () => {
+    const controlServer = await startControlServer();
+    const child = spawn(process.execPath, [
+      collectorScript,
+      "--fixture",
+      fixturePath,
+      "--server-url",
+      controlServer.baseUrl,
+      "--interval-ms",
+      "100000",
+    ], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    try {
+      const result = await controlServer.refreshResult;
+
+      expect(result.hello).toMatchObject({
+        type: "hello",
+        deviceId: "fixture-mac",
+        collectorVersion: "0.1.0",
+      });
+      expect(result.commandResult).toMatchObject({
+        type: "command.result",
+        commandId: "cmd-refresh-1",
+        deviceId: "fixture-mac",
+        status: "succeeded",
+      });
+      expect(result.snapshots.map((snapshot) => (snapshot.device as { id: string }).id)).toEqual([
+        "fixture-mac",
+        "fixture-mac",
+      ]);
+    } finally {
+      child.kill();
+      controlServer.close();
     }
   });
 
@@ -236,5 +281,95 @@ async function startSnapshotServer(): Promise<{
     server,
     receivedSnapshot,
     baseUrl: `http://127.0.0.1:${address.port}`,
+  };
+}
+
+async function startControlServer(): Promise<{
+  baseUrl: string;
+  close: () => void;
+  refreshResult: Promise<{
+    hello: Record<string, unknown>;
+    commandResult: Record<string, unknown>;
+    snapshots: Array<Record<string, unknown>>;
+  }>;
+}> {
+  const snapshots: Array<Record<string, unknown>> = [];
+  let webSocketServer: WebSocketServer | undefined;
+  let server: Server | undefined;
+  let helloMessage: Record<string, unknown> | undefined;
+
+  const refreshResult = new Promise<{
+    hello: Record<string, unknown>;
+    commandResult: Record<string, unknown>;
+    snapshots: Array<Record<string, unknown>>;
+  }>((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error("collector control refresh timed out")), 5000);
+
+    server = createServer((request, response) => {
+      if (request.method !== "POST" || request.url !== "/api/device-snapshots") {
+        response.writeHead(404);
+        response.end();
+        return;
+      }
+
+      let body = "";
+      request.setEncoding("utf8");
+      request.on("data", (chunk) => {
+        body += chunk;
+      });
+      request.on("end", () => {
+        snapshots.push(JSON.parse(body));
+        response.writeHead(201, { "content-type": "application/json" });
+        response.end(JSON.stringify({ ok: true }));
+      });
+    });
+
+    webSocketServer = new WebSocketServer({ noServer: true });
+    server.on("upgrade", (request, socket, head) => {
+      if (request.url !== "/api/device-control/ws") {
+        socket.destroy();
+        return;
+      }
+      webSocketServer?.handleUpgrade(request, socket, head, (webSocket) => {
+        webSocketServer?.emit("connection", webSocket, request);
+      });
+    });
+    webSocketServer.on("connection", (webSocket) => {
+      webSocket.on("message", (data) => {
+        const message = JSON.parse(data.toString()) as Record<string, unknown>;
+        if (message.type === "hello") {
+          helloMessage = message;
+          webSocket.send(JSON.stringify({
+            type: "inventory.refresh",
+            deviceId: message.deviceId,
+            commandId: "cmd-refresh-1",
+          }));
+        }
+        if (message.type === "command.result") {
+          clearTimeout(timeout);
+          resolve({
+            hello: helloMessage ?? {},
+            commandResult: message,
+            snapshots,
+          });
+        }
+      });
+    });
+  });
+
+  if (!server) throw new Error("failed to create control server");
+  await new Promise<void>((resolve) => {
+    server?.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("missing test server address");
+
+  return {
+    baseUrl: `http://127.0.0.1:${address.port}`,
+    close() {
+      webSocketServer?.close();
+      server?.close();
+    },
+    refreshResult,
   };
 }

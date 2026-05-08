@@ -9,6 +9,7 @@ Options:
   --source-dir <path>     Local Agentlane repo/source path that contains scripts/agentlane-device-collector.mjs
   --install-dir <path>    Install directory (default: ~/.agentlane/collector)
   --server-url <url>      Optional Agentlane server URL
+  --ws-url <url>          Optional Agentlane device control WebSocket URL
   --device-id <id>        Device id to register
   --device-name <name>    Human-readable device name
   --device-token <token>  Optional future auth token; stored but not enforced in v1
@@ -23,6 +24,7 @@ EOF
 SOURCE_DIR=""
 INSTALL_DIR="$HOME/.agentlane/collector"
 SERVER_URL=""
+WS_URL=""
 DEVICE_ID=""
 DEVICE_NAME=""
 DEVICE_TOKEN=""
@@ -43,6 +45,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --server-url)
       SERVER_URL="$2"
+      shift 2
+      ;;
+    --ws-url)
+      WS_URL="$2"
       shift 2
       ;;
     --device-id)
@@ -136,13 +142,14 @@ fi
 mkdir -p "$INSTALL_DIR"
 install -m 0755 "$SOURCE_COLLECTOR" "$INSTALL_DIR/agentlane-device-collector.mjs"
 
-"$NODE_BIN" - "$INSTALL_DIR/config.json" "$INSTALL_DIR" "$SERVER_URL" "$DEVICE_ID" "$DEVICE_NAME" "$DEVICE_TOKEN" "$INTERVAL_MS" <<'NODE'
+"$NODE_BIN" - "$INSTALL_DIR/config.json" "$INSTALL_DIR" "$SERVER_URL" "$WS_URL" "$DEVICE_ID" "$DEVICE_NAME" "$DEVICE_TOKEN" "$INTERVAL_MS" <<'NODE'
 const fs = require("node:fs");
 
-const [configPath, installDir, serverUrl, deviceId, deviceName, deviceToken, intervalMs] = process.argv.slice(2);
+const [configPath, installDir, serverUrl, wsUrl, deviceId, deviceName, deviceToken, intervalMs] = process.argv.slice(2);
 const config = {
   installDir,
   serverUrl,
+  wsUrl,
   deviceId,
   deviceName,
   deviceToken,
