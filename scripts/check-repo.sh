@@ -10,11 +10,14 @@ required_paths=(
   "docs/product/ui-design.md"
   "docs/product/catalog-page-spec.md"
   "docs/product/runtime-device-registration-spec.md"
+  "docs/product/runtime-fleet-page-spec.md"
   "playwright.config.ts"
   "e2e/catalog-layout.spec.ts"
   "e2e/catalog-workflow.spec.ts"
+  "e2e/runtime-fleet.spec.ts"
   "src/catalog/catalog-object.ts"
   "src/catalog/index.ts"
+  "src/runtime/runtime-inventory-query.ts"
   "src/runtime/runtime-normalize.ts"
   "scripts/agentlane-device-collector.mjs"
   "scripts/install-device-collector.sh"
@@ -49,6 +52,7 @@ markdown_files = [
     Path("docs/product/ui-design.md"),
     Path("docs/product/catalog-page-spec.md"),
     Path("docs/product/runtime-device-registration-spec.md"),
+    Path("docs/product/runtime-fleet-page-spec.md"),
 ]
 
 problems = []

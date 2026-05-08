@@ -78,12 +78,13 @@ A single Run may contain multiple Tasks. For example, one Workflow Run may creat
 
 ## Current Status
 
-Agentlane is in product definition and early engineering. The first implemented surface is a Chinese-first Catalog / Registry page backed by the initial TypeScript Catalog Object model and seed data. Runtime and device registration are now being shaped through a read-only collector and normalized runtime inventory model.
+Agentlane is in product definition and early engineering. The first implemented surfaces are a Chinese-first Catalog / Registry page and a Runtime Fleet page backed by the initial TypeScript Catalog Object model, collector snapshot fixture, and normalized runtime inventory model. Runtime and device registration are currently read-only; production backend persistence and execution control are still being built.
 
 The first product design package is available here:
 
 - [Product UI/UX Design](docs/product/ui-design.md)
 - [Runtime & Device Registration Spec](docs/product/runtime-device-registration-spec.md)
+- [Runtime Fleet Page Spec](docs/product/runtime-fleet-page-spec.md)
 - [Agent Network Runtime Panorama](docs/product/agent-network-runtime-panorama.png)
 - [Agent Network Build Object Map](docs/product/agent-network-build-objects.png)
 - [Product UI Assets](assets/product-ui)

@@ -263,6 +263,20 @@ h1 {
   grid-template-columns: minmax(680px, 1fr) 360px;
 }
 
+.runtimeFleetGrid {
+  align-items: start;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  min-width: 0;
+}
+
+.runtimeStack {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
 .tablePanel,
 .detailPanel {
   background: #ffffff;
@@ -275,6 +289,76 @@ h1 {
   overflow: hidden;
 }
 
+.runtimeAssetPanel {
+  overflow-x: auto;
+}
+
+.runtimePanelHeader {
+  align-items: center;
+  border-bottom: 1px solid #e4ebf5;
+  color: #32445f;
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 14px;
+}
+
+.runtimePanelHeader h2 {
+  color: #071943;
+  font-size: 16px;
+  line-height: 1.2;
+  margin: 0 0 4px;
+}
+
+.runtimePanelHeader p {
+  color: #6a7890;
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.deviceSummary {
+  align-items: center;
+  background: #fff;
+  border: 0;
+  color: #16294d;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  padding: 14px;
+  text-align: left;
+  width: 100%;
+}
+
+.deviceSummary:hover {
+  background: #f7faff;
+}
+
+.deviceSummary strong,
+.deviceSummary small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deviceSummary small {
+  color: #687890;
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.iconSquare {
+  align-items: center;
+  background: #eef6ff;
+  border: 1px solid #d5e7ff;
+  border-radius: 6px;
+  color: #0b4fb3;
+  display: inline-flex;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
+}
+
 .tableSummary {
   border-bottom: 1px solid #e4ebf5;
   color: #5c6b84;
@@ -284,6 +368,11 @@ h1 {
 
 .objectTable {
   display: grid;
+}
+
+.assetTable {
+  display: grid;
+  min-width: 760px;
 }
 
 .tableRow {
@@ -312,6 +401,48 @@ h1 {
 button.tableRow:hover,
 .tableRowActive {
   background: #eef6ff;
+}
+
+.assetRow {
+  align-items: center;
+  background: #fff;
+  border: 0;
+  border-bottom: 1px solid #edf2f8;
+  color: #16294d;
+  display: grid;
+  gap: 10px;
+  min-height: 56px;
+  padding: 0 14px;
+  text-align: left;
+  width: 100%;
+}
+
+.assetDataRow:hover {
+  background: #eef6ff;
+}
+
+.assetHeader {
+  background: #f7faff;
+  color: #5e6e87;
+  font-size: 12px;
+  font-weight: 800;
+  min-height: 38px;
+}
+
+.runtimeTableRow {
+  grid-template-columns: minmax(240px, 1.4fr) 120px 110px minmax(180px, 1fr);
+}
+
+.agentTableRow {
+  grid-template-columns: minmax(220px, 1.3fr) 120px minmax(180px, 1fr) minmax(160px, 0.8fr) 110px;
+}
+
+.mutedAssetText {
+  color: #5f6f89;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .nameCell {
@@ -427,8 +558,57 @@ button.tableRow:hover,
   color: #405371;
 }
 
+.statusBadge {
+  align-items: center;
+  background: #edf8f2;
+  border-radius: 999px;
+  color: #1f8b57;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 24px;
+  padding: 0 9px;
+}
+
+.status-degraded,
+.status-unknown {
+  background: #fff7e8;
+  color: #ba6b00;
+}
+
+.status-offline,
+.status-inactive {
+  background: #f2f4f7;
+  color: #667085;
+}
+
+.status-idle {
+  background: #eef6ff;
+  color: #0b4fb3;
+}
+
+.channelList {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
 .mutedText {
   color: #8b98aa;
+}
+
+.emptyAsset {
+  color: #65758d;
+  display: grid;
+  min-height: 110px;
+  place-items: center;
+  padding: 18px;
+}
+
+.emptyAsset p {
+  margin: 0;
 }
 
 .emptyState {
@@ -501,6 +681,10 @@ button.tableRow:hover,
   }
 
   .contentGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .runtimeFleetGrid {
     grid-template-columns: 1fr;
   }
 

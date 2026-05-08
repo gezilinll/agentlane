@@ -65,4 +65,35 @@ describe("Catalog page", () => {
 
     expect(screen.getByRole("heading", { name: "没有匹配的对象" })).toBeInTheDocument();
   });
+
+  it("opens Runtime Fleet and renders the fixture runtime inventory", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Runtime Fleet" }));
+
+    expect(screen.getByRole("heading", { name: "运行资产" })).toBeInTheDocument();
+    expect(screen.getByText("Fixture Mac")).toBeInTheDocument();
+    expect(screen.getByText("OpenClaw Gateway")).toBeInTheDocument();
+    expect(screen.getByText("tester")).toBeInTheDocument();
+  });
+
+  it("filters Runtime Fleet agents by channel and opens agent details", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Runtime Fleet" }));
+    await user.selectOptions(screen.getByLabelText("Channel"), "slock");
+
+    const agentTable = screen.getByRole("table", { name: "Agent 列表" });
+    expect(within(agentTable).getByText("tester")).toBeInTheDocument();
+    expect(within(agentTable).queryByText("main")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("row", { name: /tester/ }));
+
+    const detail = screen.getByRole("complementary", { name: "运行资产详情" });
+    expect(within(detail).getByRole("heading", { name: "tester" })).toBeInTheDocument();
+    expect(within(detail).getByText("Slock")).toBeInTheDocument();
+    expect(within(detail).getByText("slock: tester")).toBeInTheDocument();
+  });
 });

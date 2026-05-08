@@ -26,10 +26,14 @@ import {
   type CatalogObjectType,
   type CatalogOwnerFilter,
 } from "./catalog";
+import { RuntimeFleetPage } from "./runtime/RuntimeFleetPage";
 
-const navItems: Array<{ label: string; icon: LucideIcon; active?: boolean }> = [
+type PageKey = "catalog" | "runtime";
+
+const navItems: Array<{ label: string; icon: LucideIcon; page?: PageKey }> = [
   { label: "总控台", icon: Activity },
-  { label: "对象目录", icon: Library, active: true },
+  { label: "对象目录", icon: Library, page: "catalog" },
+  { label: "Runtime Fleet", icon: Server, page: "runtime" },
   { label: "Agent Studio", icon: Bot },
   { label: "Workflow Studio", icon: GitBranch },
   { label: "Skill Registry", icon: Wrench },
@@ -41,6 +45,42 @@ const navItems: Array<{ label: string; icon: LucideIcon; active?: boolean }> = [
 ] as const;
 
 export function App() {
+  const [activePage, setActivePage] = useState<PageKey>("catalog");
+
+  return (
+    <main className="appShell">
+      <aside className="sideNav" aria-label="主导航">
+        <div className="brandMark">
+          <BrainCircuit size={22} aria-hidden="true" />
+          <span>Agentlane</span>
+        </div>
+        <nav className="navList">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = item.page === activePage;
+            return (
+              <button
+                className={isActive ? "navItem navItemActive" : "navItem"}
+                key={item.label}
+                type="button"
+                onClick={() => {
+                  if (item.page) setActivePage(item.page);
+                }}
+              >
+                <Icon size={17} aria-hidden="true" />
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+      </aside>
+
+      {activePage === "runtime" ? <RuntimeFleetPage /> : <CatalogPage />}
+    </main>
+  );
+}
+
+function CatalogPage() {
   const [query, setQuery] = useState("");
   const [type, setType] = useState<CatalogObjectType | "all">("all");
   const [lifecycle, setLifecycle] = useState<CatalogLifecycle | "all">("all");
@@ -66,127 +106,103 @@ export function App() {
   );
 
   return (
-    <main className="appShell">
-      <aside className="sideNav" aria-label="主导航">
-        <div className="brandMark">
-          <BrainCircuit size={22} aria-hidden="true" />
-          <span>Agentlane</span>
+    <section className="workspace">
+      <header className="pageHeader">
+        <div>
+          <p className="eyebrow">Registry / Catalog</p>
+          <h1>对象目录</h1>
+          <p className="pageSubtitle">集中查看正式对象、owner 槽位、生命周期与依赖关系。</p>
         </div>
-        <nav className="navList">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return (
+        <button className="primaryButton" type="button" aria-label="新建对象">
+          <Blocks size={16} aria-hidden="true" />
+          新建对象
+        </button>
+      </header>
+
+      <section className="toolbar" aria-label="对象筛选">
+        <label className="toolbarField toolbarSearch">
+          <span className="controlLabel">搜索</span>
+          <span className="searchBox">
+            <Search size={16} aria-hidden="true" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="搜索名称、用途或标签"
+            />
+          </span>
+        </label>
+
+        <label className="toolbarField">
+          <span className="controlLabel">类型</span>
+          <select
+            data-testid="type-filter"
+            value={type}
+            onChange={(event) => setType(event.target.value as CatalogObjectType | "all")}
+          >
+            <option value="all">全部类型</option>
+            {CATALOG_OBJECT_TYPES.map((objectType) => (
+              <option key={objectType} value={objectType}>
+                {catalogTypeZhLabels[objectType]}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="toolbarField">
+          <span className="controlLabel">生命周期</span>
+          <select
+            data-testid="lifecycle-filter"
+            value={lifecycle}
+            onChange={(event) => setLifecycle(event.target.value as CatalogLifecycle | "all")}
+          >
+            <option value="all">全部状态</option>
+            {CATALOG_LIFECYCLES.map((state) => (
+              <option key={state} value={state}>
+                {catalogLifecycleZhLabels[state]}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div className="toolbarField ownerFilter">
+          <span className="controlLabel" id="owner-filter-label">
+            Owner 状态
+          </span>
+          <div className="segmentedControl" aria-labelledby="owner-filter-label">
+            {[
+              ["all", "全部"],
+              ["tbd", "待定"],
+              ["assigned", "已分配"],
+            ].map(([value, label]) => (
               <button
-                className={item.active ? "navItem navItemActive" : "navItem"}
-                key={item.label}
+                className={owner === value ? "segmentActive" : ""}
+                key={value}
                 type="button"
+                onClick={() => setOwner(value as CatalogOwnerFilter)}
               >
-                <Icon size={17} aria-hidden="true" />
-                <span>{item.label}</span>
+                {label}
               </button>
-            );
-          })}
-        </nav>
-      </aside>
-
-      <section className="workspace">
-        <header className="pageHeader">
-          <div>
-            <p className="eyebrow">Registry / Catalog</p>
-            <h1>对象目录</h1>
-            <p className="pageSubtitle">集中查看正式对象、owner 槽位、生命周期与依赖关系。</p>
+            ))}
           </div>
-          <button className="primaryButton" type="button" aria-label="新建对象">
-            <Blocks size={16} aria-hidden="true" />
-            新建对象
-          </button>
-        </header>
-
-        <section className="toolbar" aria-label="对象筛选">
-          <label className="toolbarField toolbarSearch">
-            <span className="controlLabel">搜索</span>
-            <span className="searchBox">
-              <Search size={16} aria-hidden="true" />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="搜索名称、用途或标签"
-              />
-            </span>
-          </label>
-
-          <label className="toolbarField">
-            <span className="controlLabel">类型</span>
-            <select
-              data-testid="type-filter"
-              value={type}
-              onChange={(event) => setType(event.target.value as CatalogObjectType | "all")}
-            >
-              <option value="all">全部类型</option>
-              {CATALOG_OBJECT_TYPES.map((objectType) => (
-                <option key={objectType} value={objectType}>
-                  {catalogTypeZhLabels[objectType]}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="toolbarField">
-            <span className="controlLabel">生命周期</span>
-            <select
-              data-testid="lifecycle-filter"
-              value={lifecycle}
-              onChange={(event) => setLifecycle(event.target.value as CatalogLifecycle | "all")}
-            >
-              <option value="all">全部状态</option>
-              {CATALOG_LIFECYCLES.map((state) => (
-                <option key={state} value={state}>
-                  {catalogLifecycleZhLabels[state]}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <div className="toolbarField ownerFilter">
-            <span className="controlLabel" id="owner-filter-label">
-              Owner 状态
-            </span>
-            <div className="segmentedControl" aria-labelledby="owner-filter-label">
-              {[
-                ["all", "全部"],
-                ["tbd", "待定"],
-                ["assigned", "已分配"],
-              ].map(([value, label]) => (
-                <button
-                  className={owner === value ? "segmentActive" : ""}
-                  key={value}
-                  type="button"
-                  onClick={() => setOwner(value as CatalogOwnerFilter)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="metricGrid" aria-label="目录概览">
-          <Metric label="对象总数" value={metrics.total} tone="blue" />
-          <Metric label="Owner 待定" value={metrics.tbdOwners} tone="orange" />
-          <Metric label="生产对象" value={metrics.production} tone="green" />
-          <Metric label="评审中" value={metrics.review} tone="purple" />
-        </section>
-
-        <section className="contentGrid">
-          <CatalogTable
-            objects={filteredObjects}
-            selectedId={selectedObject?.id}
-            onSelect={(object) => setSelectedId(object.id)}
-          />
-          <CatalogDetail object={selectedObject} />
-        </section>
+        </div>
       </section>
-    </main>
+
+      <section className="metricGrid" aria-label="目录概览">
+        <Metric label="对象总数" value={metrics.total} tone="blue" />
+        <Metric label="Owner 待定" value={metrics.tbdOwners} tone="orange" />
+        <Metric label="生产对象" value={metrics.production} tone="green" />
+        <Metric label="评审中" value={metrics.review} tone="purple" />
+      </section>
+
+      <section className="contentGrid">
+        <CatalogTable
+          objects={filteredObjects}
+          selectedId={selectedObject?.id}
+          onSelect={(object) => setSelectedId(object.id)}
+        />
+        <CatalogDetail object={selectedObject} />
+      </section>
+    </section>
   );
 }
 

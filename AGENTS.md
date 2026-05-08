@@ -4,7 +4,7 @@ Root guide for coding agents working in this repository. This file is operationa
 
 ## Project State
 
-Agentlane is currently in product definition and early engineering setup. The repository is becoming the control plane for operating an Agent Network. It now has an initial frontend Catalog page, but not yet an implemented backend or runtime system.
+Agentlane is currently in product definition and early engineering setup. The repository is becoming the control plane for operating an Agent Network. It now has an initial frontend Catalog page, a first Runtime Fleet page, and a read-only collector-backed runtime inventory model, but not yet a production backend or runtime execution system.
 
 Current source of truth:
 
@@ -12,11 +12,14 @@ Current source of truth:
 - `docs/product/ui-design.md`: product object model, information architecture, pages, flows, and implementation priorities.
 - `docs/product/catalog-page-spec.md`: TinySpec for the first Catalog / Registry page.
 - `docs/product/runtime-device-registration-spec.md`: TinySpec for v1 device registration, collector, runtime adapters, and runtime inventory snapshots.
+- `docs/product/runtime-fleet-page-spec.md`: TinySpec for the first Runtime Fleet management page.
 - `src/catalog/catalog-object.ts`: initial TypeScript source of truth for Catalog Object shape.
 - `src/catalog/catalog-seed.ts`: first reviewable seed data for the Catalog page.
 - `src/runtime/runtime-normalize.ts`: TypeScript source of truth for v1 runtime inventory normalization.
+- `src/runtime/runtime-inventory-query.ts`: query and detail model for the Runtime Fleet page.
 - `e2e/catalog-workflow.spec.ts`: browser-level user workflow harness for the Catalog page.
 - `e2e/catalog-layout.spec.ts`: browser-level responsive layout harness for the Catalog page.
+- `e2e/runtime-fleet.spec.ts`: browser-level Runtime Fleet workflow and responsive layout harness.
 - `docs/product/agent-network-runtime-panorama.png`: runtime panorama.
 - `docs/product/agent-network-build-objects.png`: build object map.
 - `assets/product-ui/`: UI and flow design assets.
@@ -52,6 +55,7 @@ Current spec and harness mapping:
 | Catalog user workflow | `docs/product/catalog-page-spec.md` | `e2e/catalog-workflow.spec.ts`, `npm run check:e2e` |
 | Catalog responsive layout | `docs/product/catalog-page-spec.md` | `e2e/catalog-layout.spec.ts`, `npm run check:e2e` |
 | Runtime device registration | `docs/product/runtime-device-registration-spec.md`, `src/runtime/runtime-normalize.ts` | `src/runtime/runtime-normalize.test.ts`, `src/runtime/device-collector-script.test.ts`, `npm run check:runtime`, `npm run check:quick` |
+| Runtime Fleet page | `docs/product/runtime-fleet-page-spec.md`, `src/runtime/runtime-inventory-query.ts` | `src/runtime/runtime-inventory-query.test.ts`, `src/App.test.tsx`, `e2e/runtime-fleet.spec.ts`, `npm run check:e2e` |
 | Repo context and docs | `AGENTS.md`, `README.md`, `docs/product/ui-design.md` | `npm run check:repo` |
 
 When a user points out a missed behavior or review gap, decide whether it should become:
@@ -107,9 +111,9 @@ Current harness scripts:
 | `npm run setup:e2e` | Install the current Playwright Chromium browser. | Once per local machine, or when Playwright asks for browser installation. |
 | `npm run check:repo` | Required source-of-truth paths and local Markdown links. | Docs, assets, agent context, or product spec changes. |
 | `npm run check:runtime` | Focused Runtime / Device Registration unit and script harness. | Runtime inventory model, collector, installer, fixture, or adapter changes. |
-| `npm run check:quick` | TypeScript typecheck plus Vitest unit/component tests. | Catalog model, query logic, React behavior, labels, or seed data changes. |
+| `npm run check:quick` | TypeScript typecheck plus Vitest unit/component tests. | Catalog model, Runtime Fleet query logic, React behavior, labels, or seed data changes. |
 | `npm run check:build` | Production TypeScript/Vite build. | Frontend, dependency, Vite, TypeScript, or package changes. |
-| `npm run check:e2e` | Playwright browser harness for core user workflow and responsive layout. | UI interaction paths, layout, toolbar, responsive behavior, navigation shell, or visual regression risk. |
+| `npm run check:e2e` | Playwright browser harness for core user workflow and responsive layout. | Catalog/Runtime Fleet interaction paths, layout, toolbar, responsive behavior, navigation shell, or visual regression risk. |
 | `npm run verify` | Full harness, same as `./scripts/verify.sh`. | Before handoff, commit, or review. |
 
 Local frontend development:
