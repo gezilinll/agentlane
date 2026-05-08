@@ -78,7 +78,7 @@ A single Run may contain multiple Tasks. For example, one Workflow Run may creat
 
 ## Current Status
 
-Agentlane is in product definition and early engineering. The first implemented surfaces are a Chinese-first Catalog / Registry page and a Runtime Fleet page backed by the initial TypeScript Catalog Object model, collector snapshot fixture, and normalized runtime inventory model. Runtime and device registration are currently read-only; production backend persistence and execution control are still being built.
+Agentlane is in product definition and early engineering. The first implemented surfaces are a Chinese-first Catalog / Registry page and a Runtime Fleet page backed by the initial TypeScript Catalog Object model, normalized runtime inventory model, collector snapshot fixture, and a local file-backed dev API for the latest runtime snapshot. Runtime and device registration are currently read-only; production backend persistence and execution control are still being built.
 
 The first product design package is available here:
 

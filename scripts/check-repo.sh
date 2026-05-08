@@ -19,6 +19,7 @@ required_paths=(
   "src/catalog/index.ts"
   "src/runtime/runtime-inventory-query.ts"
   "src/runtime/runtime-normalize.ts"
+  "src/server/runtime-inventory-store.ts"
   "scripts/agentlane-device-collector.mjs"
   "scripts/install-device-collector.sh"
   "fixtures/runtime/collector-snapshot.sample.json"

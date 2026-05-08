@@ -1,7 +1,16 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
+import fixtureSnapshot from "../fixtures/runtime/collector-snapshot.sample.json";
+import type { RuntimeInventorySnapshot } from "./runtime";
+
+const originalFetch = globalThis.fetch;
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+  vi.restoreAllMocks();
+});
 
 describe("Catalog page", () => {
   it("renders the Chinese Catalog page with seed objects", () => {
@@ -76,6 +85,31 @@ describe("Catalog page", () => {
     expect(screen.getByText("Fixture Mac")).toBeInTheDocument();
     expect(screen.getByText("OpenClaw Gateway")).toBeInTheDocument();
     expect(screen.getByText("tester")).toBeInTheDocument();
+  });
+
+  it("loads Runtime Fleet from the latest backend snapshot when available", async () => {
+    const user = userEvent.setup();
+    const backendSnapshot: RuntimeInventorySnapshot = {
+      ...(fixtureSnapshot as RuntimeInventorySnapshot),
+      device: {
+        ...(fixtureSnapshot as RuntimeInventorySnapshot).device,
+        name: "Backend Fixture Mac",
+      },
+    };
+    globalThis.fetch = vi.fn(async () =>
+      new Response(JSON.stringify(backendSnapshot), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    ) as unknown as typeof fetch;
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Runtime Fleet" }));
+
+    expect(await screen.findByText("Backend Fixture Mac")).toBeInTheDocument();
+    expect(vi.mocked(globalThis.fetch).mock.calls[0]?.[0]?.toString()).toContain(
+      "/api/runtime-inventory/latest",
+    );
   });
 
   it("filters Runtime Fleet agents by channel and opens agent details", async () => {

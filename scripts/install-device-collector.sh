@@ -211,7 +211,10 @@ EOF
 }
 
 if [[ "$ONCE" == "true" ]]; then
-  ONCE_ARGS=("$COLLECTOR_PATH" "--once" "--config" "$CONFIG_PATH" "--print-only")
+  ONCE_ARGS=("$COLLECTOR_PATH" "--once" "--config" "$CONFIG_PATH")
+  if [[ -z "$SERVER_URL" ]]; then
+    ONCE_ARGS+=("--print-only")
+  fi
   if [[ -n "$FIXTURE" ]]; then
     ONCE_ARGS+=("--fixture" "$FIXTURE")
   fi

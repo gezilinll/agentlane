@@ -13,6 +13,7 @@ build/
 .next/
 .turbo/
 .cache/
+.agentlane/
 .playwright-mcp/
 playwright-report/
 test-results/

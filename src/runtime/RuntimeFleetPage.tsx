@@ -1,5 +1,5 @@
 import { Bot, Cpu, Monitor, RefreshCw, Search, Server } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import fixtureSnapshot from "../../fixtures/runtime/collector-snapshot.sample.json";
 import {
   channelKindLabels,
@@ -22,7 +22,7 @@ import {
   type RuntimeKind,
 } from "./runtime-normalize";
 
-const runtimeSnapshot = fixtureSnapshot as RuntimeInventorySnapshot;
+const fixtureRuntimeSnapshot = fixtureSnapshot as RuntimeInventorySnapshot;
 
 const channelOptions: ChannelKind[] = ["dingtalk", "slock", "multica", "openclaw", "other"];
 const runtimeStatusOptions: RuntimeHealthStatus[] = ["online", "degraded", "offline", "unknown"];
@@ -34,19 +34,46 @@ type RuntimeFleetSelection = {
 
 /** First Runtime Fleet surface: inspect registered device, runtimes, agents, and channel exposure. */
 export function RuntimeFleetPage() {
+  const [snapshot, setSnapshot] = useState<RuntimeInventorySnapshot>(fixtureRuntimeSnapshot);
+  const [dataSource, setDataSource] = useState<"fixture" | "backend">("fixture");
   const [query, setQuery] = useState("");
   const [runtimeKind, setRuntimeKind] = useState<RuntimeKind | "all">("all");
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeHealthStatus | "all">("all");
   const [channelKind, setChannelKind] = useState<ChannelKind | "all">("all");
   const [selection, setSelection] = useState<RuntimeFleetSelection | null>(null);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadLatestSnapshot() {
+      try {
+        const requestUrl = new URL("/api/runtime-inventory/latest", window.location.origin);
+        const response = await fetch(requestUrl);
+        if (response.status === 404) return;
+        if (!response.ok) throw new Error(`runtime inventory request failed: ${response.status}`);
+        const latestSnapshot = (await response.json()) as RuntimeInventorySnapshot;
+        if (!cancelled) {
+          setSnapshot(latestSnapshot);
+          setDataSource("backend");
+        }
+      } catch {
+        // The page remains useful with the bundled fixture when no local backend is running.
+      }
+    }
+
+    void loadLatestSnapshot();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const filters: RuntimeFleetFilters = useMemo(
     () => ({ query, runtimeKind, runtimeStatus, channelKind }),
     [channelKind, query, runtimeKind, runtimeStatus],
   );
-  const result = useMemo(() => filterRuntimeFleet(runtimeSnapshot, filters), [filters]);
-  const summary = useMemo(() => summarizeRuntimeFleet(runtimeSnapshot), []);
-  const detail = selection ? getRuntimeFleetDetail(runtimeSnapshot, selection.kind, selection.id) : null;
+  const result = useMemo(() => filterRuntimeFleet(snapshot, filters), [filters, snapshot]);
+  const summary = useMemo(() => summarizeRuntimeFleet(snapshot), [snapshot]);
+  const detail = selection ? getRuntimeFleetDetail(snapshot, selection.kind, selection.id) : null;
 
   return (
     <section className="workspace">
@@ -54,7 +81,10 @@ export function RuntimeFleetPage() {
         <div>
           <p className="eyebrow">Runtime / Device / Agent</p>
           <h1>运行资产</h1>
-          <p className="pageSubtitle">统一识别设备、Runtime、Agent 与它们暴露到的渠道。</p>
+          <p className="pageSubtitle">
+            统一识别设备、Runtime、Agent 与它们暴露到的渠道。当前数据源：
+            {dataSource === "backend" ? "Backend" : "Fixture"}
+          </p>
         </div>
         <button className="primaryButton" type="button" aria-label="刷新快照">
           <RefreshCw size={16} aria-hidden="true" />
@@ -130,7 +160,7 @@ export function RuntimeFleetPage() {
 
       <section className="runtimeFleetGrid">
         <div className="runtimeStack">
-          <DevicePanel onSelect={() => setSelection({ kind: "device", id: result.device.id })} />
+          <DevicePanel snapshot={snapshot} onSelect={() => setSelection({ kind: "device", id: result.device.id })} />
           <RuntimeTable
             runtimes={result.runtimes}
             selectedId={selection?.kind === "runtime" ? selection.id : undefined}
@@ -138,7 +168,7 @@ export function RuntimeFleetPage() {
           />
           <AgentTable
             agents={result.agents}
-            runtimes={runtimeSnapshot.runtimes}
+            runtimes={snapshot.runtimes}
             selectedId={selection?.kind === "agent" ? selection.id : undefined}
             onSelect={(agent) => setSelection({ kind: "agent", id: agent.id })}
           />
@@ -158,7 +188,13 @@ function Metric({ label, value, tone }: { label: string; value: number; tone: st
   );
 }
 
-function DevicePanel({ onSelect }: { onSelect: () => void }) {
+function DevicePanel({
+  snapshot,
+  onSelect,
+}: {
+  snapshot: RuntimeInventorySnapshot;
+  onSelect: () => void;
+}) {
   return (
     <section className="tablePanel devicePanel" aria-label="设备">
       <div className="runtimePanelHeader">
@@ -173,10 +209,10 @@ function DevicePanel({ onSelect }: { onSelect: () => void }) {
           <Monitor size={18} aria-hidden="true" />
         </span>
         <span>
-          <strong>{runtimeSnapshot.device.name}</strong>
-          <small>{runtimeSnapshot.device.hostname}</small>
+          <strong>{snapshot.device.name}</strong>
+          <small>{snapshot.device.hostname}</small>
         </span>
-        <StatusBadge label={runtimeHealthLabels[runtimeSnapshot.device.status]} status={runtimeSnapshot.device.status} />
+        <StatusBadge label={runtimeHealthLabels[snapshot.device.status]} status={snapshot.device.status} />
       </button>
     </section>
   );
