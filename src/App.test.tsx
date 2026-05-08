@@ -137,4 +137,87 @@ describe("Catalog page", () => {
     expect(within(detail).queryByText("slock: tester")).not.toBeInTheDocument();
     expect(within(detail).queryByText("事实")).not.toBeInTheDocument();
   });
+
+  it("requests a remote device refresh and reloads the latest backend snapshot", async () => {
+    const user = userEvent.setup();
+    let latestRequests = 0;
+    const backendSnapshot: RuntimeInventorySnapshot = {
+      ...(fixtureSnapshot as RuntimeInventorySnapshot),
+      device: {
+        ...(fixtureSnapshot as RuntimeInventorySnapshot).device,
+        name: "Backend Fixture Mac",
+      },
+    };
+    const refreshedSnapshot: RuntimeInventorySnapshot = {
+      ...backendSnapshot,
+      device: {
+        ...backendSnapshot.device,
+        name: "Refreshed Fixture Mac",
+      },
+    };
+    globalThis.fetch = vi.fn(async (input, init) => {
+      const url = input.toString();
+      if (url.includes("/api/runtime-inventory/latest")) {
+        latestRequests += 1;
+        return new Response(JSON.stringify(latestRequests === 1 ? backendSnapshot : refreshedSnapshot), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/api/devices/fixture-mac/refresh") && init?.method === "POST") {
+        return new Response(JSON.stringify({ ok: true, commandId: "cmd-refresh-1", status: "sent" }), {
+          status: 202,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/api/devices/fixture-mac/commands/cmd-refresh-1")) {
+        return new Response(JSON.stringify({ commandId: "cmd-refresh-1", status: "succeeded" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "unexpected request" }), { status: 500 });
+    }) as unknown as typeof fetch;
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Runtime Fleet" }));
+    expect(await screen.findAllByText("Backend Fixture Mac")).toHaveLength(3);
+
+    await user.click(screen.getByRole("button", { name: "请求设备刷新" }));
+
+    expect(await screen.findByText("刷新完成")).toBeInTheDocument();
+    expect((await screen.findAllByText("Refreshed Fixture Mac")).length).toBeGreaterThan(0);
+    expect(vi.mocked(globalThis.fetch).mock.calls.some((call) => call[0].toString().includes("/refresh"))).toBe(true);
+  });
+
+  it("shows a clear remote refresh error when the device is disconnected", async () => {
+    const user = userEvent.setup();
+    const backendSnapshot = fixtureSnapshot as RuntimeInventorySnapshot;
+    globalThis.fetch = vi.fn(async (input, init) => {
+      const url = input.toString();
+      if (url.includes("/api/runtime-inventory/latest")) {
+        return new Response(JSON.stringify(backendSnapshot), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/api/devices/fixture-mac/refresh") && init?.method === "POST") {
+        return new Response(JSON.stringify({
+          error: "device_not_connected",
+          message: "device is not connected: fixture-mac",
+        }), {
+          status: 409,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "unexpected request" }), { status: 500 });
+    }) as unknown as typeof fetch;
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Runtime Fleet" }));
+    expect((await screen.findAllByText("Fixture Mac")).length).toBeGreaterThan(0);
+    await user.click(screen.getByRole("button", { name: "请求设备刷新" }));
+
+    expect(await screen.findByText("device is not connected: fixture-mac")).toBeInTheDocument();
+  });
 });

@@ -44,6 +44,9 @@ test.describe("Runtime Fleet", () => {
     await expect(detail).toContainText("可用渠道");
     await expect(detail).not.toContainText("slock: tester");
 
+    await page.getByRole("button", { name: "请求设备刷新" }).click();
+    await expect(page.getByRole("status")).toContainText("device is not connected");
+
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.getByRole("heading", { name: "运行资产" })).toBeVisible();
 

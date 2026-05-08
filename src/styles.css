@@ -139,6 +139,36 @@ h1 {
   padding: 0 14px;
 }
 
+.primaryButton:disabled {
+  background: #6f8fc7;
+  border-color: #6f8fc7;
+  cursor: default;
+}
+
+.refreshControl {
+  align-items: end;
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+}
+
+.refreshMessage {
+  color: #52617a;
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 0;
+  max-width: 240px;
+  text-align: right;
+}
+
+.refresh-error {
+  color: #b42318;
+}
+
+.refresh-success {
+  color: #1f8b57;
+}
+
 .toolbar {
   align-items: end;
   background: #ffffff;

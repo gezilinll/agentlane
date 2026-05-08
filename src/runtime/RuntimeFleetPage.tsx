@@ -36,32 +36,58 @@ type RuntimeFleetSelection = {
 export function RuntimeFleetPage() {
   const [snapshot, setSnapshot] = useState<RuntimeInventorySnapshot>(fixtureRuntimeSnapshot);
   const [dataSource, setDataSource] = useState<"fixture" | "backend">("fixture");
+  const [refreshState, setRefreshState] = useState<{
+    status: "idle" | "running" | "success" | "error";
+    message: string;
+  }>({ status: "idle", message: "" });
   const [query, setQuery] = useState("");
   const [runtimeKind, setRuntimeKind] = useState<RuntimeKind | "all">("all");
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeHealthStatus | "all">("all");
   const [channelKind, setChannelKind] = useState<ChannelKind | "all">("all");
   const [selection, setSelection] = useState<RuntimeFleetSelection | null>(null);
 
+  async function fetchLatestSnapshot(): Promise<RuntimeInventorySnapshot | null> {
+    const requestUrl = new URL("/api/runtime-inventory/latest", window.location.origin);
+    const response = await fetch(requestUrl);
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error(`runtime inventory request failed: ${response.status}`);
+    return (await response.json()) as RuntimeInventorySnapshot;
+  }
+
+  function applySnapshot(latestSnapshot: RuntimeInventorySnapshot) {
+    setSnapshot(latestSnapshot);
+    setDataSource("backend");
+  }
+
+  async function loadLatestSnapshot(options: { silent?: boolean } = {}): Promise<RuntimeInventorySnapshot | null> {
+    try {
+      const latestSnapshot = await fetchLatestSnapshot();
+      if (latestSnapshot) applySnapshot(latestSnapshot);
+      return latestSnapshot;
+    } catch (error) {
+      if (!options.silent) {
+        setRefreshState({
+          status: "error",
+          message: error instanceof Error ? error.message : "读取最新快照失败",
+        });
+      }
+      return null;
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
 
-    async function loadLatestSnapshot() {
+    async function loadInitialSnapshot() {
       try {
-        const requestUrl = new URL("/api/runtime-inventory/latest", window.location.origin);
-        const response = await fetch(requestUrl);
-        if (response.status === 404) return;
-        if (!response.ok) throw new Error(`runtime inventory request failed: ${response.status}`);
-        const latestSnapshot = (await response.json()) as RuntimeInventorySnapshot;
-        if (!cancelled) {
-          setSnapshot(latestSnapshot);
-          setDataSource("backend");
-        }
+        const latestSnapshot = await fetchLatestSnapshot();
+        if (!cancelled && latestSnapshot) applySnapshot(latestSnapshot);
       } catch {
         // The page remains useful with the bundled fixture when no local backend is running.
       }
     }
 
-    void loadLatestSnapshot();
+    void loadInitialSnapshot();
     return () => {
       cancelled = true;
     };
@@ -74,6 +100,56 @@ export function RuntimeFleetPage() {
   const result = useMemo(() => filterRuntimeFleet(snapshot, filters), [filters, snapshot]);
   const summary = useMemo(() => summarizeRuntimeFleet(snapshot), [snapshot]);
   const detail = selection ? getRuntimeFleetDetail(snapshot, selection.kind, selection.id) : null;
+  const isRefreshRunning = refreshState.status === "running";
+  const refreshButtonLabel = dataSource === "backend" ? "请求设备刷新" : "读取最新快照";
+
+  async function handleRefresh() {
+    if (dataSource !== "backend") {
+      setRefreshState({ status: "running", message: "正在读取后端快照" });
+      const latestSnapshot = await loadLatestSnapshot();
+      setRefreshState(
+        latestSnapshot
+          ? { status: "success", message: "已读取最新快照" }
+          : { status: "error", message: "当前没有后端快照，继续使用 Fixture" },
+      );
+      return;
+    }
+
+    setRefreshState({ status: "running", message: "正在请求设备刷新" });
+    try {
+      const refreshResponse = await fetch(`/api/devices/${encodeURIComponent(snapshot.device.id)}/refresh`, {
+        method: "POST",
+      });
+      const refreshBody = (await refreshResponse.json()) as {
+        commandId?: string;
+        message?: string;
+        status?: string;
+      };
+      if (!refreshResponse.ok || !refreshBody.commandId) {
+        throw new Error(refreshBody.message || `刷新请求失败: HTTP ${refreshResponse.status}`);
+      }
+
+      setRefreshState({ status: "running", message: "刷新命令已下发" });
+      const commandResponse = await fetch(
+        `/api/devices/${encodeURIComponent(snapshot.device.id)}/commands/${encodeURIComponent(refreshBody.commandId)}`,
+      );
+      const commandBody = (await commandResponse.json()) as { status?: string; error?: string };
+      if (commandResponse.ok && commandBody.status === "succeeded") {
+        await loadLatestSnapshot({ silent: true });
+        setRefreshState({ status: "success", message: "刷新完成" });
+        return;
+      }
+      if (commandResponse.ok && commandBody.status === "failed") {
+        throw new Error(commandBody.error || "设备刷新失败");
+      }
+      setRefreshState({ status: "success", message: "刷新命令已下发" });
+    } catch (error) {
+      setRefreshState({
+        status: "error",
+        message: error instanceof Error ? error.message : "设备刷新失败",
+      });
+    }
+  }
 
   return (
     <section className="workspace">
@@ -86,10 +162,25 @@ export function RuntimeFleetPage() {
             {dataSource === "backend" ? "Backend" : "Fixture"}
           </p>
         </div>
-        <button className="primaryButton" type="button" aria-label="刷新快照">
-          <RefreshCw size={16} aria-hidden="true" />
-          刷新快照
-        </button>
+        <div className="refreshControl">
+          <button
+            className="primaryButton"
+            type="button"
+            aria-label={refreshButtonLabel}
+            disabled={isRefreshRunning}
+            onClick={() => {
+              void handleRefresh();
+            }}
+          >
+            <RefreshCw size={16} aria-hidden="true" />
+            {isRefreshRunning ? "刷新中" : refreshButtonLabel}
+          </button>
+          {refreshState.message ? (
+            <p className={`refreshMessage refresh-${refreshState.status}`} role="status">
+              {refreshState.message}
+            </p>
+          ) : null}
+        </div>
       </header>
 
       <section className="toolbar runtimeToolbar" aria-label="运行资产筛选">
