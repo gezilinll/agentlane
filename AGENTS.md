@@ -4,7 +4,7 @@ Root guide for coding agents working in this repository. This file is operationa
 
 ## Project State
 
-Agentlane is currently in product definition and early engineering setup. The repository is becoming the control plane for operating an Agent Network. It now has an initial frontend Catalog page, a first Runtime Fleet page, a read-only collector-backed runtime inventory model, and a local file-backed dev API for the latest runtime snapshot, but not yet a production backend or runtime execution system.
+Agentlane is currently in product definition and early engineering setup. The repository is becoming the control plane for operating an Agent Network. It now has an initial frontend Catalog page, a first Runtime Fleet page, a collector-backed runtime inventory model, and a local dev backend with latest snapshot storage plus an outbound WebSocket device control channel. It does not yet have a production backend, auth system, or runtime execution system.
 
 Current source of truth:
 
@@ -18,6 +18,10 @@ Current source of truth:
 - `src/runtime/runtime-normalize.ts`: TypeScript source of truth for v1 runtime inventory normalization.
 - `src/runtime/runtime-inventory-query.ts`: query and detail model for the Runtime Fleet page.
 - `src/server/runtime-inventory-store.ts`: local file-backed latest snapshot store used by the dev backend.
+- `src/server/runtime-control-channel.ts`: in-memory v1 device control channel for connection, heartbeat, and refresh command lifecycle.
+- `src/server/runtime-http-api.ts`: local Runtime Fleet HTTP API for latest snapshot and refresh command requests.
+- `scripts/agentlane-device-collector.mjs`: device-side collector / Device Agent script.
+- `scripts/install-device-collector.sh`: local-path collector installer for development and remote-device testing.
 - `e2e/catalog-workflow.spec.ts`: browser-level user workflow harness for the Catalog page.
 - `e2e/catalog-layout.spec.ts`: browser-level responsive layout harness for the Catalog page.
 - `e2e/runtime-fleet.spec.ts`: browser-level Runtime Fleet workflow and responsive layout harness.
@@ -33,6 +37,8 @@ Current source of truth:
 - Keep `README.md` business-facing: project background, use cases, operating model, current status, and durable design links. Put coding-agent rules, local commands, harness details, and self-verification workflow in this file.
 - Use semantic filenames for durable assets. Avoid leaving uploaded image names with spaces or copy suffixes when the asset becomes part of product documentation.
 - When code directories appear, add scoped `AGENTS.md` files only where local commands, boundaries, or ownership differ from this root guide.
+- Treat the device WebSocket as a control plane only. Do not use it for chat, arbitrary command execution, external platform protocol emulation, or task scheduling until a spec and harness explicitly introduce those behaviors.
+- Keep runtime/device secrets out of logs, fixtures, tests, docs, and UI screenshots. `deviceToken`, Slock keys, bearer tokens, and platform API keys may be passed through local config, but v1 does not implement full auth or secret management.
 
 ## Spec And Harness Workflow
 
@@ -55,9 +61,9 @@ Current spec and harness mapping:
 | Catalog page behavior | `docs/product/catalog-page-spec.md` | `src/App.test.tsx`, `npm run check:quick` |
 | Catalog user workflow | `docs/product/catalog-page-spec.md` | `e2e/catalog-workflow.spec.ts`, `npm run check:e2e` |
 | Catalog responsive layout | `docs/product/catalog-page-spec.md` | `e2e/catalog-layout.spec.ts`, `npm run check:e2e` |
-| Runtime device registration | `docs/product/runtime-device-registration-spec.md`, `src/runtime/runtime-normalize.ts` | `src/runtime/runtime-normalize.test.ts`, `src/runtime/device-collector-script.test.ts`, `npm run check:runtime`, `npm run check:quick` |
-| Runtime Fleet page | `docs/product/runtime-fleet-page-spec.md`, `src/runtime/runtime-inventory-query.ts` | `src/runtime/runtime-inventory-query.test.ts`, `src/App.test.tsx`, `e2e/runtime-fleet.spec.ts`, `npm run check:e2e` |
-| Runtime snapshot backend | `docs/product/runtime-device-registration-spec.md`, `src/server/runtime-inventory-store.ts`, `vite.config.ts` | `src/server/runtime-inventory-store.test.ts`, `src/runtime/device-collector-script.test.ts`, `e2e/runtime-fleet.spec.ts`, `npm run check:backend` |
+| Runtime device registration | `docs/product/runtime-device-registration-spec.md`, `src/runtime/runtime-normalize.ts`, `scripts/agentlane-device-collector.mjs`, `scripts/install-device-collector.sh` | `src/runtime/runtime-normalize.test.ts`, `src/runtime/device-collector-script.test.ts`, `npm run check:runtime`, `npm run check:backend` |
+| Runtime Fleet page | `docs/product/runtime-fleet-page-spec.md`, `src/runtime/runtime-inventory-query.ts`, `src/runtime/RuntimeFleetPage.tsx` | `src/runtime/runtime-inventory-query.test.ts`, `src/App.test.tsx`, `e2e/runtime-fleet.spec.ts`, `npm run check:quick`, `npm run check:e2e` |
+| Runtime snapshot and control backend | `docs/product/runtime-device-registration-spec.md`, `src/server/runtime-inventory-store.ts`, `src/server/runtime-control-channel.ts`, `src/server/runtime-http-api.ts`, `vite.config.ts` | `src/server/runtime-inventory-store.test.ts`, `src/server/runtime-control-channel.test.ts`, `src/server/runtime-http-api.test.ts`, `src/runtime/device-collector-script.test.ts`, `npm run check:backend` |
 | Repo context and docs | `AGENTS.md`, `README.md`, `docs/product/ui-design.md` | `npm run check:repo` |
 
 When a user points out a missed behavior or review gap, decide whether it should become:
@@ -78,7 +84,7 @@ Keep the test layout simple and tied to what each harness can prove:
 
 ## Agent-Ready Growth
 
-Agentlane should become agent-ready by growing only the infrastructure the project actually needs. The current layer is **Catalog + Runtime Fleet Harness Ready** for the first frontend/runtime surfaces: root guide, TinySpecs, TypeScript object models, local dev API, unit/component tests, browser layout harness, and one full verification entry point.
+Agentlane should become agent-ready by growing only the infrastructure the project actually needs. The current layer is **Catalog + Runtime Fleet Harness Ready** for the first frontend/runtime surfaces: root guide, TinySpecs, TypeScript object models, local dev API, outbound device control channel, unit/component tests, browser layout harness, and one full verification entry point.
 
 Extend this guide and `./scripts/verify.sh` only when a real project surface appears:
 
@@ -98,7 +104,7 @@ Run the full repository harness before handing off changes:
 ./scripts/verify.sh
 ```
 
-Equivalent package entry points are `npm run verify`, `npm run check`, and `npm run harness`. The full harness verifies required product documents/assets, local Markdown links, TypeScript typecheck, unit/component tests, production build, and the Playwright responsive layout harness.
+Equivalent package entry points are `npm run verify`, `npm run check`, and `npm run harness`. The full harness verifies required product documents/assets, local Markdown links, backend store/control/API checks, collector script behavior, TypeScript typecheck, unit/component tests, production build, and the Playwright responsive layout harness.
 
 If the local Playwright browser is missing, install the current test browser once:
 
@@ -112,7 +118,7 @@ Current harness scripts:
 |---|---|---|
 | `npm run setup:e2e` | Install the current Playwright Chromium browser. | Once per local machine, or when Playwright asks for browser installation. |
 | `npm run check:repo` | Required source-of-truth paths and local Markdown links. | Docs, assets, agent context, or product spec changes. |
-| `npm run check:backend` | Focused local backend store plus collector POST harness. | Runtime snapshot API, Vite API middleware, collector posting, or backend persistence changes. |
+| `npm run check:backend` | Focused local backend store, control channel, HTTP API, and collector POST / WebSocket harness. | Runtime snapshot API, Vite API middleware, collector posting, device WebSocket, refresh command lifecycle, or backend persistence changes. |
 | `npm run check:runtime` | Focused Runtime / Device Registration unit and script harness. | Runtime inventory model, collector, installer, fixture, or adapter changes. |
 | `npm run check:quick` | TypeScript typecheck plus Vitest unit/component tests. | Catalog model, Runtime Fleet query logic, React behavior, labels, or seed data changes. |
 | `npm run check:build` | Production TypeScript/Vite build. | Frontend, dependency, Vite, TypeScript, or package changes. |
