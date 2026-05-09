@@ -10,6 +10,7 @@ const DEFAULT_INTERVAL_MS = 60_000;
 function parseArgs(argv) {
   const args = {
     once: false,
+    workStateOnce: false,
     printOnly: false,
     configPath: "",
     fixturePath: "",
@@ -29,6 +30,7 @@ function parseArgs(argv) {
     };
 
     if (arg === "--once") args.once = true;
+    else if (arg === "--work-state-once") args.workStateOnce = true;
     else if (arg === "--print-only") args.printOnly = true;
     else if (arg === "--config") args.configPath = next();
     else if (arg === "--fixture") args.fixturePath = next();
@@ -53,6 +55,7 @@ function printHelp() {
 
 Options:
   --once                 Collect once and exit
+  --work-state-once      Collect one runtime work-state snapshot and exit
   --print-only           Print snapshot instead of posting
   --config <path>        Read collector config JSON
   --fixture <path>       Load a fixture snapshot instead of probing the host
@@ -537,10 +540,239 @@ async function postSnapshot(serverUrl, snapshot) {
   if (!response.ok) throw new Error(`Snapshot post failed: HTTP ${response.status}`);
 }
 
+async function postWorkStateSnapshot(serverUrl, snapshot) {
+  const url = new URL("/api/runtime-work-state-snapshots", serverUrl);
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(snapshot),
+  });
+  if (!response.ok) throw new Error(`Work state snapshot post failed: HTTP ${response.status}`);
+}
+
 async function runOnce(config, args) {
   const snapshot = collectSnapshot(config, args);
   const serverUrl = args.serverUrl || config.serverUrl || "";
   if (serverUrl && !args.printOnly) await postSnapshot(serverUrl, snapshot);
+  if (args.printOnly || !serverUrl) console.log(JSON.stringify(snapshot, null, 2));
+  return snapshot;
+}
+
+function collectWorkStateSnapshot(config, args) {
+  const mergedConfig = {
+    ...config,
+    ...(args.deviceId ? { deviceId: args.deviceId } : {}),
+    ...(args.deviceName ? { deviceName: args.deviceName } : {}),
+  };
+  const observedAt = isoNow();
+  const device = createDevice(mergedConfig, observedAt);
+  const openClawRuntimeId = makeRuntimeId(device.id, "openclaw", "gateway");
+  const openClawAgentId = makeAgentId(openClawRuntimeId, "main");
+  const multicaRuntimeId = makeRuntimeId(device.id, "multica", "runtime-openclaw");
+  const multicaAgentId = makeAgentId(multicaRuntimeId, "fixture-agent");
+  const slockRuntimeId = makeRuntimeId(device.id, "slock", "daemon");
+  const slockAgentId = makeAgentId(slockRuntimeId, "tester");
+
+  return {
+    observedAt,
+    deviceId: device.id,
+    workItems: [
+      {
+        id: `${multicaRuntimeId}:work-item:fixture-issue-1`,
+        source: "multica",
+        externalId: "fixture-issue-1",
+        title: "Prepare release note",
+        status: "todo",
+        assignee: { kind: "agent", label: "@example-agent" },
+        creator: { kind: "human", label: "@fixture-human" },
+        agentId: multicaAgentId,
+        runtimeId: multicaRuntimeId,
+        createdAt: "2026-05-09T07:10:00.000Z",
+        updatedAt: "2026-05-09T07:40:00.000Z",
+        lastSeenAt: observedAt,
+        sourceRefs: [{ source: "multica", externalId: "EX-1" }],
+      },
+      {
+        id: `${slockRuntimeId}:work-item:fixture-slock-task-1`,
+        source: "slock",
+        externalId: "fixture-slock-task-1",
+        title: "Example in progress card",
+        status: "in_progress",
+        channel: { kind: "slock", label: "#example-board", externalId: "example-board" },
+        assignee: { kind: "agent", label: "@example-agent" },
+        creator: { kind: "human", label: "@fixture-human" },
+        agentId: slockAgentId,
+        runtimeId: slockRuntimeId,
+        conversationId: `${slockRuntimeId}:conversation:fixture-thread-1`,
+        createdAt: "2026-05-09T07:10:00.000Z",
+        updatedAt: "2026-05-09T07:50:00.000Z",
+        lastSeenAt: observedAt,
+        sourceRefs: [{ source: "slock", externalId: "1" }],
+      },
+      {
+        id: `${slockRuntimeId}:work-item:fixture-slock-task-2`,
+        source: "slock",
+        externalId: "fixture-slock-task-2",
+        title: "Example review card",
+        status: "in_review",
+        channel: { kind: "slock", label: "#example-board", externalId: "example-board" },
+        assignee: { kind: "agent", label: "@example-agent" },
+        creator: { kind: "human", label: "@fixture-human" },
+        agentId: slockAgentId,
+        runtimeId: slockRuntimeId,
+        conversationId: `${slockRuntimeId}:conversation:fixture-thread-2`,
+        createdAt: "2026-05-09T07:20:00.000Z",
+        updatedAt: "2026-05-09T07:55:00.000Z",
+        lastSeenAt: observedAt,
+        sourceRefs: [{ source: "slock", externalId: "2" }],
+      },
+    ],
+    conversations: [
+      {
+        id: `${openClawRuntimeId}:conversation:fixture-session-1`,
+        source: "openclaw",
+        externalId: "fixture-session-1",
+        status: "active",
+        agentId: openClawAgentId,
+        runtimeId: openClawRuntimeId,
+        lastActivityAt: "2026-05-09T07:58:00.000Z",
+        lastSeenAt: observedAt,
+        sourceRefs: [{ source: "openclaw", externalId: "fixture-session-1" }],
+      },
+      {
+        id: `${slockRuntimeId}:conversation:fixture-thread-1`,
+        source: "slock",
+        externalId: "fixture-thread-1",
+        status: "open",
+        channel: { kind: "slock", label: "#example-board", externalId: "example-board" },
+        title: "Example in progress card",
+        workItemId: `${slockRuntimeId}:work-item:fixture-slock-task-1`,
+        agentId: slockAgentId,
+        runtimeId: slockRuntimeId,
+        lastActivityAt: "2026-05-09T07:50:00.000Z",
+        lastSeenAt: observedAt,
+        sourceRefs: [{ source: "slock", externalId: "fixture-message-1" }],
+      },
+    ],
+    executions: [
+      {
+        id: `${openClawRuntimeId}:execution:fixture-run-1`,
+        source: "openclaw",
+        externalId: "fixture-run-1",
+        runtimeId: openClawRuntimeId,
+        agentId: openClawAgentId,
+        status: "succeeded",
+        queuedAt: "2026-05-09T07:50:00.000Z",
+        startedAt: "2026-05-09T07:51:00.000Z",
+        endedAt: "2026-05-09T07:55:00.000Z",
+        lastSeenAt: observedAt,
+        sourceRefs: [{ source: "openclaw", externalId: "fixture-task-1" }],
+      },
+      {
+        id: `${openClawRuntimeId}:execution:fixture-run-2`,
+        source: "openclaw",
+        externalId: "fixture-run-2",
+        runtimeId: openClawRuntimeId,
+        agentId: openClawAgentId,
+        status: "failed",
+        queuedAt: "2026-05-09T07:56:00.000Z",
+        startedAt: "2026-05-09T07:57:00.000Z",
+        endedAt: "2026-05-09T07:59:00.000Z",
+        lastSeenAt: observedAt,
+        error: "lost heartbeat",
+        sourceRefs: [{ source: "openclaw", externalId: "fixture-task-2" }],
+      },
+      {
+        id: `${multicaRuntimeId}:execution:fixture-run-4`,
+        source: "multica",
+        externalId: "fixture-run-4",
+        runtimeId: multicaRuntimeId,
+        agentId: multicaAgentId,
+        workItemId: `${multicaRuntimeId}:work-item:fixture-issue-1`,
+        conversationId: `${multicaRuntimeId}:conversation:fixture-chat-1`,
+        status: "running",
+        queuedAt: "2026-05-09T07:55:00.000Z",
+        startedAt: "2026-05-09T07:56:00.000Z",
+        lastSeenAt: observedAt,
+        sourceRefs: [{ source: "multica", externalId: "fixture-run-4" }],
+      },
+    ],
+    capabilities: [
+      {
+        source: "openclaw",
+        collectedAt: observedAt,
+        workItems: {
+          support: "unsupported",
+          strategies: ["cli", "native_api"],
+          evidence: ["openclaw tasks list exposes executions, not project-management work items."],
+          limitations: ["OpenClaw has no pending or review phase without an upstream work item source."],
+        },
+        conversations: {
+          support: "partial",
+          strategies: ["cli", "native_api"],
+          evidence: ["openclaw health exposes session keys and recent activity."],
+          limitations: ["Session count can include historical sessions."],
+        },
+        executions: {
+          support: "supported",
+          strategies: ["cli", "native_api"],
+          evidence: ["openclaw tasks list exposes task and run status."],
+          limitations: ["Lost and timed out statuses are normalized to failed."],
+        },
+      },
+      {
+        source: "multica",
+        collectedAt: observedAt,
+        workItems: {
+          support: "supported",
+          strategies: ["cli", "native_api"],
+          evidence: ["multica issue list exposes issue lifecycle fields."],
+          limitations: ["Backlog is normalized to todo until Agentlane adds a separate backlog stage."],
+        },
+        conversations: {
+          support: "partial",
+          strategies: ["cli", "native_api"],
+          evidence: ["multica task runs can include chat_session_id."],
+          limitations: ["Conversation messages require separate issue run-message reads."],
+        },
+        executions: {
+          support: "supported",
+          strategies: ["cli", "native_api"],
+          evidence: ["multica agent tasks and issue runs expose task status and timestamps."],
+          limitations: ["Completed is normalized to succeeded."],
+        },
+      },
+      {
+        source: "slock",
+        collectedAt: observedAt,
+        workItems: {
+          support: "supported",
+          strategies: ["cli", "native_api"],
+          evidence: ["slock task board exposes task lifecycle fields."],
+          limitations: ["Task board in_progress is a business phase, not execution proof."],
+        },
+        conversations: {
+          support: "partial",
+          strategies: ["cli", "native_api"],
+          evidence: ["slock history can expose channel and thread messages."],
+          limitations: ["DM history depends on agent context."],
+        },
+        executions: {
+          support: "unknown",
+          strategies: ["network_proxy", "managed_launcher"],
+          evidence: ["daemon source has internal agent activity events, but CLI/server info does not expose running executions."],
+          limitations: ["Server active means online or available, not execution running."],
+        },
+      },
+    ],
+    warnings: ["Fixture-backed work-state collection is for local closed-loop verification."],
+  };
+}
+
+async function runWorkStateOnce(config, args) {
+  const snapshot = collectWorkStateSnapshot(config, args);
+  const serverUrl = args.serverUrl || config.serverUrl || "";
+  if (serverUrl && !args.printOnly) await postWorkStateSnapshot(serverUrl, snapshot);
   if (args.printOnly || !serverUrl) console.log(JSON.stringify(snapshot, null, 2));
   return snapshot;
 }
@@ -708,6 +940,11 @@ function startControlChannel(config, args) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const config = loadConfig(args.configPath);
+
+  if (args.workStateOnce) {
+    await runWorkStateOnce(config, args);
+    return;
+  }
 
   if (args.once) {
     await runOnce(config, args);

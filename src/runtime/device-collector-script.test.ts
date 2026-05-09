@@ -144,6 +144,52 @@ describe("device collector scripts", () => {
     }
   });
 
+  it("prints a runtime work-state snapshot in work-state once mode", () => {
+    const output = execFileSync(process.execPath, [
+      collectorScript,
+      "--work-state-once",
+      "--device-id",
+      "fixture-device",
+      "--print-only",
+    ], { encoding: "utf8" });
+
+    const snapshot = JSON.parse(output);
+
+    expect(snapshot.deviceId).toBe("fixture-device");
+    expect(Array.isArray(snapshot.workItems)).toBe(true);
+    expect(Array.isArray(snapshot.conversations)).toBe(true);
+    expect(Array.isArray(snapshot.executions)).toBe(true);
+    expect(Array.isArray(snapshot.capabilities)).toBe(true);
+    expect(snapshot.capabilities.map((capability: { source: string }) => capability.source)).toEqual([
+      "openclaw",
+      "multica",
+      "slock",
+    ]);
+  });
+
+  it("posts a runtime work-state once snapshot to the Agentlane backend when server url is configured", async () => {
+    const { server, receivedSnapshot, baseUrl } = await startWorkStateServer();
+
+    try {
+      const output = await runNodeScript([
+        collectorScript,
+        "--work-state-once",
+        "--device-id",
+        "fixture-device",
+        "--server-url",
+        baseUrl,
+      ]);
+      const snapshot = await receivedSnapshot;
+
+      expect(output).toBe("");
+      expect(snapshot.deviceId).toBe("fixture-device");
+      expect(Array.isArray(snapshot.workItems)).toBe(true);
+      expect(Array.isArray(snapshot.executions)).toBe(true);
+    } finally {
+      server.close();
+    }
+  });
+
   it("connects to the control channel and handles inventory refresh commands in daemon mode", async () => {
     const controlServer = await startControlServer();
     const child = spawn(process.execPath, [
@@ -358,6 +404,44 @@ async function startSnapshotServer(): Promise<{
   });
 
   if (!server) throw new Error("failed to create snapshot server");
+  await new Promise<void>((resolve) => {
+    server?.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("missing test server address");
+
+  return {
+    server,
+    receivedSnapshot,
+    baseUrl: `http://127.0.0.1:${address.port}`,
+  };
+}
+
+async function startWorkStateServer(): Promise<{
+  server: Server;
+  receivedSnapshot: Promise<Record<string, unknown>>;
+  baseUrl: string;
+}> {
+  let server: Server | undefined;
+  const receivedSnapshot = new Promise<Record<string, unknown>>((resolve) => {
+    server = createServer((request, response) => {
+      expect(request.method).toBe("POST");
+      expect(request.url).toBe("/api/runtime-work-state-snapshots");
+
+      let body = "";
+      request.setEncoding("utf8");
+      request.on("data", (chunk) => {
+        body += chunk;
+      });
+      request.on("end", () => {
+        response.writeHead(201, { "content-type": "application/json" });
+        response.end(JSON.stringify({ ok: true }));
+        resolve(JSON.parse(body));
+      });
+    });
+  });
+
+  if (!server) throw new Error("failed to create work state server");
   await new Promise<void>((resolve) => {
     server?.listen(0, "127.0.0.1", resolve);
   });
