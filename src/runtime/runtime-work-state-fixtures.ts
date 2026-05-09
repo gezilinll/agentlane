@@ -69,6 +69,16 @@ export const multicaWorkStateFixture = {
       updatedAt: "2026-05-09T07:45:00.000Z",
     },
     {
+      id: "fixture-issue-4",
+      identifier: "EX-4",
+      title: "Unstarted example task",
+      status: "todo",
+      assignee: "@example-agent",
+      creator: "@fixture-human",
+      createdAt: "2026-05-09T07:25:00.000Z",
+      updatedAt: "2026-05-09T07:35:00.000Z",
+    },
+    {
       id: "fixture-issue-3",
       identifier: "EX-3",
       title: "Closed example task",

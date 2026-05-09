@@ -20,8 +20,8 @@ export function mapOpenClawWorkState(input: {
   deviceId: string;
   runtimeId: string;
   agentId: string;
-  sessions: Array<{ sessionKey: string; updatedAt?: string; status?: string }>;
-  tasks: Array<{
+  sessions: ReadonlyArray<{ sessionKey: string; updatedAt?: string; status?: string }>;
+  tasks: ReadonlyArray<{
     taskId: string;
     runId?: string;
     status: string;
@@ -69,7 +69,7 @@ export function mapMulticaWorkState(input: {
   deviceId: string;
   runtimeId: string;
   agentId: string;
-  issues: Array<{
+  issues: ReadonlyArray<{
     id: string;
     identifier?: string;
     title: string;
@@ -79,7 +79,7 @@ export function mapMulticaWorkState(input: {
     createdAt?: string;
     updatedAt?: string;
   }>;
-  runs: Array<{
+  runs: ReadonlyArray<{
     id: string;
     issueId?: string;
     status: string;
@@ -147,7 +147,7 @@ export function mapSlockWorkState(input: {
   runtimeId: string;
   agentId: string;
   channel: { label: string; externalId: string };
-  tasks: Array<{
+  tasks: ReadonlyArray<{
     id: string;
     taskNumber?: number;
     title: string;
