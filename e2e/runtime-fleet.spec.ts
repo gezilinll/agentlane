@@ -15,6 +15,12 @@ const backendSnapshot: RuntimeInventorySnapshot = {
     ...fixtureSnapshot.device,
     name: "Backend Fixture Mac",
   },
+  agents: fixtureSnapshot.agents.map((agent) => {
+    if (agent.id !== "fixture-mac:slock:slock-daemon:agent:tester") return agent;
+    const { lastSeenAt, ...agentWithoutLastSeenAt } = agent;
+    void lastSeenAt;
+    return agentWithoutLastSeenAt;
+  }),
 };
 
 test.describe("Runtime Fleet", () => {
@@ -40,9 +46,19 @@ test.describe("Runtime Fleet", () => {
 
     await page.getByRole("row", { name: /tester/ }).click();
     const detail = page.getByRole("complementary", { name: "运行资产详情" });
+    await expect(detail).toHaveCSS("position", "sticky");
     await expect(detail).toContainText("归属关系");
     await expect(detail).toContainText("所属 Runtime: Slock daemon");
     await expect(detail).toContainText("关联渠道");
+    await expect(detail).toContainText(`最近同步: ${new Intl.DateTimeFormat("zh-CN", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).format(new Date("2026-05-08T08:00:01.000Z"))}`);
     await expect(detail).not.toContainText("slock: tester");
 
     await page.getByRole("button", { name: "请求设备刷新" }).click();

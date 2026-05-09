@@ -7,7 +7,7 @@ import {
   formatRuntimeTimestamp,
   getRuntimeFleetDetail,
   managedAgentStatusLabels,
-  runtimeDisplayName,
+  runtimeAgentLastSeenAt,
   runtimeHealthLabels,
   runtimeKindLabels,
   summarizeRuntimeFleet,
@@ -273,6 +273,7 @@ export function RuntimeFleetPage() {
           <AgentTable
             agents={result.agents}
             runtimes={snapshot.runtimes}
+            snapshot={snapshot}
             selectedId={selection?.kind === "agent" ? selection.id : undefined}
             onSelect={(agent) => setSelection({ kind: "agent", id: agent.id })}
           />
@@ -393,15 +394,17 @@ function RuntimeTable({
 function AgentTable({
   agents,
   runtimes,
+  snapshot,
   selectedId,
   onSelect,
 }: {
   agents: ManagedRuntimeAgent[];
   runtimes: AgentlaneRuntime[];
+  snapshot: RuntimeInventorySnapshot;
   selectedId?: string;
   onSelect: (agent: ManagedRuntimeAgent) => void;
 }) {
-  const runtimeNameById = new Map(runtimes.map((runtime) => [runtime.id, runtimeDisplayName(runtime)]));
+  const runtimeById = new Map(runtimes.map((runtime) => [runtime.id, runtime]));
 
   return (
     <section className="tablePanel runtimeAssetPanel" aria-label="Agent 列表">
@@ -440,7 +443,7 @@ function AgentTable({
                 <small>{agent.id}</small>
               </span>
               <span className="mutedAssetText" role="cell">
-                {runtimeNameById.get(agent.runtimeId) ?? agent.runtimeId}
+                {runtimeById.get(agent.runtimeId)?.name ?? agent.runtimeId}
               </span>
               <span className="channelList" role="cell">
                 {agent.channelBindings.map((binding) => (
@@ -451,7 +454,7 @@ function AgentTable({
                 <StatusBadge label={managedAgentStatusLabels[agent.status]} status={agent.status} />
               </span>
               <span className="mutedAssetText" role="cell">
-                {formatRuntimeTimestamp(agent.lastSeenAt)}
+                {formatRuntimeTimestamp(runtimeAgentLastSeenAt(agent, runtimeById.get(agent.runtimeId), snapshot))}
               </span>
             </button>
           ))}

@@ -539,9 +539,11 @@ button.tableRow:hover,
 }
 
 .detailPanel {
-  max-height: calc(100vh - 180px);
+  max-height: calc(100vh - 32px);
   overflow: auto;
   padding: 16px;
+  position: sticky;
+  top: 16px;
 }
 
 .detailHeader {
@@ -734,6 +736,7 @@ button.tableRow:hover,
 
   .detailPanel {
     max-height: none;
+    position: static;
   }
 }
 

@@ -1,6 +1,6 @@
 # Runtime Fleet Page Spec
 
-版本：TinySpec v0.3
+版本：TinySpec v0.4
 
 Runtime Fleet 是 Agentlane v1 用来查看设备、runtime、agent 和 channel binding 的第一版管理页面。页面优先读取本地后端最新 collector snapshot 和设备连接状态；没有后端数据时回退到 collector snapshot fixture，保证开发期仍可离线预览。
 
@@ -36,6 +36,8 @@ Adapter 必须把外部平台差异转换成 Agentlane 自己的数据语义，U
 
 `lastSeenAt` 表示 Agentlane 最近一次从对应对象采集到状态的时间。Device、Runtime、Agent 都使用同一字段语义，页面以本地化时间展示，不展示原始 UTC ISO 字符串。
 
+旧版本 snapshot 如果缺少 Agent 级 `lastSeenAt`，页面可以回退到归属 Runtime 的 `lastSeenAt`，再回退到 snapshot `observedAt`，避免在对象已被采集的情况下展示不可解释的未知时间。
+
 Agent 状态：
 
 - `active`：当前有任务或会话正在执行。
@@ -60,6 +62,7 @@ Device：
 
 - 列表/卡片展示设备名、连接状态、最近同步、Runtime 数、Agent 数。
 - 详情展示 `身份信息`、`连接状态`、`已注册 Runtime`。
+- 详情中的最近同步只在概览中展示一次，连接状态不重复展示同一时间。
 - 不在主界面展示 channel、sourceRefs、所有 IP、所有 MAC。
 
 Runtime：
@@ -83,6 +86,8 @@ Agent：
 - 用户可以搜索 `tester` 并只看到相关 Agent。
 - 用户可以按 `Slock` channel 过滤 Agent。
 - 用户可以点击 Agent 行并在详情面板看到归属 Runtime、归属设备、关联渠道和运行统计。
+- 用户在桌面宽度滚动到 Agent 表格后点击行，详情面板仍停留在可视区域内。
+- 当旧 snapshot 缺少 Agent 级最近同步时间时，Agent 列表和详情使用归属 Runtime 或 snapshot 时间回退，不展示未知。
 - 用户可以点击 Runtime 行并在详情面板看到所属设备和运行统计，不出现运行入口区块。
 - 用户可以点击 Device 卡片并在详情面板看到身份信息、连接状态和已注册 Runtime。
 - 当后端已有最新 snapshot 时，页面展示后端设备名称而不是 fixture 设备名称。

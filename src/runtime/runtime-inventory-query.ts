@@ -70,6 +70,15 @@ export function runtimeDisplayName(runtime: AgentlaneRuntime): string {
   return runtime.name;
 }
 
+/** Resolve the best available observation time for an Agent row or detail view. */
+export function runtimeAgentLastSeenAt(
+  agent: ManagedRuntimeAgent,
+  runtime?: AgentlaneRuntime,
+  snapshot?: RuntimeInventorySnapshot,
+): string | undefined {
+  return agent.lastSeenAt ?? runtime?.lastSeenAt ?? snapshot?.observedAt;
+}
+
 /** Filter state supported by the first Runtime Fleet page. */
 export interface RuntimeFleetFilters {
   /** Free-text search across device, runtime, agent, channel, and source labels. */
@@ -249,7 +258,6 @@ export function getRuntimeFleetDetail(
           items: [
             "连接方式: Collector",
             `设备状态: ${runtimeHealthLabels[snapshot.device.status]}`,
-            `最近同步: ${formatRuntimeTimestamp(snapshot.device.lastSeenAt ?? snapshot.observedAt)}`,
             `Collector: ${snapshot.collector.version}`,
           ],
         },
@@ -316,7 +324,7 @@ export function getRuntimeFleetDetail(
             `Agent ID: ${agent.id}`,
             `来源平台: ${sourceLabel(agent.origin)}`,
             `状态: ${managedAgentStatusLabels[agent.status]}`,
-            `最近同步: ${formatRuntimeTimestamp(agent.lastSeenAt)}`,
+            `最近同步: ${formatRuntimeTimestamp(runtimeAgentLastSeenAt(agent, runtime, snapshot))}`,
           ],
         },
         {

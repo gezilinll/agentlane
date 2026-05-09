@@ -67,7 +67,6 @@ describe("runtime inventory query", () => {
     expect(sectionItems(sections, "连接状态")).toEqual([
       "连接方式: Collector",
       "设备状态: 在线",
-      `最近同步: ${fixtureLastSeenAt}`,
       "Collector: 0.1.0",
     ]);
     expect(sectionItems(sections, "已注册 Runtime")).toEqual(["OpenClaw Gateway", "Slock daemon"]);
@@ -120,6 +119,27 @@ describe("runtime inventory query", () => {
       "最大并发: 不支持采集",
     ]);
     expect((detail as { sourceLabels?: string[] })?.sourceLabels).toBeUndefined();
+  });
+
+  it("falls back agent last sync to its runtime when older snapshots omit agent-level observation time", () => {
+    const legacySnapshot: RuntimeInventorySnapshot = {
+      ...snapshot,
+      agents: snapshot.agents.map((agent) => {
+        if (agent.id !== "fixture-mac:slock:slock-daemon:agent:tester") return agent;
+        const { lastSeenAt, ...agentWithoutLastSeenAt } = agent;
+        void lastSeenAt;
+        return agentWithoutLastSeenAt;
+      }),
+    };
+
+    const detail = getRuntimeFleetDetail(
+      legacySnapshot,
+      "agent",
+      "fixture-mac:slock:slock-daemon:agent:tester",
+    );
+    const sections = detailSections(detail);
+
+    expect(sectionItems(sections, "身份信息")).toContain(`最近同步: ${fixtureLastSeenAt}`);
   });
 
   it("formats timestamps for UI display without leaking raw ISO strings", () => {
