@@ -197,3 +197,13 @@ Multica 特别规则：
 - Multica 作为 work item + execution 的强来源。
 - Slock 作为 task board 强来源，但 execution state 需要单独方案。
 - 网络 proxy 可以作为增强策略，但 v1 不应默认要求 TLS 明文拦截；优先使用平台 API/CLI 和低侵入 observer。
+
+## 前端闭环范围
+
+Runs / Work Board 第一版是只读页面，用于验证统一工作态模型是否能被用户理解和验收。
+
+- 页面只读取 `GET /api/runtime-work-state/latest`，没有后端快照时使用明确标识的 fixture。
+- 页面只消费 `runtime-work-state-query.ts` 生成的 lane、summary、detail 和 capability notes。
+- 页面不直接判断 OpenClaw、Multica、Slock 原始状态含义。
+- 页面不提供拖拽、写回、指派、接管聊天或代理流量入口。
+- 页面必须展示 `confidence` 和平台能力缺口，避免把 partial / unsupported 数据误呈现为强事实。
