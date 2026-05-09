@@ -144,30 +144,246 @@ describe("device collector scripts", () => {
     }
   });
 
-  it("prints a runtime work-state snapshot in work-state once mode", () => {
+  it("does not fabricate runtime work-state when live probes are unavailable", () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-work-state-empty-home-"));
+
     const output = execFileSync(process.execPath, [
       collectorScript,
       "--work-state-once",
       "--device-id",
-      "fixture-device",
+      "live-empty-device",
       "--print-only",
-    ], { encoding: "utf8" });
+    ], {
+      encoding: "utf8",
+      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
+    });
 
     const snapshot = JSON.parse(output);
 
-    expect(snapshot.deviceId).toBe("fixture-device");
-    expect(Array.isArray(snapshot.workItems)).toBe(true);
-    expect(Array.isArray(snapshot.conversations)).toBe(true);
-    expect(Array.isArray(snapshot.executions)).toBe(true);
-    expect(Array.isArray(snapshot.capabilities)).toBe(true);
+    expect(snapshot.deviceId).toBe("live-empty-device");
+    expect(snapshot.workItems).toEqual([]);
+    expect(snapshot.conversations).toEqual([]);
+    expect(snapshot.executions).toEqual([]);
     expect(snapshot.capabilities.map((capability: { source: string }) => capability.source)).toEqual([
       "openclaw",
       "multica",
       "slock",
     ]);
+    expect(snapshot.warnings).toEqual(expect.arrayContaining([
+      expect.stringContaining("OpenClaw work-state probe unavailable"),
+      expect.stringContaining("Multica work-state probe unavailable"),
+      expect.stringContaining("Slock work-state probe unavailable"),
+    ]));
+  });
+
+  it("maps live OpenClaw task probes into executions without creating work items", () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-work-home-"));
+    const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-work-bin-"));
+    writeFakeOpenClaw(fakeBin, {
+      health: {
+        ok: true,
+        agents: [{ id: "main", sessions: { recent: [{ sessionKey: "live-session", updatedAt: "2026-05-09T06:41:00.000Z", status: "active" }] } }],
+      },
+      status: { gateway: { url: "ws://127.0.0.1:18789", reachable: true } },
+      tasks: {
+        tasks: [
+          {
+            taskId: "task-live-1",
+            runId: "run-live-1",
+            status: "running",
+            agentId: "main",
+            requesterSessionKey: "live-session",
+            createdAt: 1778308800000,
+            startedAt: 1778308860000,
+            lastEventAt: 1778308920000,
+          },
+          {
+            taskId: "task-live-2",
+            runId: "run-live-2",
+            status: "lost",
+            agentId: "main",
+            createdAt: 1778308980000,
+            startedAt: 1778309040000,
+            endedAt: 1778309100000,
+            lastEventAt: 1778309100000,
+          },
+        ],
+      },
+    });
+
+    const output = execFileSync(process.execPath, [
+      collectorScript,
+      "--work-state-once",
+      "--device-id",
+      "openclaw-live-device",
+      "--print-only",
+    ], {
+      encoding: "utf8",
+      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
+    });
+
+    const snapshot = JSON.parse(output);
+    const runningExecution = snapshot.executions.find((execution: { externalId: string }) => execution.externalId === "run-live-1");
+    const failedExecution = snapshot.executions.find((execution: { externalId: string }) => execution.externalId === "run-live-2");
+
+    expect(snapshot.workItems.filter((item: { source: string }) => item.source === "openclaw")).toEqual([]);
+    expect(runningExecution).toMatchObject({
+      source: "openclaw",
+      status: "running",
+      queuedAt: "2026-05-09T06:40:00.000Z",
+      startedAt: "2026-05-09T06:41:00.000Z",
+      conversationId: expect.stringContaining("conversation:live-session"),
+    });
+    expect(failedExecution).toMatchObject({ source: "openclaw", status: "failed" });
+    expect(snapshot.conversations).toContainEqual(expect.objectContaining({
+      source: "openclaw",
+      externalId: "live-session",
+      status: "active",
+    }));
+  });
+
+  it("keeps OpenClaw execution ids unique when the platform repeats run ids", () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-duplicate-home-"));
+    const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-duplicate-bin-"));
+    writeFakeOpenClaw(fakeBin, {
+      health: { ok: true, agents: [{ id: "main" }] },
+      status: { gateway: { url: "ws://127.0.0.1:18789", reachable: true } },
+      tasks: {
+        tasks: [
+          { taskId: "task-duplicate-1", runId: "reused-run", status: "succeeded", agentId: "main" },
+          { taskId: "task-duplicate-2", runId: "reused-run", status: "failed", agentId: "main" },
+        ],
+      },
+    });
+
+    const output = execFileSync(process.execPath, [
+      collectorScript,
+      "--work-state-once",
+      "--device-id",
+      "openclaw-duplicate-device",
+      "--print-only",
+    ], {
+      encoding: "utf8",
+      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
+    });
+
+    const snapshot = JSON.parse(output);
+    const executionIds = snapshot.executions.map((execution: { id: string }) => execution.id);
+
+    expect(snapshot.executions.map((execution: { externalId: string }) => execution.externalId)).toEqual([
+      "reused-run",
+      "reused-run",
+    ]);
+    expect(new Set(executionIds).size).toBe(executionIds.length);
+    expect(executionIds.every((id: string) => id.includes("task-duplicate"))).toBe(true);
+  });
+
+  it("maps live Multica issue and agent task probes into work items and executions", () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-multica-work-home-"));
+    const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-multica-work-bin-"));
+    writeFakeMultica(fakeBin, {
+      runtimes: [{ id: "runtime-openclaw", provider: "openclaw", name: "Openclaw runtime", status: "online" }],
+      agents: [{ id: "agent-1", name: "CMO", runtime_id: "runtime-openclaw", status: "idle" }],
+      issues: {
+        issues: [
+          {
+            id: "issue-1",
+            identifier: "GDA-31",
+            title: "Live Multica issue",
+            status: "todo",
+            assignee_id: "agent-1",
+            assignee_type: "agent",
+            creator_id: "member-1",
+            creator_type: "member",
+            created_at: "2026-05-09T06:30:00.000Z",
+            updated_at: "2026-05-09T06:45:00.000Z",
+          },
+        ],
+      },
+      tasksByAgentId: {
+        "agent-1": {
+          tasks: [
+            {
+              id: "task-1",
+              issue_id: "issue-1",
+              agent_id: "agent-1",
+              runtime_id: "runtime-openclaw",
+              chat_session_id: "chat-1",
+              status: "running",
+              created_at: "2026-05-09T06:40:00.000Z",
+              started_at: "2026-05-09T06:41:00.000Z",
+            },
+          ],
+        },
+      },
+    });
+
+    const output = execFileSync(process.execPath, [
+      collectorScript,
+      "--work-state-once",
+      "--device-id",
+      "multica-live-device",
+      "--print-only",
+    ], {
+      encoding: "utf8",
+      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
+    });
+
+    const snapshot = JSON.parse(output);
+    const workItem = snapshot.workItems.find((item: { externalId: string }) => item.externalId === "issue-1");
+    const execution = snapshot.executions.find((item: { externalId: string }) => item.externalId === "task-1");
+
+    expect(workItem).toMatchObject({
+      source: "multica",
+      title: "Live Multica issue",
+      status: "todo",
+      agentId: "multica-live-device:multica:runtime-openclaw:agent:agent-1",
+      runtimeId: "multica-live-device:multica:runtime-openclaw",
+    });
+    expect(execution).toMatchObject({
+      source: "multica",
+      status: "running",
+      workItemId: workItem.id,
+      conversationId: "multica-live-device:multica:runtime-openclaw:conversation:chat-1",
+    });
+    expect(snapshot.conversations).toContainEqual(expect.objectContaining({
+      source: "multica",
+      externalId: "chat-1",
+      status: "active",
+    }));
+  });
+
+  it("does not invent Slock board state when only workspace agent files are present", () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-slock-work-home-"));
+    const agentDir = path.join(fakeHome, ".slock", "agents", "tester");
+    mkdirSync(agentDir, { recursive: true });
+    writeFileSync(path.join(agentDir, "MEMORY.md"), "# tester\n");
+
+    const output = execFileSync(process.execPath, [
+      collectorScript,
+      "--work-state-once",
+      "--device-id",
+      "slock-work-device",
+      "--print-only",
+    ], {
+      encoding: "utf8",
+      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
+    });
+
+    const snapshot = JSON.parse(output);
+    const slockCapability = snapshot.capabilities.find((capability: { source: string }) => capability.source === "slock");
+
+    expect(snapshot.workItems.filter((item: { source: string }) => item.source === "slock")).toEqual([]);
+    expect(snapshot.executions.filter((item: { source: string }) => item.source === "slock")).toEqual([]);
+    expect(slockCapability).toMatchObject({
+      source: "slock",
+      workItems: { support: "unknown" },
+      executions: { support: "unknown" },
+    });
   });
 
   it("posts a runtime work-state once snapshot to the Agentlane backend when server url is configured", async () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-work-state-post-home-"));
     const { server, receivedSnapshot, baseUrl } = await startWorkStateServer();
 
     try {
@@ -178,7 +394,7 @@ describe("device collector scripts", () => {
         "fixture-device",
         "--server-url",
         baseUrl,
-      ]);
+      ], { env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" } });
       const snapshot = await receivedSnapshot;
 
       expect(output).toBe("");
@@ -329,7 +545,7 @@ describe("device collector scripts", () => {
   });
 });
 
-function writeFakeOpenClaw(fakeBin: string, payload: { health: unknown; status: unknown }): void {
+function writeFakeOpenClaw(fakeBin: string, payload: { health: unknown; status: unknown; tasks?: unknown }): void {
   const executable = path.join(fakeBin, "openclaw");
   const script = path.join(fakeBin, "openclaw.js");
   writeFileSync(script, `
@@ -343,6 +559,10 @@ if (command === "status") {
   console.log(JSON.stringify(payload.status));
   process.exit(0);
 }
+if (command === "tasks" && process.argv[3] === "list") {
+  console.log(JSON.stringify(payload.tasks ?? { tasks: [] }));
+  process.exit(0);
+}
 process.exit(1);
 `);
   writeFileSync(executable, `#!/bin/sh
@@ -351,13 +571,53 @@ exec "${process.execPath}" "${script}" "$@"
   chmodSync(executable, 0o755);
 }
 
-function runNodeScript(args: string[]): Promise<string> {
-  return runCommand(process.execPath, args);
+function writeFakeMultica(fakeBin: string, payload: {
+  runtimes: unknown;
+  agents: unknown;
+  issues: unknown;
+  tasksByAgentId: Record<string, unknown>;
+}): void {
+  const executable = path.join(fakeBin, "multica");
+  const script = path.join(fakeBin, "multica.js");
+  writeFileSync(script, `
+const payload = ${JSON.stringify(payload)};
+const [resource, action, id] = process.argv.slice(2);
+if (resource === "runtime" && action === "list") {
+  console.log(JSON.stringify(payload.runtimes));
+  process.exit(0);
+}
+if (resource === "agent" && action === "list") {
+  console.log(JSON.stringify(payload.agents));
+  process.exit(0);
+}
+if (resource === "agent" && action === "tasks") {
+  console.log(JSON.stringify(payload.tasksByAgentId[id] ?? { tasks: [] }));
+  process.exit(0);
+}
+if (resource === "issue" && action === "list") {
+  console.log(JSON.stringify(payload.issues));
+  process.exit(0);
+}
+if (resource === "daemon" && action === "status") {
+  console.log(JSON.stringify({ status: "running", active_task_count: 1 }));
+  process.exit(0);
+}
+process.exit(1);
+`);
+  writeFileSync(executable, `#!/bin/sh
+exec "${process.execPath}" "${script}" "$@"
+`);
+  chmodSync(executable, 0o755);
 }
 
-function runCommand(command: string, args: string[]): Promise<string> {
+function runNodeScript(args: string[], options: { env?: NodeJS.ProcessEnv } = {}): Promise<string> {
+  return runCommand(process.execPath, args, options);
+}
+
+function runCommand(command: string, args: string[], options: { env?: NodeJS.ProcessEnv } = {}): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
+      env: options.env,
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";

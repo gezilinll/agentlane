@@ -558,6 +558,519 @@ async function runOnce(config, args) {
   return snapshot;
 }
 
+function toArray(value, keys = []) {
+  if (Array.isArray(value)) return value;
+  if (!value || typeof value !== "object") return [];
+  for (const key of keys) {
+    if (Array.isArray(value[key])) return value[key];
+  }
+  if (Array.isArray(value.data)) return value.data;
+  if (Array.isArray(value.items)) return value.items;
+  return [];
+}
+
+function toIsoTimestamp(value) {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const epochMs = value > 10_000_000_000 ? value : value * 1000;
+    return new Date(epochMs).toISOString();
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+    if (/^\d+$/.test(trimmed)) return toIsoTimestamp(Number(trimmed));
+    const parsed = Date.parse(trimmed);
+    if (Number.isFinite(parsed)) return new Date(parsed).toISOString();
+  }
+  return undefined;
+}
+
+function supportCapability(support, strategies, evidence, limitations) {
+  return { support, strategies, evidence, limitations };
+}
+
+function openClawWorkStateCapability(collectedAt, options = {}) {
+  return {
+    source: "openclaw",
+    collectedAt,
+    workItems: supportCapability(
+      "unsupported",
+      ["cli", "native_api"],
+      ["openclaw tasks list --json exposes executions, not project-management work items."],
+      ["OpenClaw has no pending or review phase without an upstream work item source."],
+    ),
+    conversations: supportCapability(
+      options.conversationsSupport || "unknown",
+      ["cli", "native_api"],
+      options.conversationsEvidence || ["openclaw health/status was not available for this snapshot."],
+      options.conversationsLimitations || ["Session count can include historical sessions; recent sessions require health/status evidence."],
+    ),
+    executions: supportCapability(
+      options.executionsSupport || "unknown",
+      ["cli", "native_api"],
+      options.executionsEvidence || ["openclaw tasks list --json was not available for this snapshot."],
+      options.executionsLimitations || ["Lost and timed out statuses are normalized to failed when task data is available."],
+    ),
+  };
+}
+
+function multicaWorkStateCapability(collectedAt, options = {}) {
+  return {
+    source: "multica",
+    collectedAt,
+    workItems: supportCapability(
+      options.workItemsSupport || "unknown",
+      ["cli", "native_api"],
+      options.workItemsEvidence || ["multica issue list --output json was not available for this snapshot."],
+      options.workItemsLimitations || ["Backlog is normalized to todo when issue data is available."],
+    ),
+    conversations: supportCapability(
+      options.conversationsSupport || "unknown",
+      ["cli", "native_api"],
+      options.conversationsEvidence || ["multica agent tasks did not expose chat_session_id in this snapshot."],
+      options.conversationsLimitations || ["Conversation messages require separate issue run-message reads."],
+    ),
+    executions: supportCapability(
+      options.executionsSupport || "unknown",
+      ["cli", "native_api"],
+      options.executionsEvidence || ["multica agent tasks --output json was not available for this snapshot."],
+      options.executionsLimitations || ["Completed is normalized to succeeded when task data is available."],
+    ),
+  };
+}
+
+function slockWorkStateCapability(collectedAt, options = {}) {
+  return {
+    source: "slock",
+    collectedAt,
+    workItems: supportCapability(
+      options.workItemsSupport || "unknown",
+      options.workItemsStrategies || ["cli", "native_api"],
+      options.workItemsEvidence || ["No Slock task-board probe was available for this snapshot."],
+      options.workItemsLimitations || ["Workspace agent files prove local agent presence, not board state."],
+    ),
+    conversations: supportCapability(
+      options.conversationsSupport || "unknown",
+      options.conversationsStrategies || ["cli", "native_api"],
+      options.conversationsEvidence || ["No Slock channel/thread history probe was available for this snapshot."],
+      options.conversationsLimitations || ["DM and thread history depend on the active Slock agent context."],
+    ),
+    executions: supportCapability(
+      "unknown",
+      ["network_proxy", "managed_launcher"],
+      ["Slock server active state is not treated as execution running evidence."],
+      ["Execution state requires activity events, an observer, or a proxy path; task-board in_progress is not enough."],
+    ),
+  };
+}
+
+function normalizeOpenClawExecutionStatus(status) {
+  if (status === "succeeded") return "succeeded";
+  if (status === "cancelled") return "cancelled";
+  if (status === "queued" || status === "pending") return "queued";
+  if (status === "running" || status === "in_progress") return "running";
+  if (status === "failed" || status === "lost" || status === "timed_out" || status === "timeout") return "failed";
+  return "unknown";
+}
+
+function normalizeMulticaWorkItemStatus(status) {
+  if (status === "todo" || status === "backlog" || status === "open") return "todo";
+  if (status === "in_progress" || status === "running") return "in_progress";
+  if (status === "in_review" || status === "review") return "in_review";
+  if (status === "done" || status === "completed" || status === "succeeded") return "done";
+  if (status === "blocked") return "blocked";
+  if (status === "cancelled" || status === "canceled") return "cancelled";
+  return "unknown";
+}
+
+function normalizeMulticaExecutionStatus(status) {
+  if (status === "completed" || status === "succeeded" || status === "done") return "succeeded";
+  if (status === "failed" || status === "error") return "failed";
+  if (status === "cancelled" || status === "canceled") return "cancelled";
+  if (status === "queued" || status === "pending") return "queued";
+  if (status === "running" || status === "in_progress") return "running";
+  return "unknown";
+}
+
+function normalizeSlockWorkItemStatus(status) {
+  if (status === "todo" || status === "backlog" || status === "open") return "todo";
+  if (status === "in_progress" || status === "running") return "in_progress";
+  if (status === "in_review" || status === "review") return "in_review";
+  if (status === "done" || status === "completed" || status === "succeeded") return "done";
+  if (status === "blocked") return "blocked";
+  if (status === "cancelled" || status === "canceled") return "cancelled";
+  return "unknown";
+}
+
+function extractOpenClawSessionKey(session) {
+  if (typeof session === "string") return session;
+  if (!session || typeof session !== "object") return "";
+  return session.sessionKey || session.session_key || session.key || session.id || session.requesterSessionKey || session.childSessionKey || "";
+}
+
+function addOpenClawSession(sessionMap, runtimeId, agentId, session, observedAt, fallbackStatus = "unknown") {
+  const sessionKey = extractOpenClawSessionKey(session);
+  if (!sessionKey) return;
+  const existing = sessionMap.get(sessionKey) || {};
+  const lastActivityAt = toIsoTimestamp(session?.updatedAt || session?.updated_at || session?.lastActivityAt || session?.last_activity_at || session?.lastEventAt);
+  sessionMap.set(sessionKey, {
+    id: `${runtimeId}:conversation:${sanitizeId(sessionKey)}`,
+    source: "openclaw",
+    externalId: sessionKey,
+    status: session?.status === "active" || fallbackStatus === "active" ? "active" : existing.status || fallbackStatus,
+    agentId: existing.agentId || agentId,
+    runtimeId,
+    ...(lastActivityAt || existing.lastActivityAt ? { lastActivityAt: lastActivityAt || existing.lastActivityAt } : {}),
+    lastSeenAt: observedAt,
+    sourceRefs: [{ source: "openclaw", externalId: sessionKey }],
+  });
+}
+
+function collectOpenClawWorkState(deviceId, observedAt) {
+  if (!commandExists("openclaw")) {
+    return {
+      workItems: [],
+      conversations: [],
+      executions: [],
+      capabilities: [openClawWorkStateCapability(observedAt)],
+      warnings: ["OpenClaw work-state probe unavailable: openclaw command not found."],
+    };
+  }
+
+  const health = runJson("openclaw", ["health", "--json", "--timeout", "5000"]);
+  const status = runJson("openclaw", ["status", "--json", "--timeout", "5000"]);
+  const taskReport = runJson("openclaw", ["tasks", "list", "--json"], 20_000);
+  const tasks = toArray(taskReport, ["tasks"]);
+  const gateway = status?.gateway;
+  const runtimeId = makeRuntimeId(deviceId, "openclaw", gateway?.url ? `gateway-${gateway.url}` : "gateway-local");
+  const sessionMap = new Map();
+
+  const healthAgents = toArray(health?.agents, ["agents"]);
+  const statusAgents = toArray(status?.agents?.agents || status?.agents, ["agents"]);
+  for (const agent of [...healthAgents, ...statusAgents]) {
+    const agentExternalId = agent?.agentId || agent?.agent_id || agent?.id || "main";
+    const agentId = makeAgentId(runtimeId, agentExternalId);
+    const recentSessions = [
+      ...toArray(agent?.sessions?.recent, ["sessions"]),
+      ...toArray(agent?.sessions?.recentSessions, ["sessions"]),
+      ...toArray(agent?.recentSessions, ["sessions"]),
+    ];
+    for (const session of recentSessions) addOpenClawSession(sessionMap, runtimeId, agentId, session, observedAt, session?.status || "unknown");
+  }
+
+  const executions = tasks.map((task) => {
+    const taskId = task.taskId || task.task_id || task.id || task.runId || "task";
+    const runId = task.runId || task.run_id || taskId;
+    const agentExternalId = task.agentId || task.agent_id || "main";
+    const agentId = makeAgentId(runtimeId, agentExternalId);
+    const sessionKey = task.requesterSessionKey || task.requester_session_key || task.childSessionKey || task.child_session_key || task.sessionKey || task.session_key;
+    if (sessionKey) {
+      addOpenClawSession(
+        sessionMap,
+        runtimeId,
+        agentId,
+        {
+          sessionKey,
+          lastEventAt: task.lastEventAt || task.last_event_at || task.startedAt || task.started_at,
+          status: normalizeOpenClawExecutionStatus(task.status) === "running" ? "active" : "idle",
+        },
+        observedAt,
+        normalizeOpenClawExecutionStatus(task.status) === "running" ? "active" : "idle",
+      );
+    }
+    const error = task.error || task.lastError || task.last_error;
+    const executionKey = taskId && String(taskId) !== String(runId)
+      ? `${sanitizeId(runId)}-${sanitizeId(taskId)}`
+      : sanitizeId(runId);
+    return {
+      id: `${runtimeId}:execution:${executionKey}`,
+      source: "openclaw",
+      externalId: String(runId),
+      runtimeId,
+      agentId,
+      ...(sessionKey ? { conversationId: `${runtimeId}:conversation:${sanitizeId(sessionKey)}` } : {}),
+      status: normalizeOpenClawExecutionStatus(task.status),
+      ...(toIsoTimestamp(task.createdAt || task.created_at) ? { queuedAt: toIsoTimestamp(task.createdAt || task.created_at) } : {}),
+      ...(toIsoTimestamp(task.startedAt || task.started_at) ? { startedAt: toIsoTimestamp(task.startedAt || task.started_at) } : {}),
+      ...(toIsoTimestamp(task.endedAt || task.ended_at || task.completedAt || task.completed_at) ? { endedAt: toIsoTimestamp(task.endedAt || task.ended_at || task.completedAt || task.completed_at) } : {}),
+      lastSeenAt: toIsoTimestamp(task.lastEventAt || task.last_event_at || task.endedAt || task.ended_at || task.startedAt || task.started_at) || observedAt,
+      ...(error ? { error: String(error).slice(0, 240) } : {}),
+      sourceRefs: [{ source: "openclaw", externalId: String(taskId) }],
+    };
+  });
+
+  const warnings = [];
+  if (!taskReport) warnings.push("OpenClaw work-state probe unavailable: openclaw tasks list --json failed or returned non-JSON.");
+  if (!health && !status) warnings.push("OpenClaw conversation probe unavailable: health/status failed or returned non-JSON.");
+
+  return {
+    workItems: [],
+    conversations: Array.from(sessionMap.values()),
+    executions,
+    capabilities: [
+      openClawWorkStateCapability(observedAt, {
+        conversationsSupport: health || status || sessionMap.size > 0 ? "partial" : "unknown",
+        conversationsEvidence: health || status || sessionMap.size > 0
+          ? ["openclaw health/status or task session keys exposed recent session evidence."]
+          : undefined,
+        executionsSupport: taskReport ? "supported" : "unknown",
+        executionsEvidence: taskReport ? ["openclaw tasks list --json exposed task and run status."] : undefined,
+      }),
+    ],
+    warnings,
+  };
+}
+
+function runtimeIdFromMulticaRuntime(deviceId, runtime) {
+  return makeRuntimeId(deviceId, "multica", runtime?.id || runtime?.name || runtime?.provider || "runtime");
+}
+
+function runtimeIdForMulticaAgent(deviceId, agent, runtimeIdByExternalId) {
+  return runtimeIdByExternalId.get(agent?.runtime_id || agent?.runtimeId) ||
+    makeRuntimeId(deviceId, "multica", agent?.runtime_id || agent?.runtimeId || "unknown-runtime");
+}
+
+function collectMulticaWorkState(deviceId, observedAt) {
+  if (!commandExists("multica")) {
+    return {
+      workItems: [],
+      conversations: [],
+      executions: [],
+      capabilities: [multicaWorkStateCapability(observedAt)],
+      warnings: ["Multica work-state probe unavailable: multica command not found."],
+    };
+  }
+
+  const runtimeReport = runJson("multica", ["runtime", "list", "--output", "json"]);
+  const agentReport = runJson("multica", ["agent", "list", "--output", "json"]);
+  const issueReport = runJson("multica", ["issue", "list", "--output", "json"], 20_000);
+  const runtimes = toArray(runtimeReport, ["runtimes"]);
+  const agents = toArray(agentReport, ["agents"]);
+  const issues = toArray(issueReport, ["issues"]);
+  const runtimeIdByExternalId = new Map(
+    runtimes.map((runtime) => [runtime.id || runtime.name || runtime.provider, runtimeIdFromMulticaRuntime(deviceId, runtime)]),
+  );
+  const agentByExternalId = new Map(agents.map((agent) => [agent.id || agent.name, agent]));
+  const firstRuntimeId = runtimes.length ? runtimeIdFromMulticaRuntime(deviceId, runtimes[0]) : makeRuntimeId(deviceId, "multica", "unknown-runtime");
+
+  const workItems = issues.map((issue) => {
+    const issueId = issue.id || issue.identifier || issue.number || "issue";
+    const assigneeId = issue.assignee_id || issue.assigneeId || issue.assignee?.id || issue.assignee;
+    const assigneeAgent = assigneeId ? agentByExternalId.get(assigneeId) : undefined;
+    const runtimeId = issue.runtime_id
+      ? makeRuntimeId(deviceId, "multica", issue.runtime_id)
+      : assigneeAgent
+        ? runtimeIdForMulticaAgent(deviceId, assigneeAgent, runtimeIdByExternalId)
+        : firstRuntimeId;
+    const agentId = assigneeId && (issue.assignee_type === "agent" || assigneeAgent)
+      ? makeAgentId(runtimeId, assigneeId)
+      : undefined;
+    return {
+      id: `${runtimeId}:work-item:${sanitizeId(issueId)}`,
+      source: "multica",
+      externalId: String(issueId),
+      title: issue.title || issue.name || issue.identifier || String(issueId),
+      ...(issue.description ? { description: String(issue.description).slice(0, 500) } : {}),
+      status: normalizeMulticaWorkItemStatus(issue.status),
+      ...(assigneeId ? { assignee: { kind: issue.assignee_type === "agent" || assigneeAgent ? "agent" : "unknown", label: String(issue.assignee_name || issue.assigneeName || assigneeId), externalId: String(assigneeId) } } : {}),
+      ...(issue.creator_id || issue.creatorId || issue.creator ? { creator: { kind: issue.creator_type === "agent" ? "agent" : "human", label: String(issue.creator_name || issue.creatorName || issue.creator_id || issue.creatorId || issue.creator), externalId: String(issue.creator_id || issue.creatorId || issue.creator) } } : {}),
+      ...(agentId ? { agentId } : {}),
+      runtimeId,
+      ...(toIsoTimestamp(issue.created_at || issue.createdAt) ? { createdAt: toIsoTimestamp(issue.created_at || issue.createdAt) } : {}),
+      ...(toIsoTimestamp(issue.updated_at || issue.updatedAt) ? { updatedAt: toIsoTimestamp(issue.updated_at || issue.updatedAt) } : {}),
+      lastSeenAt: toIsoTimestamp(issue.updated_at || issue.updatedAt || issue.created_at || issue.createdAt) || observedAt,
+      sourceRefs: [{ source: "multica", externalId: String(issue.identifier || issueId) }],
+    };
+  });
+
+  const conversationsById = new Map();
+  const executions = [];
+  let taskProbeSucceeded = false;
+  for (const agent of agents) {
+    const agentExternalId = agent.id || agent.name;
+    if (!agentExternalId) continue;
+    const taskReport = runJson("multica", ["agent", "tasks", String(agentExternalId), "--output", "json"], 20_000);
+    if (taskReport) taskProbeSucceeded = true;
+    const tasks = toArray(taskReport, ["tasks", "runs"]);
+    for (const task of tasks) {
+      const taskId = task.id || task.task_id || task.run_id || task.runId || "task";
+      const runtimeId = task.runtime_id
+        ? makeRuntimeId(deviceId, "multica", task.runtime_id)
+        : runtimeIdForMulticaAgent(deviceId, agent, runtimeIdByExternalId);
+      const executionAgentId = makeAgentId(runtimeId, task.agent_id || task.agentId || agentExternalId);
+      const issueId = task.issue_id || task.issueId;
+      const workItemId = issueId ? `${runtimeId}:work-item:${sanitizeId(issueId)}` : undefined;
+      const chatSessionId = task.chat_session_id || task.chatSessionId;
+      const conversationId = chatSessionId ? `${runtimeId}:conversation:${sanitizeId(chatSessionId)}` : undefined;
+      if (chatSessionId) {
+        conversationsById.set(chatSessionId, {
+          id: conversationId,
+          source: "multica",
+          externalId: String(chatSessionId),
+          status: normalizeMulticaExecutionStatus(task.status) === "running" ? "active" : "idle",
+          ...(workItemId ? { workItemId } : {}),
+          agentId: executionAgentId,
+          runtimeId,
+          ...(toIsoTimestamp(task.started_at || task.startedAt || task.created_at || task.createdAt) ? { startedAt: toIsoTimestamp(task.started_at || task.startedAt || task.created_at || task.createdAt) } : {}),
+          lastSeenAt: toIsoTimestamp(task.completed_at || task.completedAt || task.started_at || task.startedAt || task.created_at || task.createdAt) || observedAt,
+          sourceRefs: [{ source: "multica", externalId: String(chatSessionId) }],
+        });
+      }
+      executions.push({
+        id: `${runtimeId}:execution:${sanitizeId(taskId)}`,
+        source: "multica",
+        externalId: String(taskId),
+        runtimeId,
+        agentId: executionAgentId,
+        ...(workItemId ? { workItemId } : {}),
+        ...(conversationId ? { conversationId } : {}),
+        status: normalizeMulticaExecutionStatus(task.status),
+        ...(toIsoTimestamp(task.created_at || task.createdAt) ? { queuedAt: toIsoTimestamp(task.created_at || task.createdAt) } : {}),
+        ...(toIsoTimestamp(task.started_at || task.startedAt || task.dispatched_at || task.dispatchedAt) ? { startedAt: toIsoTimestamp(task.started_at || task.startedAt || task.dispatched_at || task.dispatchedAt) } : {}),
+        ...(toIsoTimestamp(task.completed_at || task.completedAt || task.ended_at || task.endedAt) ? { endedAt: toIsoTimestamp(task.completed_at || task.completedAt || task.ended_at || task.endedAt) } : {}),
+        lastSeenAt: toIsoTimestamp(task.updated_at || task.updatedAt || task.completed_at || task.completedAt || task.started_at || task.startedAt) || observedAt,
+        ...(task.error ? { error: String(task.error).slice(0, 240) } : {}),
+        sourceRefs: [{ source: "multica", externalId: String(taskId) }],
+      });
+    }
+  }
+
+  const warnings = [];
+  if (!issueReport) warnings.push("Multica work-state probe unavailable: multica issue list --output json failed or returned non-JSON.");
+  if (!agentReport) warnings.push("Multica execution probe unavailable: multica agent list --output json failed or returned non-JSON.");
+  if (agents.length > 0 && !taskProbeSucceeded) warnings.push("Multica execution probe unavailable: multica agent tasks failed for every agent.");
+
+  return {
+    workItems,
+    conversations: Array.from(conversationsById.values()),
+    executions,
+    capabilities: [
+      multicaWorkStateCapability(observedAt, {
+        workItemsSupport: issueReport ? "supported" : "unknown",
+        workItemsEvidence: issueReport ? ["multica issue list --output json exposed issue lifecycle fields."] : undefined,
+        conversationsSupport: conversationsById.size > 0 ? "partial" : taskProbeSucceeded ? "partial" : "unknown",
+        conversationsEvidence: conversationsById.size > 0 || taskProbeSucceeded ? ["multica agent tasks can expose chat_session_id for task-linked conversations."] : undefined,
+        executionsSupport: taskProbeSucceeded ? "supported" : "unknown",
+        executionsEvidence: taskProbeSucceeded ? ["multica agent tasks <agent-id> --output json exposed task status and timestamps."] : undefined,
+      }),
+    ],
+    warnings,
+  };
+}
+
+function normalizeSlockTask(rawTask, runtimeId, agentId, channel, observedAt) {
+  const taskId = rawTask.id || rawTask.taskId || rawTask.messageId || rawTask.taskNumber || "task";
+  const threadId = rawTask.threadId || rawTask.thread_id;
+  return {
+    id: `${runtimeId}:work-item:${sanitizeId(taskId)}`,
+    source: "slock",
+    externalId: String(taskId),
+    title: rawTask.title || rawTask.content || rawTask.summary || String(taskId),
+    status: normalizeSlockWorkItemStatus(rawTask.status || rawTask.taskStatus || rawTask.task_status),
+    channel: { kind: "slock", label: channel.label, externalId: channel.externalId },
+    ...(rawTask.claimedByName || rawTask.assigneeName ? { assignee: { kind: "agent", label: rawTask.claimedByName || rawTask.assigneeName } } : {}),
+    ...(rawTask.createdByName || rawTask.creatorName ? { creator: { kind: "human", label: rawTask.createdByName || rawTask.creatorName } } : {}),
+    agentId,
+    runtimeId,
+    ...(threadId ? { conversationId: `${runtimeId}:conversation:${sanitizeId(threadId)}` } : {}),
+    ...(toIsoTimestamp(rawTask.createdAt || rawTask.created_at) ? { createdAt: toIsoTimestamp(rawTask.createdAt || rawTask.created_at) } : {}),
+    ...(toIsoTimestamp(rawTask.updatedAt || rawTask.updated_at || rawTask.completedAt || rawTask.completed_at) ? { updatedAt: toIsoTimestamp(rawTask.updatedAt || rawTask.updated_at || rawTask.completedAt || rawTask.completed_at) } : {}),
+    lastSeenAt: toIsoTimestamp(rawTask.updatedAt || rawTask.updated_at || rawTask.completedAt || rawTask.completed_at || rawTask.createdAt || rawTask.created_at) || observedAt,
+    sourceRefs: [{ source: "slock", externalId: String(rawTask.taskNumber || rawTask.task_number || taskId) }],
+  };
+}
+
+function collectSlockWorkState(deviceId, observedAt, config) {
+  const runtimeId = makeRuntimeId(deviceId, "slock", "slock-daemon");
+  const agentId = makeAgentId(runtimeId, config.slockAgentId || "unknown-agent");
+  const channels = Array.isArray(config.slockTaskChannels) ? config.slockTaskChannels : [];
+  const hasWorkspace = existsSync(path.join(homeDir(), ".slock", "agents"));
+
+  if (!commandExists("slock") || channels.length === 0) {
+    const reason = !commandExists("slock")
+      ? "slock command not found"
+      : "config.slockTaskChannels is empty";
+    return {
+      workItems: [],
+      conversations: [],
+      executions: [],
+      capabilities: [
+        slockWorkStateCapability(observedAt, {
+          workItemsEvidence: hasWorkspace
+            ? [`Slock workspace agent files exist, but task-board probe is unavailable: ${reason}.`]
+            : [`Slock task-board probe is unavailable: ${reason}.`],
+          conversationsEvidence: [`Slock conversation probe is unavailable: ${reason}.`],
+        }),
+      ],
+      warnings: [`Slock work-state probe unavailable: ${reason}.`],
+    };
+  }
+
+  const workItems = [];
+  const conversations = [];
+  const warnings = [];
+  for (const channelEntry of channels) {
+    const channel = typeof channelEntry === "string"
+      ? { label: channelEntry, externalId: channelEntry }
+      : { label: channelEntry.label || channelEntry.externalId || channelEntry.id || "Slock channel", externalId: channelEntry.externalId || channelEntry.id || channelEntry.label || "unknown" };
+    const taskReport = runJson("slock", ["task", "list", "--channel", channel.externalId, "--output", "json"], 20_000) ||
+      runJson("slock", ["task", "list", "--channel", channel.externalId], 20_000);
+    if (!taskReport) {
+      warnings.push(`Slock task-board probe failed for channel ${channel.label}.`);
+      continue;
+    }
+    const tasks = toArray(taskReport, ["tasks"]);
+    for (const rawTask of tasks) {
+      const workItem = normalizeSlockTask(rawTask, runtimeId, agentId, channel, observedAt);
+      workItems.push(workItem);
+      const threadId = rawTask.threadId || rawTask.thread_id;
+      if (threadId) {
+        conversations.push({
+          id: `${runtimeId}:conversation:${sanitizeId(threadId)}`,
+          source: "slock",
+          externalId: String(threadId),
+          status: workItem.status === "done" || workItem.status === "cancelled" ? "closed" : "open",
+          channel: workItem.channel,
+          title: workItem.title,
+          workItemId: workItem.id,
+          agentId,
+          runtimeId,
+          lastActivityAt: workItem.updatedAt,
+          lastSeenAt: observedAt,
+          sourceRefs: [{ source: "slock", externalId: String(rawTask.messageId || rawTask.id || threadId) }],
+        });
+      }
+    }
+  }
+
+  return {
+    workItems,
+    conversations,
+    executions: [],
+    capabilities: [
+      slockWorkStateCapability(observedAt, {
+        workItemsSupport: workItems.length > 0 || warnings.length < channels.length ? "supported" : "unknown",
+        workItemsEvidence: workItems.length > 0 || warnings.length < channels.length
+          ? ["slock task list --channel <channel> exposed task board fields."]
+          : undefined,
+        conversationsSupport: conversations.length > 0 ? "partial" : "unknown",
+        conversationsEvidence: conversations.length > 0 ? ["Slock task board exposed threadId/messageId for conversation linkage."] : undefined,
+      }),
+    ],
+    warnings,
+  };
+}
+
+function mergeWorkStateParts(parts) {
+  return {
+    workItems: parts.flatMap((part) => part.workItems),
+    conversations: parts.flatMap((part) => part.conversations),
+    executions: parts.flatMap((part) => part.executions),
+    capabilities: parts.flatMap((part) => part.capabilities),
+    warnings: parts.flatMap((part) => part.warnings || []),
+  };
+}
+
 function collectWorkStateSnapshot(config, args) {
   const mergedConfig = {
     ...config,
@@ -566,206 +1079,20 @@ function collectWorkStateSnapshot(config, args) {
   };
   const observedAt = isoNow();
   const device = createDevice(mergedConfig, observedAt);
-  const openClawRuntimeId = makeRuntimeId(device.id, "openclaw", "gateway");
-  const openClawAgentId = makeAgentId(openClawRuntimeId, "main");
-  const multicaRuntimeId = makeRuntimeId(device.id, "multica", "runtime-openclaw");
-  const multicaAgentId = makeAgentId(multicaRuntimeId, "fixture-agent");
-  const slockRuntimeId = makeRuntimeId(device.id, "slock", "daemon");
-  const slockAgentId = makeAgentId(slockRuntimeId, "tester");
+  const collected = mergeWorkStateParts([
+    collectOpenClawWorkState(device.id, observedAt),
+    collectMulticaWorkState(device.id, observedAt),
+    collectSlockWorkState(device.id, observedAt, mergedConfig),
+  ]);
 
   return {
     observedAt,
     deviceId: device.id,
-    workItems: [
-      {
-        id: `${multicaRuntimeId}:work-item:fixture-issue-1`,
-        source: "multica",
-        externalId: "fixture-issue-1",
-        title: "Prepare release note",
-        status: "todo",
-        assignee: { kind: "agent", label: "@example-agent" },
-        creator: { kind: "human", label: "@fixture-human" },
-        agentId: multicaAgentId,
-        runtimeId: multicaRuntimeId,
-        createdAt: "2026-05-09T07:10:00.000Z",
-        updatedAt: "2026-05-09T07:40:00.000Z",
-        lastSeenAt: observedAt,
-        sourceRefs: [{ source: "multica", externalId: "EX-1" }],
-      },
-      {
-        id: `${slockRuntimeId}:work-item:fixture-slock-task-1`,
-        source: "slock",
-        externalId: "fixture-slock-task-1",
-        title: "Example in progress card",
-        status: "in_progress",
-        channel: { kind: "slock", label: "#example-board", externalId: "example-board" },
-        assignee: { kind: "agent", label: "@example-agent" },
-        creator: { kind: "human", label: "@fixture-human" },
-        agentId: slockAgentId,
-        runtimeId: slockRuntimeId,
-        conversationId: `${slockRuntimeId}:conversation:fixture-thread-1`,
-        createdAt: "2026-05-09T07:10:00.000Z",
-        updatedAt: "2026-05-09T07:50:00.000Z",
-        lastSeenAt: observedAt,
-        sourceRefs: [{ source: "slock", externalId: "1" }],
-      },
-      {
-        id: `${slockRuntimeId}:work-item:fixture-slock-task-2`,
-        source: "slock",
-        externalId: "fixture-slock-task-2",
-        title: "Example review card",
-        status: "in_review",
-        channel: { kind: "slock", label: "#example-board", externalId: "example-board" },
-        assignee: { kind: "agent", label: "@example-agent" },
-        creator: { kind: "human", label: "@fixture-human" },
-        agentId: slockAgentId,
-        runtimeId: slockRuntimeId,
-        conversationId: `${slockRuntimeId}:conversation:fixture-thread-2`,
-        createdAt: "2026-05-09T07:20:00.000Z",
-        updatedAt: "2026-05-09T07:55:00.000Z",
-        lastSeenAt: observedAt,
-        sourceRefs: [{ source: "slock", externalId: "2" }],
-      },
-    ],
-    conversations: [
-      {
-        id: `${openClawRuntimeId}:conversation:fixture-session-1`,
-        source: "openclaw",
-        externalId: "fixture-session-1",
-        status: "active",
-        agentId: openClawAgentId,
-        runtimeId: openClawRuntimeId,
-        lastActivityAt: "2026-05-09T07:58:00.000Z",
-        lastSeenAt: observedAt,
-        sourceRefs: [{ source: "openclaw", externalId: "fixture-session-1" }],
-      },
-      {
-        id: `${slockRuntimeId}:conversation:fixture-thread-1`,
-        source: "slock",
-        externalId: "fixture-thread-1",
-        status: "open",
-        channel: { kind: "slock", label: "#example-board", externalId: "example-board" },
-        title: "Example in progress card",
-        workItemId: `${slockRuntimeId}:work-item:fixture-slock-task-1`,
-        agentId: slockAgentId,
-        runtimeId: slockRuntimeId,
-        lastActivityAt: "2026-05-09T07:50:00.000Z",
-        lastSeenAt: observedAt,
-        sourceRefs: [{ source: "slock", externalId: "fixture-message-1" }],
-      },
-    ],
-    executions: [
-      {
-        id: `${openClawRuntimeId}:execution:fixture-run-1`,
-        source: "openclaw",
-        externalId: "fixture-run-1",
-        runtimeId: openClawRuntimeId,
-        agentId: openClawAgentId,
-        status: "succeeded",
-        queuedAt: "2026-05-09T07:50:00.000Z",
-        startedAt: "2026-05-09T07:51:00.000Z",
-        endedAt: "2026-05-09T07:55:00.000Z",
-        lastSeenAt: observedAt,
-        sourceRefs: [{ source: "openclaw", externalId: "fixture-task-1" }],
-      },
-      {
-        id: `${openClawRuntimeId}:execution:fixture-run-2`,
-        source: "openclaw",
-        externalId: "fixture-run-2",
-        runtimeId: openClawRuntimeId,
-        agentId: openClawAgentId,
-        status: "failed",
-        queuedAt: "2026-05-09T07:56:00.000Z",
-        startedAt: "2026-05-09T07:57:00.000Z",
-        endedAt: "2026-05-09T07:59:00.000Z",
-        lastSeenAt: observedAt,
-        error: "lost heartbeat",
-        sourceRefs: [{ source: "openclaw", externalId: "fixture-task-2" }],
-      },
-      {
-        id: `${multicaRuntimeId}:execution:fixture-run-4`,
-        source: "multica",
-        externalId: "fixture-run-4",
-        runtimeId: multicaRuntimeId,
-        agentId: multicaAgentId,
-        workItemId: `${multicaRuntimeId}:work-item:fixture-issue-1`,
-        conversationId: `${multicaRuntimeId}:conversation:fixture-chat-1`,
-        status: "running",
-        queuedAt: "2026-05-09T07:55:00.000Z",
-        startedAt: "2026-05-09T07:56:00.000Z",
-        lastSeenAt: observedAt,
-        sourceRefs: [{ source: "multica", externalId: "fixture-run-4" }],
-      },
-    ],
-    capabilities: [
-      {
-        source: "openclaw",
-        collectedAt: observedAt,
-        workItems: {
-          support: "unsupported",
-          strategies: ["cli", "native_api"],
-          evidence: ["openclaw tasks list exposes executions, not project-management work items."],
-          limitations: ["OpenClaw has no pending or review phase without an upstream work item source."],
-        },
-        conversations: {
-          support: "partial",
-          strategies: ["cli", "native_api"],
-          evidence: ["openclaw health exposes session keys and recent activity."],
-          limitations: ["Session count can include historical sessions."],
-        },
-        executions: {
-          support: "supported",
-          strategies: ["cli", "native_api"],
-          evidence: ["openclaw tasks list exposes task and run status."],
-          limitations: ["Lost and timed out statuses are normalized to failed."],
-        },
-      },
-      {
-        source: "multica",
-        collectedAt: observedAt,
-        workItems: {
-          support: "supported",
-          strategies: ["cli", "native_api"],
-          evidence: ["multica issue list exposes issue lifecycle fields."],
-          limitations: ["Backlog is normalized to todo until Agentlane adds a separate backlog stage."],
-        },
-        conversations: {
-          support: "partial",
-          strategies: ["cli", "native_api"],
-          evidence: ["multica task runs can include chat_session_id."],
-          limitations: ["Conversation messages require separate issue run-message reads."],
-        },
-        executions: {
-          support: "supported",
-          strategies: ["cli", "native_api"],
-          evidence: ["multica agent tasks and issue runs expose task status and timestamps."],
-          limitations: ["Completed is normalized to succeeded."],
-        },
-      },
-      {
-        source: "slock",
-        collectedAt: observedAt,
-        workItems: {
-          support: "supported",
-          strategies: ["cli", "native_api"],
-          evidence: ["slock task board exposes task lifecycle fields."],
-          limitations: ["Task board in_progress is a business phase, not execution proof."],
-        },
-        conversations: {
-          support: "partial",
-          strategies: ["cli", "native_api"],
-          evidence: ["slock history can expose channel and thread messages."],
-          limitations: ["DM history depends on agent context."],
-        },
-        executions: {
-          support: "unknown",
-          strategies: ["network_proxy", "managed_launcher"],
-          evidence: ["daemon source has internal agent activity events, but CLI/server info does not expose running executions."],
-          limitations: ["Server active means online or available, not execution running."],
-        },
-      },
-    ],
-    warnings: ["Fixture-backed work-state collection is for local closed-loop verification."],
+    workItems: collected.workItems,
+    conversations: collected.conversations,
+    executions: collected.executions,
+    capabilities: collected.capabilities,
+    ...(collected.warnings.length ? { warnings: collected.warnings } : {}),
   };
 }
 

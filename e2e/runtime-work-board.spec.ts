@@ -58,4 +58,19 @@ test.describe("Runtime Work Board", () => {
     );
     expect(pageOverflows).toBe(false);
   });
+
+  test("keeps the board within the viewport on laptop widths", async ({ page, request }) => {
+    const seedResponse = await request.post("/api/runtime-work-state-snapshots", { data: backendSnapshot });
+    expect(seedResponse.ok()).toBe(true);
+
+    await page.setViewportSize({ width: 1185, height: 900 });
+    await page.goto("/");
+    await page.getByRole("button", { name: "Runs" }).click();
+    await expect(page.getByText(/当前数据源：Backend/)).toBeVisible();
+
+    const pageOverflows = await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth + 1,
+    );
+    expect(pageOverflows).toBe(false);
+  });
 });

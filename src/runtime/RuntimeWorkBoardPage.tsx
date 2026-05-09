@@ -217,7 +217,7 @@ export function RuntimeWorkBoardPage() {
       </section>
 
       <section className="metricGrid" aria-label="工作态概览">
-        <Metric label="工作项" value={board.summary.totalItems} tone="blue" />
+        <Metric label="看板项" value={board.summary.totalItems} tone="blue" />
         <Metric label="处理中" value={board.summary.byStage.processing} tone="green" />
         <Metric label="需关注" value={board.summary.byStage.attention} tone="orange" />
         <Metric label="能力缺口" value={board.summary.unsupportedCapabilities} tone="purple" />
