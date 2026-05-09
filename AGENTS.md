@@ -13,9 +13,11 @@ Current source of truth:
 - `docs/product/catalog-page-spec.md`: TinySpec for the first Catalog / Registry page.
 - `docs/product/runtime-device-registration-spec.md`: TinySpec for v1 device registration, collector, runtime adapters, and runtime inventory snapshots.
 - `docs/product/runtime-fleet-page-spec.md`: TinySpec for the first Runtime Fleet management page.
+- `docs/product/runtime-work-state-probe.md`: platform probe matrix for work items, conversations, and runtime executions.
 - `src/catalog/catalog-object.ts`: initial TypeScript source of truth for Catalog Object shape.
 - `src/catalog/catalog-seed.ts`: first reviewable seed data for the Catalog page.
 - `src/runtime/runtime-normalize.ts`: TypeScript source of truth for v1 runtime inventory normalization.
+- `src/runtime/runtime-work-state.ts`: TypeScript source of truth for work item, conversation, execution, and observation capability models.
 - `src/runtime/runtime-inventory-query.ts`: query and detail model for the Runtime Fleet page.
 - `src/server/runtime-inventory-store.ts`: local file-backed latest snapshot store used by the dev backend.
 - `src/server/runtime-control-channel.ts`: in-memory v1 device control channel for connection, heartbeat, and refresh command lifecycle.
@@ -63,6 +65,7 @@ Current spec and harness mapping:
 | Catalog user workflow | `docs/product/catalog-page-spec.md` | `e2e/catalog-workflow.spec.ts`, `npm run check:e2e` |
 | Catalog responsive layout | `docs/product/catalog-page-spec.md` | `e2e/catalog-layout.spec.ts`, `npm run check:e2e` |
 | Runtime device registration | `docs/product/runtime-device-registration-spec.md`, `src/runtime/runtime-normalize.ts`, `scripts/agentlane-device-collector.mjs`, `scripts/install-device-collector.sh` | `src/runtime/runtime-normalize.test.ts`, `src/runtime/device-collector-script.test.ts`, `npm run check:runtime`, `npm run check:backend` |
+| Runtime work state model | `src/runtime/runtime-work-state.ts`, `docs/product/runtime-work-state-probe.md` | `src/runtime/runtime-work-state.test.ts`, `npm run check:runtime` |
 | Runtime Fleet page | `docs/product/runtime-fleet-page-spec.md`, `src/runtime/runtime-inventory-query.ts`, `src/runtime/RuntimeFleetPage.tsx` | `src/runtime/runtime-inventory-query.test.ts`, `src/App.test.tsx`, `e2e/runtime-fleet.spec.ts`, `npm run check:quick`, `npm run check:e2e` |
 | Runtime snapshot and control backend | `docs/product/runtime-device-registration-spec.md`, `src/server/runtime-inventory-store.ts`, `src/server/runtime-control-channel.ts`, `src/server/runtime-http-api.ts`, `vite.config.ts` | `src/server/runtime-inventory-store.test.ts`, `src/server/runtime-control-channel.test.ts`, `src/server/runtime-http-api.test.ts`, `src/runtime/device-collector-script.test.ts`, `npm run check:backend` |
 | Repo context and docs | `AGENTS.md`, `README.md`, `docs/product/ui-design.md` | `npm run check:repo` |

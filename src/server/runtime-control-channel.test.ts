@@ -16,9 +16,10 @@ class MemorySocket implements RuntimeControlSocket {
 describe("runtime control channel", () => {
   it("registers a device through hello and updates heartbeat state", () => {
     const store = createStore();
+    const currentTime = new Date("2026-05-08T08:00:00.000Z");
     const channel = createRuntimeControlChannel({
       store,
-      now: () => new Date("2026-05-08T08:00:00.000Z"),
+      now: () => currentTime,
     });
     const socket = new MemorySocket();
 
@@ -31,7 +32,7 @@ describe("runtime control channel", () => {
       hostname: "fixture-mac.local",
     }));
 
-    expect(store.readDeviceConnection("fixture-mac")).toMatchObject({
+    expect(store.readDeviceConnection("fixture-mac", currentTime)).toMatchObject({
       deviceId: "fixture-mac",
       status: "online",
       collectorVersion: "0.1.0",
@@ -46,7 +47,7 @@ describe("runtime control channel", () => {
       summary: { activeTasks: 2 },
     }));
 
-    expect(store.readDeviceConnection("fixture-mac")).toMatchObject({
+    expect(store.readDeviceConnection("fixture-mac", currentTime)).toMatchObject({
       status: "online",
       lastHeartbeatAt: "2026-05-08T08:00:00.000Z",
       summary: { activeTasks: 2 },
