@@ -24,7 +24,8 @@
       "version": "2026.4.27",
       "capabilities": ["health", "status", "tasks"],
       "lastSeenAt": "2026-05-08T08:00:01.000Z",
-      "sourceRefs": [{ "source": "openclaw", "externalId": "gateway-18789", "label": "OpenClaw Gateway" }]
+      "sourceRefs": [{ "source": "openclaw", "externalId": "gateway-18789", "label": "OpenClaw Gateway" }],
+      "health": { "historicalSessions": 2 }
     },
     {
       "id": "fixture-mac:slock:slock-daemon",
@@ -43,18 +44,21 @@
       "runtimeId": "fixture-mac:openclaw:gateway-18789",
       "name": "main",
       "origin": "openclaw",
-      "status": "active",
+      "status": "idle",
       "channelBindings": [{ "kind": "dingtalk", "label": "DingTalk default", "status": "enabled" }],
-      "sourceRefs": [{ "source": "openclaw", "externalId": "main", "label": "main" }]
+      "sourceRefs": [{ "source": "openclaw", "externalId": "main", "label": "main" }],
+      "lastSeenAt": "2026-05-08T08:00:01.000Z",
+      "load": { "historicalSessions": 2 }
     },
     {
       "id": "fixture-mac:slock:slock-daemon:agent:tester",
       "runtimeId": "fixture-mac:slock:slock-daemon",
       "name": "tester",
       "origin": "slock",
-      "status": "active",
+      "status": "unknown",
       "channelBindings": [{ "kind": "slock", "label": "Slock", "status": "enabled" }],
-      "sourceRefs": [{ "source": "slock", "externalId": "tester", "label": "tester" }]
+      "sourceRefs": [{ "source": "slock", "externalId": "tester", "label": "tester" }],
+      "lastSeenAt": "2026-05-08T08:00:01.000Z"
     }
   ],
   "reports": []

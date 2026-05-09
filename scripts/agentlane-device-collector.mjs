@@ -202,7 +202,7 @@ function createRuntime({ deviceId, source, externalId, kind, name, status, versi
   };
 }
 
-function createAgent({ runtimeId, source, externalId, name, origin, status, channelBindings, load }) {
+function createAgent({ runtimeId, source, externalId, name, origin, status, channelBindings, lastSeenAt, load }) {
   return {
     id: makeAgentId(runtimeId, externalId),
     runtimeId,
@@ -211,6 +211,7 @@ function createAgent({ runtimeId, source, externalId, name, origin, status, chan
     status,
     channelBindings,
     sourceRefs: [{ source, externalId, label: name }],
+    ...(lastSeenAt ? { lastSeenAt } : {}),
     ...(load ? { load } : {}),
   };
 }
@@ -300,7 +301,7 @@ function collectOpenClaw(deviceId, observedAt) {
     capabilities: ["config", ...(health ? ["health"] : []), ...(status ? ["status", "tasks"] : [])],
     lastSeenAt: observedAt,
     health: {
-      activeSessions: status?.agents?.totalSessions,
+      historicalSessions: status?.agents?.totalSessions,
       lastError: health?.ok === false ? "openclaw health returned ok=false" : undefined,
     },
   });
@@ -318,9 +319,12 @@ function collectOpenClaw(deviceId, observedAt) {
       externalId: agentId,
       name: agentId,
       origin: "openclaw",
-      status: health || status ? "active" : "unknown",
+      status: health || status ? "idle" : "unknown",
       channelBindings: resolveOpenClawChannelBindings(config, health, agentId),
-      load: { activeSessions: agent.sessions?.count ?? status?.agents?.totalSessions },
+      lastSeenAt: observedAt,
+      load: {
+        ...(agent.sessions?.count === undefined ? {} : { historicalSessions: agent.sessions.count }),
+      },
     });
   });
 
@@ -362,9 +366,12 @@ function collectMultica(deviceId, observedAt) {
           externalId: agent.id || agent.name || "agent",
           name: agent.name || "Multica Agent",
           origin: "multica",
-          status: agent.status === "active" ? "active" : agent.status === "inactive" ? "inactive" : "idle",
+          status: normalizeMulticaAgentStatus(agent.status),
           channelBindings: [{ kind: "multica", label: "Multica", status: "enabled" }],
-          load: { maxConcurrentTasks: agent.max_concurrent_tasks },
+          lastSeenAt: agent.last_seen_at || agent.updated_at || observedAt,
+          load: {
+            ...(agent.max_concurrent_tasks === undefined ? {} : { maxConcurrency: agent.max_concurrent_tasks }),
+          },
         });
       })
     : [];
@@ -396,7 +403,6 @@ function collectSlock(deviceId, observedAt) {
     status: commandExists("slock-daemon") || agentDirs.length > 0 ? "online" : "unknown",
     capabilities: ["agent:start", "agent:deliver", "workspace:files"],
     lastSeenAt: observedAt,
-    health: { activeSessions: agentDirs.length },
   });
 
   const agents = agentDirs.map((entry) =>
@@ -406,12 +412,22 @@ function collectSlock(deviceId, observedAt) {
       externalId: entry.name,
       name: readSlockAgentName(path.join(slockAgentsDir, entry.name), entry.name),
       origin: "slock",
-      status: "active",
+      status: "unknown",
       channelBindings: [{ kind: "slock", label: "Slock", status: "enabled" }],
+      lastSeenAt: observedAt,
     }),
   );
 
   return { runtimes: [runtime], agents };
+}
+
+function normalizeMulticaAgentStatus(status) {
+  if (status === "active") return "active";
+  if (status === "idle") return "idle";
+  if (status === "inactive") return "inactive";
+  if (status === "degraded") return "degraded";
+  if (status === "unknown") return "unknown";
+  return "idle";
 }
 
 function collectCliRuntime(deviceId, observedAt, command, kind, name) {

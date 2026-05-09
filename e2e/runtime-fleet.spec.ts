@@ -32,6 +32,7 @@ test.describe("Runtime Fleet", () => {
     await expect(page.getByRole("table", { name: "Agent 列表" })).toContainText("tester");
     await expect(page.getByRole("table", { name: "Runtime 列表" })).toContainText("所属设备");
     await expect(page.getByRole("table", { name: "Agent 列表" })).toContainText("归属 Runtime");
+    await expect(page.getByRole("table", { name: "Agent 列表" })).toContainText("最近同步");
 
     await page.getByLabel("Channel").selectOption("slock");
     await expect(page.getByRole("table", { name: "Agent 列表" })).toContainText("tester");
@@ -41,7 +42,7 @@ test.describe("Runtime Fleet", () => {
     const detail = page.getByRole("complementary", { name: "运行资产详情" });
     await expect(detail).toContainText("归属关系");
     await expect(detail).toContainText("所属 Runtime: Slock daemon");
-    await expect(detail).toContainText("可用渠道");
+    await expect(detail).toContainText("关联渠道");
     await expect(detail).not.toContainText("slock: tester");
 
     await page.getByRole("button", { name: "请求设备刷新" }).click();

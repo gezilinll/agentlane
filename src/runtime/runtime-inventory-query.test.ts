@@ -1,14 +1,17 @@
 import { describe, expect, it } from "vitest";
 import fixtureSnapshot from "../../fixtures/runtime/collector-snapshot.sample.json";
 import {
+  formatRuntimeTimestamp,
   filterRuntimeFleet,
   getRuntimeFleetDetail,
+  runtimeDisplayName,
   summarizeRuntimeFleet,
   type RuntimeFleetFilters,
 } from "./runtime-inventory-query";
 import type { RuntimeInventorySnapshot } from "./runtime-normalize";
 
 const snapshot = fixtureSnapshot as RuntimeInventorySnapshot;
+const fixtureLastSeenAt = formatRuntimeTimestamp("2026-05-08T08:00:01.000Z");
 
 describe("runtime inventory query", () => {
   it("summarizes fixture inventory for Runtime Fleet metrics", () => {
@@ -17,7 +20,7 @@ describe("runtime inventory query", () => {
       runtimes: 2,
       onlineRuntimes: 2,
       agents: 2,
-      issues: 0,
+      issues: 1,
     });
   });
 
@@ -44,9 +47,9 @@ describe("runtime inventory query", () => {
       kind: "agent",
       title: "tester",
       runtimeName: "Slock daemon",
-      status: "active",
+      status: "unknown",
       sections: expect.arrayContaining([
-        expect.objectContaining({ title: "可用渠道", items: ["Slock"] }),
+        expect.objectContaining({ title: "关联渠道", items: ["Slock"] }),
       ]),
     });
   });
@@ -64,14 +67,14 @@ describe("runtime inventory query", () => {
     expect(sectionItems(sections, "连接状态")).toEqual([
       "连接方式: Collector",
       "设备状态: 在线",
-      "最近同步: 2026-05-08T08:00:01.000Z",
+      `最近同步: ${fixtureLastSeenAt}`,
       "Collector: 0.1.0",
     ]);
-    expect(sectionItems(sections, "平台注册")).toEqual(["OpenClaw: OpenClaw Gateway", "Slock: Slock daemon"]);
+    expect(sectionItems(sections, "已注册 Runtime")).toEqual(["OpenClaw Gateway", "Slock daemon"]);
     expect((detail as { sourceLabels?: string[] })?.sourceLabels).toBeUndefined();
   });
 
-  it("resolves runtime detail around ownership and endpoint instead of table capabilities", () => {
+  it("resolves runtime detail around ownership and statistics instead of endpoint or table capabilities", () => {
     const detail = getRuntimeFleetDetail(snapshot, "runtime", "fixture-mac:openclaw:gateway-18789");
     const sections = detailSections(detail);
 
@@ -79,9 +82,17 @@ describe("runtime inventory query", () => {
       "Runtime ID: fixture-mac:openclaw:gateway-18789",
       "Kind: OpenClaw",
       "Version: 2026.4.27",
+      `最近同步: ${fixtureLastSeenAt}`,
     ]);
     expect(sectionItems(sections, "归属关系")).toEqual(["所属设备: Fixture Mac", "Agent 数量: 1"]);
-    expect(sectionItems(sections, "运行入口")).toEqual(["暂无运行入口"]);
+    expect(sectionItems(sections, "运行入口")).toEqual([]);
+    expect(sectionItems(sections, "运行统计")).toEqual([
+      "活跃任务: 不支持采集",
+      "队列深度: 不支持采集",
+      "活跃会话: 不支持采集",
+      "历史会话: 2",
+      "最大并发: 不支持采集",
+    ]);
     expect((detail as { capabilities?: string[] })?.capabilities).toBeUndefined();
     expect((detail as { channelLabels?: string[] })?.channelLabels).toBeUndefined();
   });
@@ -93,15 +104,35 @@ describe("runtime inventory query", () => {
     expect(sectionItems(sections, "身份信息")).toEqual([
       "Agent ID: fixture-mac:slock:slock-daemon:agent:tester",
       "来源平台: Slock",
-      "状态: 活跃",
+      "状态: 未知",
+      `最近同步: ${fixtureLastSeenAt}`,
     ]);
     expect(sectionItems(sections, "归属关系")).toEqual([
       "所属 Runtime: Slock daemon",
       "所属设备: Fixture Mac",
     ]);
-    expect(sectionItems(sections, "可用渠道")).toEqual(["Slock"]);
-    expect(sectionItems(sections, "负载状态")).toEqual(["暂无负载数据"]);
+    expect(sectionItems(sections, "关联渠道")).toEqual(["Slock"]);
+    expect(sectionItems(sections, "运行统计")).toEqual([
+      "活跃任务: 不支持采集",
+      "队列深度: 不支持采集",
+      "活跃会话: 不支持采集",
+      "历史会话: 不支持采集",
+      "最大并发: 不支持采集",
+    ]);
     expect((detail as { sourceLabels?: string[] })?.sourceLabels).toBeUndefined();
+  });
+
+  it("formats timestamps for UI display without leaking raw ISO strings", () => {
+    const formatted = formatRuntimeTimestamp("2026-05-08T08:00:01.000Z");
+
+    expect(formatted).not.toContain("T");
+    expect(formatted).toContain("2026");
+    expect(formatted).toContain("16:00");
+  });
+
+  it("uses runtime names as the stable display label for agent ownership", () => {
+    expect(runtimeDisplayName(snapshot.runtimes[0])).toBe("OpenClaw Gateway");
+    expect(runtimeDisplayName(snapshot.runtimes[1])).toBe("Slock daemon");
   });
 });
 

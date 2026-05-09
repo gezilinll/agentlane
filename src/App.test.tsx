@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
@@ -9,6 +9,7 @@ const originalFetch = globalThis.fetch;
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -83,10 +84,11 @@ describe("Catalog page", () => {
 
     expect(screen.getByRole("heading", { name: "运行资产" })).toBeInTheDocument();
     expect(within(screen.getByLabelText("设备")).getByText("Fixture Mac")).toBeInTheDocument();
-    expect(screen.getByText("OpenClaw Gateway")).toBeInTheDocument();
-    expect(screen.getByText("tester")).toBeInTheDocument();
+    expect(within(screen.getByRole("table", { name: "Runtime 列表" })).getByText("OpenClaw Gateway")).toBeInTheDocument();
+    expect(within(screen.getByRole("table", { name: "Agent 列表" })).getByText("tester")).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "所属设备" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "归属 Runtime" })).toBeInTheDocument();
+    expect(screen.getAllByRole("columnheader", { name: "最近同步" }).length).toBeGreaterThanOrEqual(2);
   });
 
   it("loads Runtime Fleet from the latest backend snapshot when available", async () => {
@@ -132,10 +134,52 @@ describe("Catalog page", () => {
     expect(within(detail).getByText("归属关系")).toBeInTheDocument();
     expect(within(detail).getByText("所属 Runtime: Slock daemon")).toBeInTheDocument();
     expect(within(detail).getByText("所属设备: Fixture Mac")).toBeInTheDocument();
-    expect(within(detail).getByText("可用渠道")).toBeInTheDocument();
+    expect(within(detail).getByText("关联渠道")).toBeInTheDocument();
     expect(within(detail).getByText("Slock")).toBeInTheDocument();
     expect(within(detail).queryByText("slock: tester")).not.toBeInTheDocument();
     expect(within(detail).queryByText("事实")).not.toBeInTheDocument();
+    expect(within(detail).queryByText("可用渠道")).not.toBeInTheDocument();
+  });
+
+  it("automatically refreshes the latest Runtime Fleet snapshot while mounted", async () => {
+    vi.useFakeTimers();
+    let latestRequests = 0;
+    globalThis.fetch = vi.fn(async (input) => {
+      const url = input.toString();
+      if (url.includes("/api/runtime-inventory/latest")) {
+        latestRequests += 1;
+        const snapshot: RuntimeInventorySnapshot = {
+          ...(fixtureSnapshot as RuntimeInventorySnapshot),
+          device: {
+            ...(fixtureSnapshot as RuntimeInventorySnapshot).device,
+            name: `Auto Refresh Mac ${latestRequests}`,
+          },
+          observedAt: `2026-05-08T08:00:0${latestRequests}.000Z`,
+        };
+        return new Response(JSON.stringify(snapshot), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "unexpected request" }), { status: 500 });
+    }) as unknown as typeof fetch;
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Runtime Fleet" }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getAllByText("Auto Refresh Mac 1")).toHaveLength(3);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+      await Promise.resolve();
+    });
+
+    expect(screen.getAllByText("Auto Refresh Mac 2").length).toBeGreaterThan(0);
+    expect(latestRequests).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText(/上次刷新/)).toBeInTheDocument();
   });
 
   it("requests a remote device refresh and reloads the latest backend snapshot", async () => {

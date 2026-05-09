@@ -30,6 +30,7 @@ describe("runtime inventory normalization", () => {
             status: "online",
             version: "2026.4.27",
             capabilities: ["health", "status", "tasks"],
+            lastSeenAt: "2026-05-08T08:00:03.000Z",
           },
         ],
         agents: [
@@ -38,12 +39,14 @@ describe("runtime inventory normalization", () => {
             runtimeExternalId: "gateway-18789",
             name: "main",
             origin: "openclaw",
-            status: "active",
+            status: "idle",
+            lastSeenAt: "2026-05-08T08:00:02.000Z",
             channelBindings: [{ kind: "dingtalk", label: "DingTalk default", status: "enabled" }],
+            load: { historicalSessions: 12 },
           },
         ],
       },
-    ];
+    ] as RuntimeAdapterReport[];
 
     const snapshot = createRuntimeInventorySnapshot({
       device: fixtureDevice,
@@ -59,13 +62,52 @@ describe("runtime inventory normalization", () => {
       kind: "openclaw",
       status: "online",
       capabilities: ["health", "status", "tasks"],
+      lastSeenAt: "2026-05-08T08:00:03.000Z",
     });
     expect(snapshot.agents[0]).toMatchObject({
       id: "gezilinll-claw:openclaw:gateway-18789:agent:main",
       runtimeId: "gezilinll-claw:openclaw:gateway-18789",
       origin: "openclaw",
+      status: "idle",
+      lastSeenAt: "2026-05-08T08:00:02.000Z",
       channelBindings: [{ kind: "dingtalk", label: "DingTalk default", status: "enabled" }],
+      load: { historicalSessions: 12 },
     });
+  });
+
+  it("falls back agent lastSeenAt to the adapter collection time", () => {
+    const snapshot = createRuntimeInventorySnapshot({
+      device: fixtureDevice,
+      observedAt: "2026-05-08T08:00:03.000Z",
+      collector: { version: "0.1.0", status: "online" },
+      reports: [
+        {
+          source: "multica",
+          collectedAt: "2026-05-08T08:00:02.000Z",
+          runtimes: [
+            {
+              externalId: "runtime-1",
+              kind: "codex",
+              name: "Codex Runtime",
+              status: "online",
+              capabilities: ["agent:list"],
+            },
+          ],
+          agents: [
+            {
+              externalId: "agent-1",
+              runtimeExternalId: "runtime-1",
+              name: "MiBot",
+              origin: "multica",
+              status: "idle",
+              channelBindings: [{ kind: "multica", label: "Multica", status: "enabled" }],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(snapshot.agents[0]?.lastSeenAt).toBe("2026-05-08T08:00:02.000Z");
   });
 
   it("keeps Slock and Multica as source kinds while preserving underlying runtime kinds", () => {

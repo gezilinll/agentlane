@@ -1,6 +1,7 @@
 import type {
   AgentlaneRuntime,
   ChannelKind,
+  RuntimeActivityStats,
   RuntimeSource,
   ManagedAgentStatus,
   ManagedRuntimeAgent,
@@ -45,6 +46,29 @@ export const managedAgentStatusLabels: Record<ManagedAgentStatus, string> = {
   degraded: "降级",
   unknown: "未知",
 };
+
+const unsupportedStatLabel = "不支持采集";
+
+/** Format runtime timestamps for Chinese-first UI without leaking raw UTC ISO strings. */
+export function formatRuntimeTimestamp(value?: string): string {
+  if (!value) return "未知";
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) return value;
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(timestamp);
+}
+
+/** Runtime display label used consistently across Runtime and Agent surfaces. */
+export function runtimeDisplayName(runtime: AgentlaneRuntime): string {
+  return runtime.name;
+}
 
 /** Filter state supported by the first Runtime Fleet page. */
 export interface RuntimeFleetFilters {
@@ -207,7 +231,7 @@ export function getRuntimeFleetDetail(
       kind: "device",
       id: snapshot.device.id,
       title: snapshot.device.name,
-      subtitle: `最近同步 ${snapshot.device.lastSeenAt ?? snapshot.observedAt}`,
+      subtitle: `最近同步 ${formatRuntimeTimestamp(snapshot.device.lastSeenAt ?? snapshot.observedAt)}`,
       status: snapshot.device.status,
       statusLabel: runtimeHealthLabels[snapshot.device.status],
       sections: [
@@ -225,13 +249,13 @@ export function getRuntimeFleetDetail(
           items: [
             "连接方式: Collector",
             `设备状态: ${runtimeHealthLabels[snapshot.device.status]}`,
-            `最近同步: ${snapshot.device.lastSeenAt ?? snapshot.observedAt}`,
+            `最近同步: ${formatRuntimeTimestamp(snapshot.device.lastSeenAt ?? snapshot.observedAt)}`,
             `Collector: ${snapshot.collector.version}`,
           ],
         },
         {
-          title: "平台注册",
-          items: platformRegistrationLabels(snapshot.runtimes),
+          title: "已注册 Runtime",
+          items: registeredRuntimeLabels(snapshot.runtimes),
         },
       ],
     };
@@ -257,6 +281,7 @@ export function getRuntimeFleetDetail(
             `Runtime ID: ${runtime.id}`,
             `Kind: ${runtimeKindLabels[runtime.kind]}`,
             `Version: ${runtime.version ?? "unknown"}`,
+            `最近同步: ${formatRuntimeTimestamp(runtime.lastSeenAt)}`,
           ],
         },
         {
@@ -264,12 +289,8 @@ export function getRuntimeFleetDetail(
           items: [`所属设备: ${snapshot.device.name}`, `Agent 数量: ${agents.length}`],
         },
         {
-          title: "运行入口",
-          items: [runtime.endpoint ?? "暂无运行入口"],
-        },
-        {
-          title: "健康状态",
-          items: runtimeHealthItems(runtime),
+          title: "运行统计",
+          items: runtimeStatisticsItems(runtime.health),
         },
       ],
     };
@@ -291,19 +312,24 @@ export function getRuntimeFleetDetail(
       sections: [
         {
           title: "身份信息",
-          items: [`Agent ID: ${agent.id}`, `来源平台: ${sourceLabel(agent.origin)}`, `状态: ${managedAgentStatusLabels[agent.status]}`],
+          items: [
+            `Agent ID: ${agent.id}`,
+            `来源平台: ${sourceLabel(agent.origin)}`,
+            `状态: ${managedAgentStatusLabels[agent.status]}`,
+            `最近同步: ${formatRuntimeTimestamp(agent.lastSeenAt)}`,
+          ],
         },
         {
           title: "归属关系",
           items: [`所属 Runtime: ${runtime?.name ?? agent.runtimeId}`, `所属设备: ${snapshot.device.name}`],
         },
         {
-          title: "可用渠道",
+          title: "关联渠道",
           items: labelsForAgent(agent),
         },
         {
-          title: "负载状态",
-          items: agentLoadItems(agent),
+          title: "运行统计",
+          items: runtimeStatisticsItems(agent.load),
         },
       ],
     };
@@ -357,7 +383,7 @@ function agentMatches(agent: ManagedRuntimeAgent, query: string): boolean {
 
 function labelsForAgent(agent: ManagedRuntimeAgent): string[] {
   const labels = agent.channelBindings.map((binding) => binding.label || channelKindLabels[binding.kind]);
-  return labels.length ? labels : ["暂无可用渠道"];
+  return labels.length ? labels : ["暂无关联渠道"];
 }
 
 function labelsForAgents(agents: ManagedRuntimeAgent[]): string[] {
@@ -370,32 +396,24 @@ function labelsForAgents(agents: ManagedRuntimeAgent[]): string[] {
   ).sort();
 }
 
-function platformRegistrationLabels(runtimes: AgentlaneRuntime[]): string[] {
-  const labels = runtimes.flatMap((runtime) =>
-    runtime.sourceRefs.map((ref) => `${sourceLabel(ref.source)}: ${ref.label ?? ref.externalId}`),
-  );
-  return labels.length ? Array.from(new Set(labels)).sort() : ["暂无平台注册"];
+function registeredRuntimeLabels(runtimes: AgentlaneRuntime[]): string[] {
+  const labels = runtimes.map(runtimeDisplayName);
+  return labels.length ? Array.from(new Set(labels)).sort() : ["暂无已注册 Runtime"];
 }
 
-function runtimeHealthItems(runtime: AgentlaneRuntime): string[] {
+function runtimeStatisticsItems(stats?: RuntimeActivityStats & { lastError?: string }): string[] {
   return [
-    `状态: ${runtimeHealthLabels[runtime.status]}`,
-    `最近同步: ${runtime.lastSeenAt ?? "unknown"}`,
-    runtime.health?.activeTasks === undefined ? "" : `活跃任务: ${runtime.health.activeTasks}`,
-    runtime.health?.queueDepth === undefined ? "" : `队列深度: ${runtime.health.queueDepth}`,
-    runtime.health?.activeSessions === undefined ? "" : `活跃会话: ${runtime.health.activeSessions}`,
-    runtime.health?.lastError ? `最近错误: ${runtime.health.lastError}` : "",
+    `活跃任务: ${statValue(stats?.activeTasks)}`,
+    `队列深度: ${statValue(stats?.queuedTasks)}`,
+    `活跃会话: ${statValue(stats?.activeSessions)}`,
+    `历史会话: ${statValue(stats?.historicalSessions)}`,
+    `最大并发: ${statValue(stats?.maxConcurrency)}`,
+    stats?.lastError ? `最近错误: ${stats.lastError}` : "",
   ].filter(Boolean);
 }
 
-function agentLoadItems(agent: ManagedRuntimeAgent): string[] {
-  if (!agent.load) return ["暂无负载数据"];
-  return [
-    agent.load.activeTasks === undefined ? "" : `活跃任务: ${agent.load.activeTasks}`,
-    agent.load.queueDepth === undefined ? "" : `队列深度: ${agent.load.queueDepth}`,
-    agent.load.activeSessions === undefined ? "" : `活跃会话: ${agent.load.activeSessions}`,
-    agent.load.maxConcurrentTasks === undefined ? "" : `最大并发: ${agent.load.maxConcurrentTasks}`,
-  ].filter(Boolean);
+function statValue(value?: number): string {
+  return value === undefined ? unsupportedStatLabel : String(value);
 }
 
 function sourceLabel(source: RuntimeSource): string {

@@ -4,8 +4,10 @@ import fixtureSnapshot from "../../fixtures/runtime/collector-snapshot.sample.js
 import {
   channelKindLabels,
   filterRuntimeFleet,
+  formatRuntimeTimestamp,
   getRuntimeFleetDetail,
   managedAgentStatusLabels,
+  runtimeDisplayName,
   runtimeHealthLabels,
   runtimeKindLabels,
   summarizeRuntimeFleet,
@@ -23,6 +25,7 @@ import {
 } from "./runtime-normalize";
 
 const fixtureRuntimeSnapshot = fixtureSnapshot as RuntimeInventorySnapshot;
+const autoRefreshIntervalMs = 30_000;
 
 const channelOptions: ChannelKind[] = ["dingtalk", "slock", "multica", "openclaw", "other"];
 const runtimeStatusOptions: RuntimeHealthStatus[] = ["online", "degraded", "offline", "unknown"];
@@ -40,6 +43,7 @@ export function RuntimeFleetPage() {
     status: "idle" | "running" | "success" | "error";
     message: string;
   }>({ status: "idle", message: "" });
+  const [lastLoadedAt, setLastLoadedAt] = useState("");
   const [query, setQuery] = useState("");
   const [runtimeKind, setRuntimeKind] = useState<RuntimeKind | "all">("all");
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeHealthStatus | "all">("all");
@@ -57,6 +61,7 @@ export function RuntimeFleetPage() {
   function applySnapshot(latestSnapshot: RuntimeInventorySnapshot) {
     setSnapshot(latestSnapshot);
     setDataSource("backend");
+    setLastLoadedAt(new Date().toISOString());
   }
 
   async function loadLatestSnapshot(options: { silent?: boolean } = {}): Promise<RuntimeInventorySnapshot | null> {
@@ -88,8 +93,12 @@ export function RuntimeFleetPage() {
     }
 
     void loadInitialSnapshot();
+    const refreshTimer = window.setInterval(() => {
+      void loadInitialSnapshot();
+    }, autoRefreshIntervalMs);
     return () => {
       cancelled = true;
+      window.clearInterval(refreshTimer);
     };
   }, []);
 
@@ -161,6 +170,9 @@ export function RuntimeFleetPage() {
             统一识别设备、Runtime、Agent 与它们暴露到的渠道。当前数据源：
             {dataSource === "backend" ? "Backend" : "Fixture"}
           </p>
+          {lastLoadedAt ? (
+            <p className="pageRefreshMeta">上次刷新 {formatRuntimeTimestamp(lastLoadedAt)}</p>
+          ) : null}
         </div>
         <div className="refreshControl">
           <button
@@ -303,6 +315,7 @@ function DevicePanel({
         <span>
           <strong>{snapshot.device.name}</strong>
           <small>{snapshot.device.hostname}</small>
+          <small>最近同步 {formatRuntimeTimestamp(snapshot.device.lastSeenAt ?? snapshot.observedAt)}</small>
         </span>
         <StatusBadge label={runtimeHealthLabels[snapshot.device.status]} status={snapshot.device.status} />
       </button>
@@ -367,7 +380,7 @@ function RuntimeTable({
                 <StatusBadge label={runtimeHealthLabels[runtime.status]} status={runtime.status} />
               </span>
               <span className="mutedAssetText" role="cell">
-                {runtime.lastSeenAt ?? "未知"}
+                {formatRuntimeTimestamp(runtime.lastSeenAt)}
               </span>
             </button>
           ))}
@@ -388,7 +401,7 @@ function AgentTable({
   selectedId?: string;
   onSelect: (agent: ManagedRuntimeAgent) => void;
 }) {
-  const runtimeNameById = new Map(runtimes.map((runtime) => [runtime.id, runtimeCompactLabel(runtime)]));
+  const runtimeNameById = new Map(runtimes.map((runtime) => [runtime.id, runtimeDisplayName(runtime)]));
 
   return (
     <section className="tablePanel runtimeAssetPanel" aria-label="Agent 列表">
@@ -406,8 +419,9 @@ function AgentTable({
           <div className="assetRow assetHeader agentTableRow" role="row">
             <span role="columnheader">名称</span>
             <span role="columnheader">归属 Runtime</span>
-            <span role="columnheader">可用渠道</span>
+            <span role="columnheader">关联渠道</span>
             <span role="columnheader">状态</span>
+            <span role="columnheader">最近同步</span>
           </div>
           {agents.map((agent) => (
             <button
@@ -435,6 +449,9 @@ function AgentTable({
               </span>
               <span role="cell">
                 <StatusBadge label={managedAgentStatusLabels[agent.status]} status={agent.status} />
+              </span>
+              <span className="mutedAssetText" role="cell">
+                {formatRuntimeTimestamp(agent.lastSeenAt)}
               </span>
             </button>
           ))}
@@ -519,8 +536,4 @@ function Badge({ children }: { children: string }) {
 
 function StatusBadge({ label, status }: { label: string; status: string }) {
   return <span className={`statusBadge status-${status}`}>{label}</span>;
-}
-
-function runtimeCompactLabel(runtime: AgentlaneRuntime): string {
-  return `${runtimeKindLabels[runtime.kind]} · ${runtime.id.split(":").at(-1) ?? runtime.name}`;
 }

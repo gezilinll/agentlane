@@ -39,6 +39,7 @@ Current source of truth:
 - When code directories appear, add scoped `AGENTS.md` files only where local commands, boundaries, or ownership differ from this root guide.
 - Treat the device WebSocket as a control plane only. Do not use it for chat, arbitrary command execution, external platform protocol emulation, or task scheduling until a spec and harness explicitly introduce those behaviors.
 - Keep runtime/device secrets out of logs, fixtures, tests, docs, and UI screenshots. `deviceToken`, Slock keys, bearer tokens, and platform API keys may be passed through local config, but v1 does not implement full auth or secret management.
+- Runtime adapters must translate platform-specific fields into Agentlane-owned semantics before UI consumption. Do not make React components infer whether OpenClaw sessions, Multica tasks, or Slock workspaces mean `active`, `idle`, `lastSeenAt`, or runtime statistics.
 
 ## Spec And Harness Workflow
 

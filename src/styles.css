@@ -127,6 +127,12 @@ h1 {
   margin-bottom: 0;
 }
 
+.pageRefreshMeta {
+  color: #6a7890;
+  font-size: 12px;
+  margin: 6px 0 0;
+}
+
 .primaryButton {
   align-items: center;
   background: #0958d9;
@@ -464,7 +470,7 @@ button.tableRow:hover,
 }
 
 .agentTableRow {
-  grid-template-columns: minmax(220px, 1.4fr) minmax(180px, 1fr) minmax(160px, 0.8fr) 110px;
+  grid-template-columns: minmax(220px, 1.4fr) minmax(180px, 1fr) minmax(160px, 0.8fr) 100px minmax(160px, 0.8fr);
 }
 
 .mutedAssetText {

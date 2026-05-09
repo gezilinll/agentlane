@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -216,7 +216,94 @@ describe("device collector scripts", () => {
       status: "enabled",
     });
   });
+
+  it("maps OpenClaw historical sessions without treating them as active sessions", () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-home-"));
+    const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-bin-"));
+    writeFakeOpenClaw(fakeBin, {
+      health: { ok: true, channels: { dingtalk: { enabled: true } } },
+      status: {
+        gateway: {
+          url: "ws://127.0.0.1:18789",
+          reachable: true,
+          self: { version: "2026.4.27" },
+        },
+        agents: {
+          agents: [{ id: "main", sessions: { count: 12 } }],
+          totalSessions: 12,
+        },
+      },
+    });
+
+    const output = execFileSync(process.execPath, [
+      collectorScript,
+      "--once",
+      "--device-id",
+      "openclaw-device",
+      "--print-only",
+    ], {
+      encoding: "utf8",
+      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
+    });
+
+    const snapshot = JSON.parse(output);
+    const runtime = snapshot.runtimes.find((candidate: { kind: string }) => candidate.kind === "openclaw");
+    const agent = snapshot.agents.find((candidate: { origin: string }) => candidate.origin === "openclaw");
+
+    expect(runtime.health).toMatchObject({ historicalSessions: 12 });
+    expect(runtime.health).not.toHaveProperty("activeSessions");
+    expect(agent.status).toBe("idle");
+    expect(agent.load).toMatchObject({ historicalSessions: 12 });
+    expect(agent.load).not.toHaveProperty("activeSessions");
+    expect(agent.lastSeenAt).toBe(snapshot.observedAt);
+  });
+
+  it("maps Slock workspace-only agents as unknown instead of active", () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-slock-home-"));
+    const agentDir = path.join(fakeHome, ".slock", "agents", "tester");
+    mkdirSync(agentDir, { recursive: true });
+    writeFileSync(path.join(agentDir, "MEMORY.md"), "# tester\n");
+
+    const output = execFileSync(process.execPath, [
+      collectorScript,
+      "--once",
+      "--device-id",
+      "slock-device",
+      "--print-only",
+    ], {
+      encoding: "utf8",
+      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
+    });
+
+    const snapshot = JSON.parse(output);
+    const agent = snapshot.agents.find((candidate: { origin: string }) => candidate.origin === "slock");
+
+    expect(agent.status).toBe("unknown");
+    expect(agent.lastSeenAt).toBe(snapshot.observedAt);
+  });
 });
+
+function writeFakeOpenClaw(fakeBin: string, payload: { health: unknown; status: unknown }): void {
+  const executable = path.join(fakeBin, "openclaw");
+  const script = path.join(fakeBin, "openclaw.js");
+  writeFileSync(script, `
+const payload = ${JSON.stringify(payload)};
+const command = process.argv[2];
+if (command === "health") {
+  console.log(JSON.stringify(payload.health));
+  process.exit(0);
+}
+if (command === "status") {
+  console.log(JSON.stringify(payload.status));
+  process.exit(0);
+}
+process.exit(1);
+`);
+  writeFileSync(executable, `#!/bin/sh
+exec "${process.execPath}" "${script}" "$@"
+`);
+  chmodSync(executable, 0o755);
+}
 
 function runNodeScript(args: string[]): Promise<string> {
   return runCommand(process.execPath, args);

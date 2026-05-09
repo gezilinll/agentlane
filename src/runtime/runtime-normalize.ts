@@ -93,12 +93,16 @@ export interface AgentlaneRuntime {
   health?: {
     /** Optional latest runtime error summary. */
     lastError?: string;
-    /** Optional queue depth reported by the runtime. */
-    queueDepth?: number;
-    /** Optional active task count reported by the runtime. */
+    /** Optional current running task count after adapter normalization. */
     activeTasks?: number;
-    /** Optional active session count reported by the runtime. */
+    /** Optional current queued task count after adapter normalization. */
+    queuedTasks?: number;
+    /** Optional current active session count after adapter normalization. */
     activeSessions?: number;
+    /** Optional historical or cumulative session count after adapter normalization. */
+    historicalSessions?: number;
+    /** Optional configured concurrency capacity after adapter normalization. */
+    maxConcurrency?: number;
   };
 }
 
@@ -112,6 +116,20 @@ export interface ChannelBinding {
   externalId?: string;
   /** Optional channel binding state. */
   status?: "enabled" | "disabled" | "unknown";
+}
+
+/** Normalized runtime or agent activity statistics owned by Agentlane. */
+export interface RuntimeActivityStats {
+  /** Current running task count. */
+  activeTasks?: number;
+  /** Current queued task count. */
+  queuedTasks?: number;
+  /** Current active session count. */
+  activeSessions?: number;
+  /** Historical or cumulative session count. */
+  historicalSessions?: number;
+  /** Configured concurrency capacity. */
+  maxConcurrency?: number;
 }
 
 /** Agent view after adapter reports are normalized. */
@@ -130,17 +148,10 @@ export interface ManagedRuntimeAgent {
   channelBindings: ChannelBinding[];
   /** External platform references that produced this agent. */
   sourceRefs: ExternalRuntimeRef[];
-  /** Optional load and concurrency summary. */
-  load?: {
-    /** Optional active task count. */
-    activeTasks?: number;
-    /** Optional queued task count. */
-    queueDepth?: number;
-    /** Optional active session count. */
-    activeSessions?: number;
-    /** Optional max concurrent task setting. */
-    maxConcurrentTasks?: number;
-  };
+  /** ISO timestamp when this agent was last observed by its adapter. */
+  lastSeenAt?: string;
+  /** Optional normalized load and concurrency summary. */
+  load?: RuntimeActivityStats;
 }
 
 /** Runtime discovery reported by one adapter before normalization. */
@@ -159,9 +170,11 @@ export interface RuntimeDiscovery {
   endpoint?: string;
   /** Runtime capabilities reported by the adapter. */
   capabilities: string[];
+  /** ISO timestamp when this runtime was last observed by its adapter. */
+  lastSeenAt?: string;
   /** Optional external references in addition to the adapter-local id. */
   sourceRefs?: ExternalRuntimeRef[];
-  /** Optional runtime health detail. */
+  /** Optional runtime health detail using Agentlane-owned statistic semantics. */
   health?: AgentlaneRuntime["health"];
 }
 
@@ -181,7 +194,9 @@ export interface AgentDiscovery {
   channelBindings: ChannelBinding[];
   /** Optional external references in addition to the adapter-local id. */
   sourceRefs?: ExternalRuntimeRef[];
-  /** Optional load and concurrency summary. */
+  /** ISO timestamp when this agent was last observed by its adapter. */
+  lastSeenAt?: string;
+  /** Optional normalized load and concurrency summary. */
   load?: ManagedRuntimeAgent["load"];
 }
 
@@ -329,7 +344,7 @@ export function createRuntimeInventorySnapshot(
         version: runtime.version,
         endpoint: runtime.endpoint,
         capabilities: runtime.capabilities,
-        lastSeenAt: report.collectedAt,
+        lastSeenAt: runtime.lastSeenAt ?? report.collectedAt,
         sourceRefs: sourceRefsForRuntime(report.source, runtime),
         health: runtime.health,
       };
@@ -349,6 +364,7 @@ export function createRuntimeInventorySnapshot(
         status: agent.status,
         channelBindings: agent.channelBindings,
         sourceRefs: sourceRefsForAgent(report.source, agent),
+        lastSeenAt: agent.lastSeenAt ?? report.collectedAt,
         load: agent.load,
       };
     }),
