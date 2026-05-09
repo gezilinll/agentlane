@@ -16,14 +16,13 @@ import {
   type RuntimeWorkBoardFilters,
 } from "./runtime-work-state-query";
 import type { RuntimeSource } from "./runtime-normalize";
-import type { RuntimeWorkStageConfidence, RuntimeWorkStageId, RuntimeWorkStateSnapshot } from "./runtime-work-state";
+import type { RuntimeWorkStageId, RuntimeWorkStateSnapshot } from "./runtime-work-state";
 import { formatRuntimeTimestamp } from "./runtime-inventory-query";
 
 const autoRefreshIntervalMs = 30_000;
 
 const sourceOptions: Array<RuntimeSource | "all"> = ["all", "openclaw", "multica", "slock"];
 const stageOptions: Array<RuntimeWorkStageId | "all"> = ["all", "pending", "processing", "review", "closed", "attention"];
-const confidenceOptions: Array<RuntimeWorkStageConfidence | "all"> = ["all", "direct", "partial", "unsupported"];
 
 const sourceLabels: Record<RuntimeSource | "all", string> = {
   all: "全部平台",
@@ -32,8 +31,8 @@ const sourceLabels: Record<RuntimeSource | "all", string> = {
   slock: "Slock",
   codex: "Codex",
   claude_code: "Claude Code",
-  unknown: "Unknown",
-  manual: "Manual",
+  unknown: "未知",
+  manual: "手动",
 };
 
 const stageLabels: Record<RuntimeWorkStageId | "all", string> = {
@@ -43,13 +42,6 @@ const stageLabels: Record<RuntimeWorkStageId | "all", string> = {
   review: "待验收",
   closed: "已关闭",
   attention: "需关注",
-};
-
-const confidenceLabels: Record<RuntimeWorkStageConfidence | "all", string> = {
-  all: "全部可信度",
-  direct: "直接证据",
-  partial: "部分可信",
-  unsupported: "不支持",
 };
 
 const fixtureWorkStateSnapshot = createFixtureWorkStateSnapshot();
@@ -66,7 +58,6 @@ export function RuntimeWorkBoardPage() {
   const [search, setSearch] = useState("");
   const [source, setSource] = useState<RuntimeSource | "all">("all");
   const [stage, setStage] = useState<RuntimeWorkStageId | "all">("all");
-  const [confidence, setConfidence] = useState<RuntimeWorkStageConfidence | "all">("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   async function fetchLatestSnapshot(): Promise<RuntimeWorkStateSnapshot | null> {
@@ -124,8 +115,8 @@ export function RuntimeWorkBoardPage() {
   }, []);
 
   const filters: RuntimeWorkBoardFilters = useMemo(
-    () => ({ search, source, stage, confidence }),
-    [confidence, search, source, stage],
+    () => ({ search, source, stage }),
+    [search, source, stage],
   );
   const board = useMemo(() => createRuntimeWorkBoard(snapshot, filters), [filters, snapshot]);
   const selectedItem = selectedId ? board.visibleItems.find((item) => item.id === selectedId) ?? null : board.visibleItems[0] ?? null;
@@ -137,8 +128,8 @@ export function RuntimeWorkBoardPage() {
           <p className="eyebrow">Runtime / Work State</p>
           <h1>工作看板</h1>
           <p className="pageSubtitle">
-            统一查看 Agent 相关工作项、执行态、阶段可信度和平台采集能力。当前数据源：
-            {dataSource === "backend" ? "Backend" : "Fixture"}
+            统一查看 Agent 承接的工作项、发起人、群组/渠道、消息摘要和当前阶段。当前数据源：
+            {dataSource === "backend" ? "后端快照" : "Fixture 样例"}
           </p>
           <p className="pageRefreshMeta">
             快照时间 {formatRuntimeTimestamp(snapshot.observedAt)}
@@ -174,7 +165,7 @@ export function RuntimeWorkBoardPage() {
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="搜索工作项、Agent、Runtime 或渠道"
+              placeholder="搜索任务、消息、发起人、Agent 或群组"
             />
           </span>
         </label>
@@ -201,23 +192,10 @@ export function RuntimeWorkBoardPage() {
           </select>
         </label>
 
-        <label className="toolbarField">
-          <span className="controlLabel">可信度</span>
-          <select
-            value={confidence}
-            onChange={(event) => setConfidence(event.target.value as RuntimeWorkStageConfidence | "all")}
-          >
-            {confidenceOptions.map((option) => (
-              <option key={option} value={option}>
-                {confidenceLabels[option]}
-              </option>
-            ))}
-          </select>
-        </label>
       </section>
 
       <section className="metricGrid" aria-label="工作态概览">
-        <Metric label="看板项" value={board.summary.totalItems} tone="blue" />
+        <Metric label="工作项" value={board.summary.totalItems} tone="blue" />
         <Metric label="处理中" value={board.summary.byStage.processing} tone="green" />
         <Metric label="需关注" value={board.summary.byStage.attention} tone="orange" />
         <Metric label="能力缺口" value={board.summary.unsupportedCapabilities} tone="purple" />
@@ -242,12 +220,18 @@ export function RuntimeWorkBoardPage() {
                     >
                       <span className="workCardTopline">
                         <Badge>{sourceLabels[item.source]}</Badge>
-                        <ConfidenceBadge confidence={item.confidence} />
+                        <Badge>{stageLabels[item.stage]}</Badge>
                       </span>
                       <strong>{item.title}</strong>
-                      <small>{item.runtimeId ?? "无 Runtime"}</small>
+                      <small>{item.requestExcerpt}</small>
                       <span className="workCardMeta">
-                        {item.channelLabel ?? item.kind}
+                        发起人 {item.creatorLabel}
+                      </span>
+                      <span className="workCardMeta">
+                        承接 Agent {item.assigneeLabel}
+                      </span>
+                      <span className="workCardMeta">
+                        群组/渠道 {item.channelLabel ?? "不支持采集"}
                         {item.lastSeenAt ? ` · ${formatRuntimeTimestamp(item.lastSeenAt)}` : ""}
                       </span>
                     </button>
@@ -259,7 +243,7 @@ export function RuntimeWorkBoardPage() {
             </section>
           ))}
         </div>
-        <WorkItemDetail item={selectedItem} notes={board.capabilityNotes} />
+        <WorkItemDetail item={selectedItem} />
       </section>
     </section>
   );
@@ -276,10 +260,8 @@ function Metric({ label, value, tone }: { label: string; value: number; tone: st
 
 function WorkItemDetail({
   item,
-  notes,
 }: {
   item: RuntimeWorkBoardItem | null;
-  notes: ReturnType<typeof createRuntimeWorkBoard>["capabilityNotes"];
 }) {
   if (!item) {
     return (
@@ -294,39 +276,32 @@ function WorkItemDetail({
     <aside className="detailPanel" aria-label="工作项详情">
       <div className="detailHeader">
         <div>
-          <p className="eyebrow">{item.kind === "work_item" ? "Work Item" : "Execution"}</p>
+          <p className="eyebrow">工作项</p>
           <h2>{item.title}</h2>
         </div>
-        <ConfidenceBadge confidence={item.confidence} />
+        <StatusPill>{stageLabels[item.stage]}</StatusPill>
       </div>
       <DetailBlock title="概览">
-        {`${stageLabels[item.stage]} · ${item.workItemStatus ?? item.executionStatus ?? "unknown"}`}
+        {`${stageLabels[item.stage]} · ${workItemStatusLabel(item.workItemStatus)}`}
       </DetailBlock>
       <DetailList
-        title="归属关系"
+        title="任务上下文"
         items={[
           `来源平台: ${sourceLabels[item.source]}`,
-          `可信度: ${confidenceLabels[item.confidence]}`,
-          `Runtime: ${item.runtimeId ?? "未知"}`,
-          `Agent: ${item.agentId ?? "未知"}`,
-          `渠道: ${item.channelLabel ?? "无"}`,
+          `发起人: ${item.creatorLabel}`,
+          `承接 Agent: ${item.assigneeLabel}`,
+          `群组/渠道: ${item.channelLabel ?? "不支持采集"}`,
         ]}
       />
-      <DetailList title="阶段依据" items={item.reasons} />
       <DetailList
         title="最近状态"
         items={[
           `最近同步: ${formatRuntimeTimestamp(item.lastSeenAt)}`,
-          `工作项状态: ${item.workItemStatus ?? "无"}`,
-          `执行状态: ${item.executionStatus ?? "无"}`,
+          `工作项状态: ${workItemStatusLabel(item.workItemStatus)}`,
+          `执行状态: ${executionStatusLabel(item.executionStatus)}`,
         ]}
       />
-      <DetailList
-        title="能力说明"
-        items={notes
-          .filter((note) => note.source === item.source)
-          .map((note) => `${surfaceLabel(note.surface)}: ${supportLabel(note.support)} · ${note.limitation}`)}
-      />
+      <DetailBlock title="消息摘要">{item.requestExcerpt}</DetailBlock>
     </aside>
   );
 }
@@ -357,12 +332,12 @@ function DetailList({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-function ConfidenceBadge({ confidence }: { confidence: RuntimeWorkStageConfidence }) {
-  return <span className={`statusBadge confidence-${confidence}`}>{confidenceLabels[confidence]}</span>;
-}
-
 function Badge({ children }: { children: string }) {
   return <span className="badge">{children}</span>;
+}
+
+function StatusPill({ children }: { children: string }) {
+  return <span className="statusBadge">{children}</span>;
 }
 
 function createFixtureWorkStateSnapshot(): RuntimeWorkStateSnapshot {
@@ -380,15 +355,22 @@ function createFixtureWorkStateSnapshot(): RuntimeWorkStateSnapshot {
   };
 }
 
-function surfaceLabel(surface: string): string {
-  if (surface === "workItems") return "工作项";
-  if (surface === "conversations") return "会话";
-  return "执行态";
+function workItemStatusLabel(status: RuntimeWorkBoardItem["workItemStatus"]): string {
+  if (status === "todo") return "待处理";
+  if (status === "in_progress") return "处理中";
+  if (status === "in_review") return "待验收";
+  if (status === "done") return "已完成";
+  if (status === "blocked") return "阻塞";
+  if (status === "cancelled") return "已取消";
+  return "未知";
 }
 
-function supportLabel(support: string): string {
-  if (support === "supported") return "支持";
-  if (support === "partial") return "部分支持";
-  if (support === "unsupported") return "不支持";
-  return "未知";
+function executionStatusLabel(status: RuntimeWorkBoardItem["executionStatus"]): string {
+  if (status === "queued") return "排队中";
+  if (status === "running") return "运行中";
+  if (status === "succeeded") return "已成功";
+  if (status === "failed") return "失败";
+  if (status === "cancelled") return "已取消";
+  if (status === "unknown") return "未知";
+  return "不支持采集";
 }

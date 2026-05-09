@@ -23,7 +23,7 @@ const backendSnapshot: RuntimeWorkStateSnapshot = {
 };
 
 test.describe("Runtime Work Board", () => {
-  test("filters partial Slock work, opens details, and stays responsive", async ({ page, request }) => {
+  test("filters Slock work by task context, opens details, and stays responsive", async ({ page, request }) => {
     const seedResponse = await request.post("/api/runtime-work-state-snapshots", { data: backendSnapshot });
     expect(seedResponse.ok()).toBe(true);
 
@@ -32,23 +32,26 @@ test.describe("Runtime Work Board", () => {
     await page.getByRole("button", { name: "Runs" }).click();
 
     await expect(page.getByRole("heading", { name: "工作看板" })).toBeVisible();
-    await expect(page.getByText(/当前数据源：Backend/)).toBeVisible();
+    await expect(page.getByText(/当前数据源：后端快照/)).toBeVisible();
     for (const lane of ["待处理", "处理中", "待验收", "已关闭", "需关注"]) {
       await expect(page.getByRole("heading", { name: lane })).toBeVisible();
     }
 
     await page.getByLabel("来源平台").selectOption("slock");
-    await page.getByLabel("可信度").selectOption("partial");
-    await page.getByPlaceholder("搜索工作项、Agent、Runtime 或渠道").fill("progress");
+    await page.getByPlaceholder("搜索任务、消息、发起人、Agent 或群组").fill("@fixture-human");
 
     await expect(page.getByRole("button", { name: /Example in progress card/ })).toBeVisible();
-    await expect(page.getByText("Example review card")).not.toBeVisible();
+    await expect(page.getByRole("button", { name: /@example-agent/ }).first()).toBeVisible();
+    await expect(page.getByText(/OpenClaw execution/)).not.toBeVisible();
+    await expect(page.getByText("直接证据")).not.toBeVisible();
+    await expect(page.getByText(/OpenClaw has no/)).not.toBeVisible();
 
     await page.getByRole("button", { name: /Example in progress card/ }).click();
     const detail = page.getByRole("complementary", { name: "工作项详情" });
-    await expect(detail).toContainText("可信度: 部分可信");
     await expect(detail).toContainText("来源平台: Slock");
-    await expect(detail).toContainText("执行态: 未知");
+    await expect(detail).toContainText("发起人: @fixture-human");
+    await expect(detail).toContainText("承接 Agent: @example-agent");
+    await expect(detail).toContainText("群组/渠道: #example-board");
 
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.getByRole("heading", { name: "工作看板" })).toBeVisible();
@@ -66,7 +69,7 @@ test.describe("Runtime Work Board", () => {
     await page.setViewportSize({ width: 1185, height: 900 });
     await page.goto("/");
     await page.getByRole("button", { name: "Runs" }).click();
-    await expect(page.getByText(/当前数据源：Backend/)).toBeVisible();
+    await expect(page.getByText(/当前数据源：后端快照/)).toBeVisible();
 
     const pageOverflows = await page.evaluate(
       () => document.documentElement.scrollWidth > window.innerWidth + 1,

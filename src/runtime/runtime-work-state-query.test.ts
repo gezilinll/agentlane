@@ -38,7 +38,7 @@ const snapshot: RuntimeWorkStateSnapshot = {
 };
 
 describe("runtime work state query", () => {
-  it("groups work items and standalone executions into stable Agentlane-owned lanes", () => {
+  it("uses only work-item backed cards and exposes human-readable task context", () => {
     const board = createRuntimeWorkBoard(snapshot);
 
     expect(board.lanes.map((lane) => lane.stage)).toEqual(["pending", "processing", "review", "closed", "attention"]);
@@ -48,14 +48,21 @@ describe("runtime work state query", () => {
     expect(board.lanes.find((lane) => lane.stage === "processing")?.items.some((item) => item.confidence === "partial")).toBe(
       true,
     );
-    expect(board.lanes.find((lane) => lane.stage === "closed")?.items.some((item) => item.source === "openclaw")).toBe(true);
-    expect(board.lanes.find((lane) => lane.stage === "attention")?.items.some((item) => item.source === "openclaw")).toBe(true);
+    expect(board.visibleItems.some((item) => item.source === "openclaw")).toBe(false);
+
+    const slockCard = board.visibleItems.find((item) => item.title === "Example in progress card");
+    expect(slockCard).toMatchObject({
+      creatorLabel: "@fixture-human",
+      assigneeLabel: "@example-agent",
+      channelLabel: "#example-board",
+      requestExcerpt: "Example in progress card",
+    });
   });
 
   it("summarizes confidence and unsupported capability signals", () => {
     const board = createRuntimeWorkBoard(snapshot);
 
-    expect(board.summary.totalItems).toBeGreaterThan(0);
+    expect(board.summary.totalItems).toBe(snapshot.workItems.length);
     expect(board.summary.partialItems).toBeGreaterThan(0);
     expect(board.summary.unsupportedCapabilities).toBeGreaterThan(0);
     expect(board.capabilityNotes.some((note) => note.source === "slock" && note.surface === "executions")).toBe(true);

@@ -76,7 +76,7 @@ describe("Catalog page", () => {
     expect(screen.getByRole("heading", { name: "没有匹配的对象" })).toBeInTheDocument();
   });
 
-  it("opens Runs work board, filters partial Slock work, and opens details", async () => {
+  it("opens Runs work board with task context and no adapter debug text", async () => {
     const user = userEvent.setup();
     globalThis.fetch = vi.fn(async (input) => {
       const url = input.toString();
@@ -99,18 +99,24 @@ describe("Catalog page", () => {
     expect(await screen.findByText(/当前数据源：Fixture/)).toBeInTheDocument();
 
     await user.selectOptions(screen.getByLabelText("来源平台"), "slock");
-    await user.selectOptions(screen.getByLabelText("可信度"), "partial");
-    await user.type(screen.getByPlaceholderText("搜索工作项、Agent、Runtime 或渠道"), "progress");
+    await user.type(screen.getByPlaceholderText("搜索任务、消息、发起人、Agent 或群组"), "@fixture-human");
 
     expect(screen.getAllByText("Example in progress card").length).toBeGreaterThan(0);
-    expect(screen.queryByText("Example review card")).not.toBeInTheDocument();
+    expect(screen.getAllByText(/@fixture-human/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/@example-agent/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/#example-board/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/OpenClaw execution/)).not.toBeInTheDocument();
+    expect(screen.queryByText("直接证据")).not.toBeInTheDocument();
+    expect(screen.queryByText(/OpenClaw has no/)).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /Example in progress card/ }));
 
     const detail = screen.getByRole("complementary", { name: "工作项详情" });
     expect(within(detail).getByRole("heading", { name: "Example in progress card" })).toBeInTheDocument();
-    expect(within(detail).getByText("可信度: 部分可信")).toBeInTheDocument();
     expect(within(detail).getByText("来源平台: Slock")).toBeInTheDocument();
+    expect(within(detail).getByText("发起人: @fixture-human")).toBeInTheDocument();
+    expect(within(detail).getByText("承接 Agent: @example-agent")).toBeInTheDocument();
+    expect(within(detail).getByText("群组/渠道: #example-board")).toBeInTheDocument();
   });
 
   it("opens Runtime Fleet and renders the fixture runtime inventory", async () => {

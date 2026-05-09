@@ -74,6 +74,12 @@ export interface RuntimeWorkBoardItem {
   agentId?: string;
   /** Channel label when the source exposes one. */
   channelLabel?: string;
+  /** Work item creator label when the source exposes one. */
+  creatorLabel: string;
+  /** Agent or assignee currently carrying this item. */
+  assigneeLabel: string;
+  /** Short request/message excerpt suitable for card display and search. */
+  requestExcerpt: string;
   /** Latest observed timestamp for this item. */
   lastSeenAt?: string;
   /** Original normalized work item, when this item is work-item backed. */
@@ -147,16 +153,10 @@ function createBoardItems(snapshot: RuntimeWorkStateSnapshot): RuntimeWorkBoardI
     }
   }
 
-  const workItemBackedItems = snapshot.workItems.map((workItem) => {
+  return snapshot.workItems.map((workItem) => {
     const execution = executionsByWorkItemId.get(workItem.id);
     return createWorkItemBoardItem(workItem, execution);
-  });
-
-  const standaloneExecutionItems = snapshot.executions
-    .filter((execution) => !execution.workItemId || !snapshot.workItems.some((workItem) => workItem.id === execution.workItemId))
-    .map(createExecutionBoardItem);
-
-  return [...workItemBackedItems, ...standaloneExecutionItems].sort(compareBoardItems);
+  }).sort(compareBoardItems);
 }
 
 function createWorkItemBoardItem(workItem: RuntimeWorkItem, execution?: RuntimeExecution): RuntimeWorkBoardItem {
@@ -179,30 +179,11 @@ function createWorkItemBoardItem(workItem: RuntimeWorkItem, execution?: RuntimeE
     runtimeId: workItem.runtimeId,
     agentId: workItem.agentId,
     channelLabel: workItem.channel?.label,
+    creatorLabel: participantLabel(workItem.creator),
+    assigneeLabel: participantLabel(workItem.assignee) || compactObjectId(workItem.agentId),
+    requestExcerpt: createRequestExcerpt(workItem.description ?? workItem.title),
     lastSeenAt: workItem.lastSeenAt ?? workItem.updatedAt ?? execution?.lastSeenAt,
     workItem,
-    execution,
-  };
-}
-
-function createExecutionBoardItem(execution: RuntimeExecution): RuntimeWorkBoardItem {
-  const derivation = deriveRuntimeWorkStage({
-    source: execution.source,
-    executionStatus: execution.status,
-  });
-
-  return {
-    id: execution.id,
-    title: `${sourceLabel(execution.source)} execution ${execution.externalId}`,
-    source: execution.source,
-    stage: derivation.stage,
-    confidence: derivation.confidence,
-    reasons: derivation.reasons,
-    kind: "execution",
-    executionStatus: execution.status,
-    runtimeId: execution.runtimeId,
-    agentId: execution.agentId,
-    lastSeenAt: execution.lastSeenAt ?? execution.endedAt ?? execution.startedAt,
     execution,
   };
 }
@@ -250,6 +231,9 @@ function matchesFilters(item: RuntimeWorkBoardItem, filters: RuntimeWorkBoardFil
     item.runtimeId,
     item.agentId,
     item.channelLabel,
+    item.creatorLabel,
+    item.assigneeLabel,
+    item.requestExcerpt,
     item.workItemStatus,
     item.executionStatus,
   ]
@@ -273,4 +257,20 @@ function sourceLabel(source: RuntimeSource): string {
   if (source === "codex") return "Codex";
   if (source === "claude_code") return "Claude Code";
   return "Manual";
+}
+
+function participantLabel(participant: RuntimeWorkItem["creator"]): string {
+  return participant?.label?.trim() || "";
+}
+
+function compactObjectId(value: string | undefined): string {
+  if (!value) return "不支持采集";
+  const lastPart = value.split(":").at(-1);
+  return lastPart || value;
+}
+
+function createRequestExcerpt(value: string): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= 80) return normalized;
+  return `${normalized.slice(0, 80)}...`;
 }

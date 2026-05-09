@@ -168,7 +168,7 @@ export function RuntimeFleetPage() {
           <h1>运行资产</h1>
           <p className="pageSubtitle">
             统一识别设备、Runtime、Agent 与它们暴露到的渠道。当前数据源：
-            {dataSource === "backend" ? "Backend" : "Fixture"}
+            {dataSource === "backend" ? "后端快照" : "Fixture 样例"}
           </p>
           {lastLoadedAt ? (
             <p className="pageRefreshMeta">上次刷新 {formatRuntimeTimestamp(lastLoadedAt)}</p>
