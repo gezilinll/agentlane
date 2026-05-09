@@ -76,6 +76,43 @@ describe("Catalog page", () => {
     expect(screen.getByRole("heading", { name: "没有匹配的对象" })).toBeInTheDocument();
   });
 
+  it("opens Runs work board, filters partial Slock work, and opens details", async () => {
+    const user = userEvent.setup();
+    globalThis.fetch = vi.fn(async (input) => {
+      const url = input.toString();
+      if (url.includes("/api/runtime-work-state/latest")) {
+        return new Response(JSON.stringify({ error: "not_found" }), {
+          status: 404,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "unexpected request" }), { status: 500 });
+    }) as unknown as typeof fetch;
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Runs" }));
+
+    expect(screen.getByRole("heading", { name: "工作看板" })).toBeInTheDocument();
+    for (const lane of ["待处理", "处理中", "待验收", "已关闭", "需关注"]) {
+      expect(screen.getByRole("heading", { name: lane })).toBeInTheDocument();
+    }
+    expect(await screen.findByText(/当前数据源：Fixture/)).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("来源平台"), "slock");
+    await user.selectOptions(screen.getByLabelText("可信度"), "partial");
+    await user.type(screen.getByPlaceholderText("搜索工作项、Agent、Runtime 或渠道"), "progress");
+
+    expect(screen.getAllByText("Example in progress card").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Example review card")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Example in progress card/ }));
+
+    const detail = screen.getByRole("complementary", { name: "工作项详情" });
+    expect(within(detail).getByRole("heading", { name: "Example in progress card" })).toBeInTheDocument();
+    expect(within(detail).getByText("可信度: 部分可信")).toBeInTheDocument();
+    expect(within(detail).getByText("来源平台: Slock")).toBeInTheDocument();
+  });
+
   it("opens Runtime Fleet and renders the fixture runtime inventory", async () => {
     const user = userEvent.setup();
     render(<App />);

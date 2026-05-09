@@ -307,6 +307,108 @@ h1 {
   min-width: 0;
 }
 
+.workBoardGrid {
+  align-items: start;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  min-width: 0;
+}
+
+.workBoardLanes {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(5, minmax(180px, 1fr));
+  min-width: 0;
+}
+
+.workLane {
+  background: #ffffff;
+  border: 1px solid #d9e4f2;
+  border-radius: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.workLaneHeader {
+  align-items: center;
+  background: #f7faff;
+  border-bottom: 1px solid #e4ebf5;
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+
+.workLaneHeader h2 {
+  color: #071943;
+  font-size: 15px;
+  margin: 0;
+}
+
+.workLaneHeader span {
+  background: #eaf2ff;
+  border-radius: 999px;
+  color: #0b4fb3;
+  font-size: 12px;
+  font-weight: 800;
+  min-width: 24px;
+  padding: 3px 8px;
+  text-align: center;
+}
+
+.workLaneItems {
+  display: grid;
+  gap: 10px;
+  min-height: 180px;
+  padding: 10px;
+}
+
+.workCard {
+  background: #fff;
+  border: 1px solid #dde8f6;
+  border-radius: 8px;
+  color: #16294d;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  text-align: left;
+}
+
+.workCard:hover,
+.workCardActive {
+  background: #eef6ff;
+  border-color: #8fc2ff;
+}
+
+.workCardTopline {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.workCard strong,
+.workCard small,
+.workCardMeta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workCard small,
+.workCardMeta {
+  color: #61718a;
+  font-size: 12px;
+}
+
+.emptyLane {
+  color: #8b98aa;
+  font-size: 13px;
+  margin: 0;
+  padding: 8px 2px;
+}
+
 .runtimeStack {
   display: grid;
   gap: 14px;
@@ -625,6 +727,21 @@ button.tableRow:hover,
   color: #0b4fb3;
 }
 
+.confidence-direct {
+  background: #edf8f2;
+  color: #1f8b57;
+}
+
+.confidence-partial {
+  background: #fff7e8;
+  color: #ba6b00;
+}
+
+.confidence-unsupported {
+  background: #f2f4f7;
+  color: #667085;
+}
+
 .channelList {
   align-items: center;
   display: flex;
@@ -726,6 +843,14 @@ button.tableRow:hover,
     grid-template-columns: 1fr;
   }
 
+  .workBoardGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .workBoardLanes {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+  }
+
   .tablePanel {
     overflow-x: auto;
   }
@@ -753,6 +878,10 @@ button.tableRow:hover,
 
   .toolbar,
   .metricGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .workBoardLanes {
     grid-template-columns: 1fr;
   }
 

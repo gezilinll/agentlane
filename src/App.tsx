@@ -27,8 +27,9 @@ import {
   type CatalogOwnerFilter,
 } from "./catalog";
 import { RuntimeFleetPage } from "./runtime/RuntimeFleetPage";
+import { RuntimeWorkBoardPage } from "./runtime/RuntimeWorkBoardPage";
 
-type PageKey = "catalog" | "runtime";
+type PageKey = "catalog" | "runtime" | "work";
 
 const navItems: Array<{ label: string; icon: LucideIcon; page?: PageKey }> = [
   { label: "总控台", icon: Activity },
@@ -38,7 +39,7 @@ const navItems: Array<{ label: string; icon: LucideIcon; page?: PageKey }> = [
   { label: "Workflow Studio", icon: GitBranch },
   { label: "Skill Registry", icon: Wrench },
   { label: "Worker Fleet", icon: Server },
-  { label: "Runs", icon: PlayCircle },
+  { label: "Runs", icon: PlayCircle, page: "work" },
   { label: "People", icon: Users },
   { label: "Integrations", icon: Blocks },
   { label: "Governance", icon: ShieldCheck },
@@ -75,7 +76,7 @@ export function App() {
         </nav>
       </aside>
 
-      {activePage === "runtime" ? <RuntimeFleetPage /> : <CatalogPage />}
+      {activePage === "runtime" ? <RuntimeFleetPage /> : activePage === "work" ? <RuntimeWorkBoardPage /> : <CatalogPage />}
     </main>
   );
 }
