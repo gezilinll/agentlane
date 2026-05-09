@@ -195,7 +195,7 @@ export function RuntimeWorkBoardPage() {
       </section>
 
       <section className="metricGrid" aria-label="工作态概览">
-        <Metric label="工作项" value={board.summary.totalItems} tone="blue" />
+        <Metric label="看板项" value={board.summary.totalItems} tone="blue" />
         <Metric label="处理中" value={board.summary.byStage.processing} tone="green" />
         <Metric label="需关注" value={board.summary.byStage.attention} tone="orange" />
         <Metric label="能力缺口" value={board.summary.unsupportedCapabilities} tone="purple" />
@@ -224,16 +224,25 @@ export function RuntimeWorkBoardPage() {
                       </span>
                       <strong>{item.title}</strong>
                       <small>{item.requestExcerpt}</small>
-                      <span className="workCardMeta">
-                        发起人 {item.creatorLabel}
-                      </span>
-                      <span className="workCardMeta">
-                        承接 Agent {item.assigneeLabel}
-                      </span>
-                      <span className="workCardMeta">
-                        群组/渠道 {item.channelLabel ?? "不支持采集"}
-                        {item.lastSeenAt ? ` · ${formatRuntimeTimestamp(item.lastSeenAt)}` : ""}
-                      </span>
+                      {item.kind === "work_item" ? (
+                        <>
+                          <span className="workCardMeta">
+                            发起人 {item.creatorLabel}
+                          </span>
+                          <span className="workCardMeta">
+                            承接 Agent {item.assigneeLabel}
+                          </span>
+                          <span className="workCardMeta">
+                            群组/渠道 {item.channelLabel ?? "不支持采集"}
+                            {item.lastSeenAt ? ` · ${formatRuntimeTimestamp(item.lastSeenAt)}` : ""}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="workCardMeta">
+                          平台监听状态
+                          {item.lastSeenAt ? ` · ${formatRuntimeTimestamp(item.lastSeenAt)}` : ""}
+                        </span>
+                      )}
                     </button>
                   ))
                 ) : (
@@ -267,7 +276,7 @@ function WorkItemDetail({
     return (
       <aside className="detailPanel" aria-label="工作项详情">
         <h2>工作项详情</h2>
-        <p>选择一个工作项或执行记录查看详情。</p>
+        <p>选择一个工作项或监听状态查看详情。</p>
       </aside>
     );
   }
@@ -276,11 +285,31 @@ function WorkItemDetail({
     <aside className="detailPanel" aria-label="工作项详情">
       <div className="detailHeader">
         <div>
-          <p className="eyebrow">工作项</p>
+          <p className="eyebrow">{item.kind === "work_item" ? "工作项" : "监听状态"}</p>
           <h2>{item.title}</h2>
         </div>
         <StatusPill>{stageLabels[item.stage]}</StatusPill>
       </div>
+      {item.kind === "listening_status" ? (
+        <>
+          <DetailBlock title="概览">{item.requestExcerpt}</DetailBlock>
+          <DetailList
+            title="监听范围"
+            items={[
+              `来源平台: ${sourceLabels[item.source]}`,
+              `监听状态: ${listeningReadinessLabel(item.listeningReadiness)}`,
+              `群组/渠道: ${item.channelLabel ?? "不支持采集"}`,
+            ]}
+          />
+          <DetailList
+            title="最近状态"
+            items={[
+              `最近同步: ${formatRuntimeTimestamp(item.lastSeenAt)}`,
+            ]}
+          />
+        </>
+      ) : (
+        <>
       <DetailBlock title="概览">
         {`${stageLabels[item.stage]} · ${workItemStatusLabel(item.workItemStatus)}`}
       </DetailBlock>
@@ -302,6 +331,8 @@ function WorkItemDetail({
         ]}
       />
       <DetailBlock title="消息摘要">{item.requestExcerpt}</DetailBlock>
+        </>
+      )}
     </aside>
   );
 }
@@ -373,4 +404,11 @@ function executionStatusLabel(status: RuntimeWorkBoardItem["executionStatus"]): 
   if (status === "cancelled") return "已取消";
   if (status === "unknown") return "未知";
   return "不支持采集";
+}
+
+function listeningReadinessLabel(readiness: RuntimeWorkBoardItem["listeningReadiness"]): string {
+  if (readiness === "ready_for_runs") return "已满足 Runs 任务卡要求";
+  if (readiness === "execution_only") return "已接入执行监听，缺少上游工作项关联";
+  if (readiness === "not_ready") return "未就绪";
+  return "未知";
 }

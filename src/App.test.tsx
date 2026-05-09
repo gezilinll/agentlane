@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import fixtureSnapshot from "../fixtures/runtime/collector-snapshot.sample.json";
-import type { RuntimeInventorySnapshot } from "./runtime";
+import type { RuntimeInventorySnapshot, RuntimeWorkStateSnapshot } from "./runtime";
 
 const originalFetch = globalThis.fetch;
 
@@ -117,6 +117,68 @@ describe("Catalog page", () => {
     expect(within(detail).getByText("发起人: @fixture-human")).toBeInTheDocument();
     expect(within(detail).getByText("承接 Agent: @example-agent")).toBeInTheDocument();
     expect(within(detail).getByText("群组/渠道: #example-board")).toBeInTheDocument();
+  });
+
+  it("keeps OpenClaw and Slock visible when they only have execution data or listening gaps", async () => {
+    const user = userEvent.setup();
+    const backendSnapshot: RuntimeWorkStateSnapshot = {
+      observedAt: "2026-05-09T08:00:00.000Z",
+      deviceId: "fixture-device",
+      workItems: [],
+      conversations: [{
+        id: "fixture-device:openclaw:gateway:conversation:session-1",
+        source: "openclaw",
+        externalId: "session-1",
+        status: "active",
+        runtimeId: "fixture-device:openclaw:gateway",
+        agentId: "fixture-device:openclaw:gateway:agent:main",
+        lastSeenAt: "2026-05-09T08:00:00.000Z",
+      }],
+      executions: [{
+        id: "fixture-device:openclaw:gateway:execution:run-1",
+        source: "openclaw",
+        externalId: "run-1",
+        runtimeId: "fixture-device:openclaw:gateway",
+        agentId: "fixture-device:openclaw:gateway:agent:main",
+        status: "succeeded",
+        lastSeenAt: "2026-05-09T08:00:00.000Z",
+      }],
+      capabilities: [
+        {
+          source: "openclaw",
+          collectedAt: "2026-05-09T08:00:00.000Z",
+          workItems: { support: "unsupported", strategies: ["cli"], evidence: [], limitations: [] },
+          conversations: { support: "partial", strategies: ["cli"], evidence: [], limitations: [] },
+          executions: { support: "supported", strategies: ["cli"], evidence: [], limitations: [] },
+        },
+        {
+          source: "slock",
+          collectedAt: "2026-05-09T08:00:00.000Z",
+          workItems: { support: "unknown", strategies: ["local_state"], evidence: [], limitations: [] },
+          conversations: { support: "unknown", strategies: ["local_state"], evidence: [], limitations: [] },
+          executions: { support: "unknown", strategies: ["local_state"], evidence: [], limitations: [] },
+        },
+      ],
+    };
+    globalThis.fetch = vi.fn(async (input) => {
+      const url = input.toString();
+      if (url.includes("/api/runtime-work-state/latest")) {
+        return new Response(JSON.stringify(backendSnapshot), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "unexpected request" }), { status: 500 });
+    }) as unknown as typeof fetch;
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Runs" }));
+    expect(await screen.findByText("OpenClaw 执行监听已接入")).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("来源平台"), "slock");
+    expect((await screen.findAllByText("Slock 监听未就绪")).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/OpenClaw execution/)).not.toBeInTheDocument();
+    expect(screen.queryByText("直接证据")).not.toBeInTheDocument();
   });
 
   it("opens Runtime Fleet and renders the fixture runtime inventory", async () => {

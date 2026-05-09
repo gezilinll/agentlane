@@ -45,6 +45,7 @@ Current source of truth:
 - Treat the device WebSocket as a control plane only. Do not use it for chat, arbitrary command execution, external platform protocol emulation, or task scheduling until a spec and harness explicitly introduce those behaviors.
 - Keep runtime/device secrets out of logs, fixtures, tests, docs, and UI screenshots. `deviceToken`, Slock keys, bearer tokens, and platform API keys may be passed through local config, but v1 does not implement full auth or secret management.
 - Runtime adapters must translate platform-specific fields into Agentlane-owned semantics before UI consumption. Do not make React components infer whether OpenClaw sessions, Multica tasks, or Slock workspaces mean `active`, `idle`, `lastSeenAt`, or runtime statistics.
+- Runs / Work Board must not turn bare platform executions into task cards, but target platforms must remain visible through normalized listening-status cards when they are `execution_only` or `not_ready`.
 - Runs / Work Board must stay task-context first: do not render unlinked runtime executions as task cards, and do not expose adapter evidence, raw limitations, command names, or debugging notes in user-facing UI. If a platform cannot provide creator, assignee, group/channel, message excerpt, or execution state, show a concise unsupported/unknown user label and keep details in logs/spec/harness.
 
 ## Spec And Harness Workflow

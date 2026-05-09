@@ -71,6 +71,7 @@ Slock：
 - workspace 文件、daemon 进程、agent 在线状态都不能单独证明任务监听已到位。
 - `creator` 和 `assigneeAgent` 只有 UUID 或不可读外部 id 时，只能算 `partial`；adapter 后续要补名称解析或对象目录关联。
 - 前端不得展示 adapter evidence、英文 limitation、原始 command 或原始 API 字段。
+- 前端不得把未关联上游 WorkItem 的裸 execution 伪造成任务卡，但必须用“监听状态”卡展示 OpenClaw `execution_only`、Slock `not_ready` 等平台级状态，避免目标平台在 Runs 中完全不可见。
 
 ## 当前下一步
 

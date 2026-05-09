@@ -38,7 +38,7 @@ const snapshot: RuntimeWorkStateSnapshot = {
 };
 
 describe("runtime work state query", () => {
-  it("uses only work-item backed cards and exposes human-readable task context", () => {
+  it("shows task cards plus source listening status cards without raw execution cards", () => {
     const board = createRuntimeWorkBoard(snapshot);
 
     expect(board.lanes.map((lane) => lane.stage)).toEqual(["pending", "processing", "review", "closed", "attention"]);
@@ -48,7 +48,14 @@ describe("runtime work state query", () => {
     expect(board.lanes.find((lane) => lane.stage === "processing")?.items.some((item) => item.confidence === "partial")).toBe(
       true,
     );
-    expect(board.visibleItems.some((item) => item.source === "openclaw")).toBe(false);
+    expect(board.visibleItems.some((item) => item.title.startsWith("OpenClaw execution"))).toBe(false);
+    expect(board.visibleItems).toContainEqual(expect.objectContaining({
+      kind: "listening_status",
+      source: "openclaw",
+      title: "OpenClaw 执行监听已接入",
+      stage: "attention",
+      listeningReadiness: "execution_only",
+    }));
 
     const slockCard = board.visibleItems.find((item) => item.title === "Example in progress card");
     expect(slockCard).toMatchObject({
@@ -62,7 +69,7 @@ describe("runtime work state query", () => {
   it("summarizes confidence and unsupported capability signals", () => {
     const board = createRuntimeWorkBoard(snapshot);
 
-    expect(board.summary.totalItems).toBe(snapshot.workItems.length);
+    expect(board.summary.totalItems).toBeGreaterThan(snapshot.workItems.length);
     expect(board.summary.partialItems).toBeGreaterThan(0);
     expect(board.summary.unsupportedCapabilities).toBeGreaterThan(0);
     expect(board.capabilityNotes.some((note) => note.source === "slock" && note.surface === "executions")).toBe(true);
@@ -83,5 +90,46 @@ describe("runtime work state query", () => {
       confidence: "partial",
       title: "Example in progress card",
     });
+  });
+
+  it("shows a Slock listening gap card when task-board data is unavailable", () => {
+    const board = createRuntimeWorkBoard({
+      observedAt: "2026-05-09T08:00:00.000Z",
+      deviceId: "fixture-device",
+      workItems: [],
+      conversations: [],
+      executions: [],
+      capabilities: [{
+        source: "slock",
+        collectedAt: "2026-05-09T08:00:00.000Z",
+        workItems: {
+          support: "unknown",
+          strategies: ["local_state"],
+          evidence: ["workspace exists"],
+          limitations: ["workspace does not expose task board"],
+        },
+        conversations: {
+          support: "unknown",
+          strategies: ["local_state"],
+          evidence: ["workspace exists"],
+          limitations: ["workspace does not expose conversations"],
+        },
+        executions: {
+          support: "unknown",
+          strategies: ["local_state"],
+          evidence: ["workspace exists"],
+          limitations: ["workspace does not expose executions"],
+        },
+      }],
+    }, { source: "slock" });
+
+    expect(board.visibleItems).toContainEqual(expect.objectContaining({
+      kind: "listening_status",
+      source: "slock",
+      title: "Slock 监听未就绪",
+      stage: "attention",
+      listeningReadiness: "not_ready",
+      requestExcerpt: "缺少 Slock task board 或 API adapter，不能确认任务卡、群组和发起消息",
+    }));
   });
 });
