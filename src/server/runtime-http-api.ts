@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { RuntimeControlChannel } from "./runtime-control-channel";
 import type { RuntimeInventoryStore } from "./runtime-inventory-store";
+import type { RuntimeWorkStateStore } from "./runtime-work-state-store";
 
 /** Dependencies for the Runtime Fleet local HTTP API. */
 export interface RuntimeHttpApiHandlerOptions {
@@ -8,6 +9,8 @@ export interface RuntimeHttpApiHandlerOptions {
   store: RuntimeInventoryStore;
   /** Device control channel for refresh dispatch. */
   controlChannel: RuntimeControlChannel;
+  /** Latest runtime work-state snapshot store. */
+  workStateStore?: RuntimeWorkStateStore;
 }
 
 /** Node/Vite middleware-style next callback. */
@@ -35,6 +38,16 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
       return;
     }
 
+    if (request.method === "GET" && requestUrl.pathname === "/api/runtime-work-state/latest") {
+      const snapshot = options.workStateStore?.readLatestSnapshot() ?? null;
+      if (!snapshot) {
+        sendJson(response, 404, { error: "not_found" });
+        return;
+      }
+      sendJson(response, 200, snapshot);
+      return;
+    }
+
     if (request.method === "POST" && requestUrl.pathname === "/api/device-snapshots") {
       try {
         const snapshot = options.store.writeLatestSnapshot(await readJsonBody(request));
@@ -46,6 +59,26 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
       } catch (error) {
         sendJson(response, 400, {
           error: error instanceof Error ? error.message : "invalid snapshot",
+        });
+      }
+      return;
+    }
+
+    if (request.method === "POST" && requestUrl.pathname === "/api/runtime-work-state-snapshots") {
+      if (!options.workStateStore) {
+        sendJson(response, 503, { error: "work_state_store_unavailable" });
+        return;
+      }
+      try {
+        const snapshot = options.workStateStore.writeLatestSnapshot(await readJsonBody(request));
+        sendJson(response, 201, {
+          ok: true,
+          deviceId: snapshot.deviceId,
+          observedAt: snapshot.observedAt,
+        });
+      } catch (error) {
+        sendJson(response, 400, {
+          error: error instanceof Error ? error.message : "invalid runtime work state snapshot",
         });
       }
       return;

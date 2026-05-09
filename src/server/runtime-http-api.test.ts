@@ -8,6 +8,7 @@ import type { RuntimeInventorySnapshot } from "../runtime";
 import { createRuntimeControlChannel, type RuntimeControlSocket } from "./runtime-control-channel";
 import { createRuntimeHttpApiHandler } from "./runtime-http-api";
 import { createRuntimeInventoryStore } from "./runtime-inventory-store";
+import { createRuntimeWorkStateStore } from "./runtime-work-state-store";
 
 class MemorySocket implements RuntimeControlSocket {
   readonly sent: unknown[] = [];
@@ -91,6 +92,40 @@ describe("runtime HTTP API", () => {
       status: "sent",
     });
   });
+
+  it("accepts and returns the latest runtime work state snapshot", async () => {
+    const { baseUrl } = await startRuntimeApi();
+    const snapshot = {
+      observedAt: "2026-05-09T08:00:00.000Z",
+      deviceId: "fixture-device",
+      workItems: [],
+      conversations: [],
+      executions: [],
+      capabilities: [],
+    };
+
+    const postResponse = await fetch(`${baseUrl}/api/runtime-work-state-snapshots`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(snapshot),
+    });
+    const latestResponse = await fetch(`${baseUrl}/api/runtime-work-state/latest`);
+    const latestBody = await latestResponse.json();
+
+    expect(postResponse.status).toBe(201);
+    expect(latestResponse.status).toBe(200);
+    expect(latestBody).toEqual(snapshot);
+  });
+
+  it("returns not found when no runtime work state snapshot exists", async () => {
+    const { baseUrl } = await startRuntimeApi();
+
+    const response = await fetch(`${baseUrl}/api/runtime-work-state/latest`);
+    const body = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(body).toEqual({ error: "not_found" });
+  });
 });
 
 async function startRuntimeApi(options: { createCommandId?: () => string } = {}) {
@@ -99,12 +134,15 @@ async function startRuntimeApi(options: { createCommandId?: () => string } = {})
     snapshotPath: path.join(dataDir, "latest.json"),
     staleAfterMs: 24 * 60 * 60 * 1000,
   });
+  const workStateStore = createRuntimeWorkStateStore({
+    snapshotPath: path.join(dataDir, "work-state-latest.json"),
+  });
   const channel = createRuntimeControlChannel({
     store,
     createCommandId: options.createCommandId,
     now: () => new Date("2026-05-08T08:00:00.000Z"),
   });
-  const handler = createRuntimeHttpApiHandler({ store, controlChannel: channel });
+  const handler = createRuntimeHttpApiHandler({ store, controlChannel: channel, workStateStore });
   const server = createServer((request, response) => {
     void handler(request, response, () => {
       response.statusCode = 404;
@@ -118,6 +156,7 @@ async function startRuntimeApi(options: { createCommandId?: () => string } = {})
   return {
     baseUrl: `http://127.0.0.1:${address.port}`,
     store,
+    workStateStore,
     channel,
   };
 }

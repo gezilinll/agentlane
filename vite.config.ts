@@ -5,6 +5,7 @@ import { WebSocketServer } from "ws";
 import { createRuntimeControlChannel, type RuntimeControlSocket } from "./src/server/runtime-control-channel";
 import { createRuntimeHttpApiHandler } from "./src/server/runtime-http-api";
 import { createRuntimeInventoryStore } from "./src/server/runtime-inventory-store";
+import { createRuntimeWorkStateStore } from "./src/server/runtime-work-state-store";
 
 export default defineConfig({
   plugins: [runtimeInventoryApiPlugin(), react()],
@@ -18,8 +19,9 @@ export default defineConfig({
 
 function runtimeInventoryApiPlugin(): Plugin {
   const store = createRuntimeInventoryStore();
+  const workStateStore = createRuntimeWorkStateStore();
   const controlChannel = createRuntimeControlChannel({ store });
-  const httpHandler = createRuntimeHttpApiHandler({ store, controlChannel });
+  const httpHandler = createRuntimeHttpApiHandler({ store, controlChannel, workStateStore });
   const webSocketServer = new WebSocketServer({ noServer: true });
 
   return {
