@@ -4,3 +4,4 @@ export * from "./runtime-work-state";
 export * from "./runtime-work-state-adapters";
 export * from "./runtime-work-state-fixtures";
 export * from "./runtime-work-state-query";
+export * from "./runtime-listening-acceptance";
