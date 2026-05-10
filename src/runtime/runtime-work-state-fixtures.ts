@@ -181,13 +181,4 @@ export const slockWorkStateFixture = {
       threadId: "fixture-thread-3",
     },
   ],
-  activities: [
-    {
-      id: "activity-1",
-      activity: "working",
-      taskId: "fixture-slock-task-1",
-      threadId: "fixture-thread-1",
-      updatedAt: "2026-05-09T07:56:00.000Z",
-    },
-  ],
 } as const;

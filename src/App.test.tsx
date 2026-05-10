@@ -98,7 +98,7 @@ describe("Catalog page", () => {
     }
     expect(await screen.findByText(/当前数据源：Fixture/)).toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText("Runtime"), "slock");
+    await user.selectOptions(screen.getByLabelText("来源 Runtime"), "slock");
     await user.type(screen.getByPlaceholderText("搜索任务、消息、发起人、Agent 或会话/群组"), "@fixture-human");
 
     expect(screen.getAllByText("Example in progress card").length).toBeGreaterThan(0);
@@ -114,11 +114,55 @@ describe("Catalog page", () => {
 
     const detail = screen.getByRole("complementary", { name: "工作项详情" });
     expect(within(detail).getByRole("heading", { name: "Example in progress card" })).toBeInTheDocument();
-    expect(within(detail).getByText("Runtime: Slock")).toBeInTheDocument();
+    expect(within(detail).getByText("来源 Runtime: Slock")).toBeInTheDocument();
     expect(within(detail).getByText("Channel: Slock")).toBeInTheDocument();
     expect(within(detail).getByText("发起人: @fixture-human")).toBeInTheDocument();
     expect(within(detail).getByText("承接 Agent: @example-agent")).toBeInTheDocument();
     expect(within(detail).getByText("会话/群组: #example-board")).toBeInTheDocument();
+    expect(within(detail).queryByText("执行状态: 不支持采集")).not.toBeInTheDocument();
+  });
+
+  it("keeps Slock task-board items readable when no execution record is linked", async () => {
+    const user = userEvent.setup();
+    const backendSnapshot: RuntimeWorkStateSnapshot = {
+      observedAt: "2026-05-09T08:00:00.000Z",
+      deviceId: "fixture-device",
+      workItems: [
+        {
+          id: "fixture-slock-no-execution",
+          source: "slock",
+          externalId: "fixture-slock-no-execution",
+          title: "Task without execution record",
+          status: "in_progress",
+          channel: { kind: "slock", label: "#example-board" },
+          assignee: { kind: "agent", label: "@example-agent" },
+          creator: { kind: "human", label: "@fixture-human" },
+          lastSeenAt: "2026-05-09T08:00:00.000Z",
+        },
+      ],
+      conversations: [],
+      executions: [],
+      capabilities: [],
+    };
+    globalThis.fetch = vi.fn(async (input) => {
+      const url = input.toString();
+      if (url.includes("/api/runtime-work-state/latest")) {
+        return new Response(JSON.stringify(backendSnapshot), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "unexpected request" }), { status: 500 });
+    }) as unknown as typeof fetch;
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Runs" }));
+    await user.click(await screen.findByRole("button", { name: /Task without execution record/ }));
+
+    const detail = screen.getByRole("complementary", { name: "工作项详情" });
+    expect(within(detail).getByText("工作项状态: 处理中")).toBeInTheDocument();
+    expect(within(detail).queryByText(/执行状态:/)).not.toBeInTheDocument();
+    expect(within(detail).queryByText("执行状态: 不支持采集")).not.toBeInTheDocument();
   });
 
   it("does not turn OpenClaw executions or Slock listening gaps into Runs cards", async () => {
@@ -177,7 +221,7 @@ describe("Catalog page", () => {
     await user.click(screen.getByRole("button", { name: "Runs" }));
     expect(await screen.findByText(/当前数据源：后端快照/)).toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText("Runtime"), "slock");
+    await user.selectOptions(screen.getByLabelText("来源 Runtime"), "slock");
     expect(screen.queryByText("Slock 监听未就绪")).not.toBeInTheDocument();
     expect(screen.queryByText("OpenClaw 执行监听已接入")).not.toBeInTheDocument();
     expect(screen.queryByText(/OpenClaw execution/)).not.toBeInTheDocument();
@@ -223,6 +267,147 @@ describe("Catalog page", () => {
     expect(vi.mocked(globalThis.fetch).mock.calls[0]?.[0]?.toString()).toContain(
       "/api/runtime-inventory/latest",
     );
+  });
+
+  it("shows Runtime operating status from the latest Agent work state", async () => {
+    const user = userEvent.setup();
+    const backendSnapshot = fixtureSnapshot as RuntimeInventorySnapshot;
+    const workState: RuntimeWorkStateSnapshot = {
+      observedAt: "2026-05-09T08:00:00.000Z",
+      deviceId: backendSnapshot.device.id,
+      workItems: [
+        {
+          id: "fixture-slock-task-1",
+          source: "slock",
+          externalId: "fixture-slock-task-1",
+          title: "Example in progress card",
+          status: "in_progress",
+          runtimeId: "fixture-mac:slock:slock-daemon",
+          agentId: "fixture-mac:slock:slock-daemon:agent:tester",
+        },
+      ],
+      conversations: [],
+      executions: [],
+      capabilities: [],
+    };
+    globalThis.fetch = vi.fn(async (input) => {
+      const url = input.toString();
+      if (url.includes("/api/runtime-inventory/latest")) {
+        return new Response(JSON.stringify(backendSnapshot), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/api/runtime-work-state/latest")) {
+        return new Response(JSON.stringify(workState), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "unexpected request" }), { status: 500 });
+    }) as unknown as typeof fetch;
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Runtime Fleet" }));
+
+    expect(await screen.findByRole("columnheader", { name: "运行状态" })).toBeInTheDocument();
+    const runtimeTable = screen.getByRole("table", { name: "Runtime 列表" });
+    const slockRuntimeRow = within(runtimeTable).getByRole("row", { name: /Slock daemon/ });
+    expect(within(slockRuntimeRow).getByText("工作中")).toBeInTheDocument();
+
+    await user.click(slockRuntimeRow);
+    const detail = screen.getByRole("complementary", { name: "运行资产详情" });
+    expect(within(detail).getByText("运行状态: 工作中")).toBeInTheDocument();
+    expect(within(detail).getByText("可用性: 在线")).toBeInTheDocument();
+  });
+
+  it("shows Slock Agent status and workload statistics from task-board work state", async () => {
+    const user = userEvent.setup();
+    const backendSnapshot = fixtureSnapshot as RuntimeInventorySnapshot;
+    const workState: RuntimeWorkStateSnapshot = {
+      observedAt: "2026-05-09T08:00:00.000Z",
+      deviceId: backendSnapshot.device.id,
+      workItems: [
+        {
+          id: "fixture-slock-task-running",
+          source: "slock",
+          externalId: "fixture-slock-task-running",
+          title: "Running Slock board card",
+          status: "in_progress",
+          runtimeId: "fixture-mac:slock:slock-daemon",
+          agentId: "fixture-mac:slock:slock-daemon:agent:workspace-owner",
+          assignee: { kind: "agent", label: "tester" },
+          conversationId: "fixture-mac:slock:slock-daemon:conversation:thread-running",
+        },
+        {
+          id: "fixture-slock-task-queued",
+          source: "slock",
+          externalId: "fixture-slock-task-queued",
+          title: "Queued Slock board card",
+          status: "todo",
+          runtimeId: "fixture-mac:slock:slock-daemon",
+          agentId: "fixture-mac:slock:slock-daemon:agent:workspace-owner",
+          assignee: { kind: "agent", label: "tester" },
+          conversationId: "fixture-mac:slock:slock-daemon:conversation:thread-queued",
+        },
+      ],
+      conversations: [
+        {
+          id: "fixture-mac:slock:slock-daemon:conversation:thread-running",
+          source: "slock",
+          externalId: "thread-running",
+          status: "open",
+          runtimeId: "fixture-mac:slock:slock-daemon",
+          agentId: "fixture-mac:slock:slock-daemon:agent:workspace-owner",
+          workItemId: "fixture-slock-task-running",
+        },
+        {
+          id: "fixture-mac:slock:slock-daemon:conversation:thread-queued",
+          source: "slock",
+          externalId: "thread-queued",
+          status: "closed",
+          runtimeId: "fixture-mac:slock:slock-daemon",
+          agentId: "fixture-mac:slock:slock-daemon:agent:workspace-owner",
+          workItemId: "fixture-slock-task-queued",
+        },
+      ],
+      executions: [],
+      capabilities: [],
+    };
+    globalThis.fetch = vi.fn(async (input) => {
+      const url = input.toString();
+      if (url.includes("/api/runtime-inventory/latest")) {
+        return new Response(JSON.stringify(backendSnapshot), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/api/runtime-work-state/latest")) {
+        return new Response(JSON.stringify(workState), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "unexpected request" }), { status: 500 });
+    }) as unknown as typeof fetch;
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Runtime Fleet" }));
+    await user.selectOptions(screen.getByLabelText("Channel"), "slock");
+
+    const agentTable = screen.getByRole("table", { name: "Agent 列表" });
+    const testerRow = within(agentTable).getByRole("row", { name: /tester/ });
+    expect(within(testerRow).getByText("活跃")).toBeInTheDocument();
+
+    await user.click(testerRow);
+
+    const detail = screen.getByRole("complementary", { name: "运行资产详情" });
+    expect(within(detail).getByRole("heading", { name: "tester" })).toBeInTheDocument();
+    expect(within(detail).getByText("状态: 活跃")).toBeInTheDocument();
+    expect(within(detail).getByText("活跃任务: 1")).toBeInTheDocument();
+    expect(within(detail).getByText("队列深度: 1")).toBeInTheDocument();
+    expect(within(detail).getByText("活跃会话: 1")).toBeInTheDocument();
+    expect(within(detail).getByText("历史会话: 2")).toBeInTheDocument();
   });
 
   it("filters Runtime Fleet agents by channel and opens agent details", async () => {

@@ -158,10 +158,10 @@ describe("runtime work state model", () => {
     });
   });
 
-  it("maps Slock task-board state separately from unproven execution state", () => {
+  it("maps Slock task-board state as the v1 Runs authority without requiring execution state", () => {
     expect(deriveRuntimeWorkStage({ source: "slock", workItemStatus: "in_progress" })).toMatchObject({
       stage: "processing",
-      confidence: "partial",
+      confidence: "direct",
     });
     expect(deriveRuntimeWorkStage({ source: "slock", workItemStatus: "in_review" })).toMatchObject({
       stage: "review",
@@ -181,6 +181,10 @@ describe("runtime work state model", () => {
       executionStatus: "failed",
     })).toMatchObject({
       stage: "attention",
+      confidence: "direct",
+    });
+    expect(deriveRuntimeWorkStage({ source: "slock", workItemStatus: "cancelled" })).toMatchObject({
+      stage: "closed",
       confidence: "direct",
     });
   });

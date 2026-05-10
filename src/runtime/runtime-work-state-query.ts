@@ -10,7 +10,7 @@ import {
   type RuntimeWorkStateSnapshot,
 } from "./runtime-work-state";
 
-/** Filters supported by the read-only Runtime Work Board query model. */
+/** Filters supported by the read-only Runs / Work Board query model. */
 export interface RuntimeWorkBoardFilters {
   /** Runtime source filter. */
   source?: RuntimeSource | "all";
@@ -22,7 +22,7 @@ export interface RuntimeWorkBoardFilters {
   search?: string;
 }
 
-/** Frontend-ready Runtime Work Board model. */
+/** Frontend-ready Runs / Work Board model. */
 export interface RuntimeWorkBoard {
   /** Latest snapshot timestamp. */
   observedAt: string;
@@ -126,7 +126,7 @@ const STAGE_LABELS: Record<RuntimeWorkStageId, string> = {
   attention: "需关注",
 };
 
-/** Create the frontend-ready Runtime Work Board from a normalized snapshot. */
+/** Create the frontend-ready Runs / Work Board from a normalized snapshot. */
 export function createRuntimeWorkBoard(
   snapshot: RuntimeWorkStateSnapshot,
   filters: RuntimeWorkBoardFilters = {},
@@ -152,7 +152,9 @@ export function createRuntimeWorkBoard(
 function createBoardItems(snapshot: RuntimeWorkStateSnapshot): RuntimeWorkBoardItem[] {
   const executionsByWorkItemId = new Map<string, RuntimeExecution>();
   for (const execution of snapshot.executions) {
-    if (execution.workItemId && !executionsByWorkItemId.has(execution.workItemId)) {
+    if (!execution.workItemId) continue;
+    const current = executionsByWorkItemId.get(execution.workItemId);
+    if (!current || isExecutionMoreRecent(execution, current)) {
       executionsByWorkItemId.set(execution.workItemId, execution);
     }
   }
@@ -183,7 +185,7 @@ function createWorkItemBoardItem(workItem: RuntimeWorkItem, execution?: RuntimeE
     executionStatus: execution?.status,
     runtimeId: workItem.runtimeId,
     agentId: workItem.agentId,
-    channelLabel: workItem.channel?.label,
+    channelLabel: displayChannelLabel(workItem.channel),
     channelKindLabel: channelLabel(workItem.channel?.kind),
     creatorLabel: participantLabel(workItem.creator, "不支持采集"),
     assigneeLabel: participantLabel(workItem.assignee, compactObjectId(workItem.agentId)),
@@ -258,6 +260,20 @@ function compareBoardItems(left: RuntimeWorkBoardItem, right: RuntimeWorkBoardIt
   return left.title.localeCompare(right.title);
 }
 
+function isExecutionMoreRecent(candidate: RuntimeExecution, current: RuntimeExecution): boolean {
+  const candidateTime = executionObservedTime(candidate);
+  const currentTime = executionObservedTime(current);
+  if (Number.isFinite(candidateTime) && Number.isFinite(currentTime) && candidateTime !== currentTime) {
+    return candidateTime > currentTime;
+  }
+  if (Number.isFinite(candidateTime) && !Number.isFinite(currentTime)) return true;
+  return false;
+}
+
+function executionObservedTime(execution: RuntimeExecution): number {
+  return Date.parse(execution.lastSeenAt ?? execution.endedAt ?? execution.startedAt ?? execution.queuedAt ?? "");
+}
+
 function sourceLabel(source: RuntimeSource): string {
   if (source === "openclaw") return "OpenClaw";
   if (source === "multica") return "Multica";
@@ -275,6 +291,28 @@ function channelLabel(kind: ChannelKind | undefined): string | undefined {
   if (kind === "multica") return "Multica";
   if (kind === "openclaw") return "OpenClaw";
   return "默认渠道";
+}
+
+function displayChannelLabel(channel: RuntimeWorkItem["channel"]): string | undefined {
+  const label = channel?.label?.trim();
+  if (!label) return undefined;
+  if (channel?.kind === "dingtalk") {
+    const generatedDingTalkId = label.match(/^DingTalk\s+(群聊|私聊)\s+(.+)$/i);
+    if (generatedDingTalkId && isOpaqueDingTalkTargetId(generatedDingTalkId[2])) {
+      if (generatedDingTalkId[1] === "私聊") return "DingTalk 私聊";
+      return `DingTalk ${generatedDingTalkId[1]}（名称待补全）`;
+    }
+  }
+  return label;
+}
+
+function isOpaqueDingTalkTargetId(value: string | undefined): boolean {
+  const normalized = value?.trim() ?? "";
+  return (
+    /^cid/i.test(normalized) ||
+    /^[A-Za-z0-9+/=_-]{2,}\.\.\.[A-Za-z0-9+/=_-]{2,}$/.test(normalized) ||
+    /^[0-9A-Za-z+/=_-]{8,}$/.test(normalized)
+  );
 }
 
 function participantLabel(participant: RuntimeWorkItem["creator"], fallback: string): string {

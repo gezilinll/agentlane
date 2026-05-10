@@ -64,7 +64,8 @@ describe("runtime listening acceptance", () => {
     expect(report.sources.slock.readiness).toBe("ready_for_runs");
     expect(report.sources.slock.fields.channel).toBe("supported");
     expect(report.sources.slock.fields.conversationLink).toBe("supported");
-    expect(report.sources.slock.fields.executionStatus).toBe("supported");
+    expect(report.sources.slock.fields.executionStatus).toBe("unknown");
+    expect(report.sources.slock.gaps).not.toContain("缺少 executionStatus 字段的可靠监听");
   });
 
   it("marks OpenClaw as usable when DingTalk messages are linked to execution evidence", () => {

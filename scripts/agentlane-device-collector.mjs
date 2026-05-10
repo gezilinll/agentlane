@@ -6,6 +6,7 @@ import path from "node:path";
 
 const COLLECTOR_VERSION = "0.1.0";
 const DEFAULT_INTERVAL_MS = 60_000;
+const DEFAULT_SLOCK_SERVER_URL = process.env.SLOCK_DEFAULT_SERVER_URL || "https://api.slock.ai";
 
 function parseArgs(argv) {
   const args = {
@@ -602,7 +603,7 @@ function openClawWorkStateCapability(collectedAt, options = {}) {
     workItems: supportCapability(
       options.workItemsSupport || "unsupported",
       options.workItemsStrategies || ["local_state", "cli", "native_api"],
-      options.workItemsEvidence || ["OpenClaw tasks, DingTalk local state, and trajectory prompt.submitted can expose message-backed work items."],
+      options.workItemsEvidence || ["OpenClaw tasks, DingTalk local state, session runtime-context, and trajectory prompt.submitted can expose message-backed work items."],
       options.workItemsLimitations || ["OpenClaw has no pending or review phase without an upstream work item source."],
     ),
     conversations: supportCapability(
@@ -664,8 +665,8 @@ function slockWorkStateCapability(collectedAt, options = {}) {
     executions: supportCapability(
       "unknown",
       ["network_proxy", "managed_launcher"],
-      ["Slock server active state is not treated as execution running evidence."],
-      ["Execution state requires activity events, an observer, or a proxy path; task-board in_progress is not enough."],
+      ["Slock task board is available; realtime activity is not collected in the v1 adapter path."],
+      ["Execution state requires activity events, an observer, or a proxy path; server active is not execution running evidence."],
     ),
   };
 }
@@ -693,7 +694,7 @@ function normalizeMulticaWorkItemStatus(status) {
   if (status === "in_review" || status === "review") return "in_review";
   if (status === "done" || status === "completed" || status === "succeeded") return "done";
   if (status === "blocked") return "blocked";
-  if (status === "cancelled" || status === "canceled") return "cancelled";
+  if (status === "cancelled" || status === "canceled" || status === "closed") return "cancelled";
   return "unknown";
 }
 
@@ -707,13 +708,18 @@ function normalizeMulticaExecutionStatus(status) {
 }
 
 function normalizeSlockWorkItemStatus(status) {
-  if (status === "todo" || status === "backlog" || status === "open") return "todo";
-  if (status === "in_progress" || status === "running") return "in_progress";
-  if (status === "in_review" || status === "review") return "in_review";
-  if (status === "done" || status === "completed" || status === "succeeded") return "done";
-  if (status === "blocked") return "blocked";
-  if (status === "cancelled" || status === "canceled") return "cancelled";
+  const normalized = normalizeStatusKey(status);
+  if (normalized === "todo" || normalized === "backlog" || normalized === "open") return "todo";
+  if (normalized === "in_progress" || normalized === "working" || normalized === "running") return "in_progress";
+  if (normalized === "in_review" || normalized === "review") return "in_review";
+  if (normalized === "done" || normalized === "completed" || normalized === "succeeded") return "done";
+  if (normalized === "blocked") return "blocked";
+  if (normalized === "cancelled" || normalized === "canceled" || normalized === "closed") return "cancelled";
   return "unknown";
+}
+
+function normalizeStatusKey(status) {
+  return String(status || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
 }
 
 function extractOpenClawSessionKey(session) {
@@ -899,8 +905,14 @@ function readOpenClawTrajectoryFile(trajectoryFile, fallbackAgentId) {
     if (event.type === "session.started") {
       current.startedAt = current.startedAt || toIsoTimestamp(event.ts || event.timestamp);
       current.sessionFile = event.data?.sessionFile || event.data?.session_file || current.sessionFile;
-    } else if (event.type === "prompt.submitted") {
-      current.prompt = cleanOpenClawPromptText(extractOpenClawPrompt(event.data) || current.prompt);
+    }
+    const runtimeContext = extractOpenClawRuntimeContextFromEvent(event);
+    if (runtimeContext) applyOpenClawRuntimeContext(current, runtimeContext);
+
+    if (event.type === "prompt.submitted") {
+      const prompt = extractOpenClawPrompt(event.data);
+      applyOpenClawRuntimeContext(current, extractOpenClawRuntimeContext(prompt));
+      current.prompt = cleanOpenClawPromptText(prompt || current.prompt);
     } else if (event.type === "trace.artifacts") {
       const data = event.data || {};
       current.finalStatus = data.finalStatus || current.finalStatus;
@@ -928,8 +940,10 @@ function readOpenClawTrajectoryFile(trajectoryFile, fallbackAgentId) {
   }
 
   for (const run of runById.values()) {
-    if (!run.prompt && run.sessionFile) {
-      run.prompt = readLatestOpenClawUserPrompt(run.sessionFile);
+    if (run.sessionFile) {
+      const sessionDetails = readLatestOpenClawUserPromptDetails(run.sessionFile);
+      if (!run.prompt) run.prompt = sessionDetails.prompt;
+      applyOpenClawRuntimeContext(run, sessionDetails.runtimeContext);
     }
   }
 
@@ -939,6 +953,8 @@ function readOpenClawTrajectoryFile(trajectoryFile, fallbackAgentId) {
 function isOpenClawTrajectoryLineNeeded(line) {
   return line.includes('"session.started"') ||
     line.includes('"prompt.submitted"') ||
+    line.includes('"openclaw.runtime-context"') ||
+    line.includes('"custom_message"') ||
     line.includes('"model.completed"') ||
     line.includes('"trace.artifacts"') ||
     line.includes('"session.ended"');
@@ -957,7 +973,7 @@ function extractOpenClawPrompt(data) {
   return "";
 }
 
-function readLatestOpenClawUserPrompt(sessionFile) {
+function readLatestOpenClawUserPromptDetails(sessionFile) {
   let records = [];
   try {
     records = readFileSync(sessionFile, "utf8").split(/\n+/).filter(Boolean).map((line) => {
@@ -968,16 +984,70 @@ function readLatestOpenClawUserPrompt(sessionFile) {
       }
     }).filter(Boolean);
   } catch {
-    return "";
+    return { prompt: "", runtimeContext: null };
   }
 
+  let prompt = "";
+  let runtimeContext = null;
   for (let index = records.length - 1; index >= 0; index -= 1) {
     const record = records[index];
-    if ((record?.role || record?.message?.role || record?.data?.role) !== "user") continue;
-    const text = openClawTextFromContent(record.content ?? record.message?.content ?? record.data?.content);
-    if (text.trim()) return cleanOpenClawPromptText(text);
+    const content = record.content ?? record.message?.content ?? record.data?.content;
+    runtimeContext ||= extractOpenClawRuntimeContext(content);
+    if (!prompt && (record?.role || record?.message?.role || record?.data?.role) === "user") {
+      const text = openClawTextFromContent(content);
+      if (text.trim()) prompt = cleanOpenClawPromptText(text);
+    }
+    if (prompt && runtimeContext) break;
   }
-  return "";
+  return { prompt, runtimeContext };
+}
+
+function extractOpenClawRuntimeContextFromEvent(event) {
+  const data = event?.data || {};
+  return extractOpenClawRuntimeContext(data.runtimeContext || data.runtime_context || data.context || data.prompt || data.messages || event.content);
+}
+
+function extractOpenClawRuntimeContext(value) {
+  if (!value) return null;
+  if (Array.isArray(value)) {
+    for (let index = value.length - 1; index >= 0; index -= 1) {
+      const nested = extractOpenClawRuntimeContext(value[index]?.content ?? value[index]?.message?.content ?? value[index]?.text ?? value[index]);
+      if (nested) return nested;
+    }
+    return null;
+  }
+  if (typeof value === "object") {
+    if (value.message_id || value.messageId || value.msgId || value.sender || value.sender_id || value.chat_id || value.group_subject) return value;
+    return null;
+  }
+  const text = String(value);
+  const codeBlockMatch = text.match(/Conversation info[^\n]*:\s*```json\s*([\s\S]*?)```/i);
+  const xmlMatch = text.match(/<conversation-metadata>\s*([\s\S]*?)<\/conversation-metadata>/i);
+  const metadataMatch = text.match(/Conversation metadata:\s*(\{[\s\S]*?\})(?:\n\n|$)/i);
+  const candidates = [codeBlockMatch?.[1], xmlMatch?.[1], metadataMatch?.[1]].filter(Boolean);
+  for (const candidate of candidates) {
+    const parsed = parseJsonMaybe(candidate);
+    if (parsed) return parsed;
+  }
+  return null;
+}
+
+function applyOpenClawRuntimeContext(run, context) {
+  if (!context || typeof context !== "object") return;
+  const messageId = context.message_id || context.messageId || context.msgId || context.msg_id;
+  const senderId = context.sender_id || context.senderId || context.user_id || context.userId;
+  const senderName = context.sender || context.sender_name || context.senderName || context.user_name || context.userName;
+  const conversationId = context.chat_id || context.chatId || context.conversation_id || context.conversationId;
+  const conversationLabel = context.conversation_label || context.conversationLabel;
+  const groupSubject = context.group_subject || context.groupSubject;
+  const groupChannel = context.group_channel || context.groupChannel;
+  if (messageId) run.messageId ||= String(messageId);
+  if (senderId) run.senderId ||= String(senderId);
+  if (senderName) run.senderName ||= String(senderName);
+  if (conversationId) run.conversationId ||= String(conversationId);
+  if (conversationLabel) run.conversationLabel ||= String(conversationLabel);
+  if (groupSubject) run.groupSubject ||= String(groupSubject);
+  if (!run.sessionKey && groupChannel) run.sessionKey = String(groupChannel);
 }
 
 function openClawTextFromContent(content) {
@@ -1020,6 +1090,75 @@ function messageTitle(value) {
   const firstSentence = normalized.split(/[，。！？,.!?]/)[0]?.trim();
   const title = firstSentence || normalized || "DingTalk 消息";
   return title.length > 32 ? `${title.slice(0, 32)}...` : title;
+}
+
+function findOpenClawMessageLink(candidates, probe) {
+  const textKey = normalizeOpenClawLinkText(probe.text);
+  if (!textKey) return undefined;
+
+  const probeSession = parseOpenClawDingTalkSession(probe.sessionKey);
+  const probeSessionKey = normalizeOpenClawLinkKey(probe.sessionKey);
+  const probeConversationKey = normalizeOpenClawLinkKey(probe.conversationId || probeSession?.conversationId);
+  const probeTime = parseOpenClawLinkTime(probe.occurredAt);
+
+  const matches = candidates
+    .map((candidate) => {
+      const candidateSession = parseOpenClawDingTalkSession(candidate.sessionKey);
+      const candidateSessionKey = normalizeOpenClawLinkKey(candidate.sessionKey);
+      const candidateConversationKey = normalizeOpenClawLinkKey(candidate.conversationId || candidateSession?.conversationId);
+      const senderMatchesDirectSession = openClawLinkSenderMatchesDirectSession(probe, candidate, probeSession);
+      const locationMatches = Boolean(
+        (probeSessionKey && candidateSessionKey && probeSessionKey === candidateSessionKey) ||
+        (probeConversationKey && candidateConversationKey && probeConversationKey === candidateConversationKey) ||
+        senderMatchesDirectSession,
+      );
+      if (!locationMatches) return null;
+
+      const candidateTextKey = normalizeOpenClawLinkText(candidate.text);
+      if (!openClawLinkTextMatches(textKey, candidateTextKey)) return null;
+
+      const candidateTime = parseOpenClawLinkTime(candidate.occurredAt);
+      const distance = probeTime !== undefined && candidateTime !== undefined ? Math.abs(probeTime - candidateTime) : 0;
+      if (distance > 2 * 60 * 60 * 1000) return null;
+      return { candidate, distance };
+    })
+    .filter(Boolean)
+    .sort((left, right) => left.distance - right.distance);
+
+  return matches[0]?.candidate.messageId;
+}
+
+function openClawLinkSenderMatchesDirectSession(probe, candidate, probeSession) {
+  if (probeSession?.kind !== "direct") return false;
+  const probeDirectId = normalizeOpenClawLinkKey(probeSession.conversationId);
+  const probeSenderId = normalizeOpenClawLinkKey(probe.senderId);
+  const candidateSenderId = normalizeOpenClawLinkKey(candidate.senderId);
+  if (candidateSenderId && (candidateSenderId === probeDirectId || candidateSenderId === probeSenderId)) return true;
+
+  const probeSenderName = normalizeOpenClawLinkKey(probe.senderName);
+  const candidateSenderName = normalizeOpenClawLinkKey(candidate.senderName);
+  return Boolean(!probeSenderId && !candidateSenderId && probeSenderName && candidateSenderName && probeSenderName === candidateSenderName);
+}
+
+function normalizeOpenClawLinkKey(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function normalizeOpenClawLinkText(value) {
+  return cleanOpenClawPromptText(value).replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function openClawLinkTextMatches(left, right) {
+  if (!left || !right) return false;
+  if (left === right) return true;
+  const comparableLength = Math.min(left.length, right.length);
+  return comparableLength >= 12 && (left.startsWith(right) || right.startsWith(left));
+}
+
+function parseOpenClawLinkTime(value) {
+  if (!value) return undefined;
+  const time = Date.parse(value);
+  return Number.isFinite(time) ? time : undefined;
 }
 
 function parseJsonMaybe(value) {
@@ -1152,8 +1291,7 @@ function hasOpenClawTrajectoryDeliveryEvidence(run) {
 }
 
 function createOpenClawTrajectoryWorkItem({ run, runtimeId, agentId, executionStatus, observedAt, dingtalkState }) {
-  const channel = openClawChannelFromDingTalkSession(run.sessionKey, dingtalkState.targetsByConversationId) ||
-    openClawDingTalkChannel(parseOpenClawDingTalkSession(run.sessionKey)?.conversationId, dingtalkState.targetsByConversationId, "group");
+  const channel = openClawChannelFromTrajectoryRun(run, dingtalkState.targetsByConversationId);
   const conversationId = `${runtimeId}:conversation:${sanitizeId(run.sessionKey)}`;
   const prompt = cleanOpenClawPromptText(run.prompt);
   return {
@@ -1164,7 +1302,7 @@ function createOpenClawTrajectoryWorkItem({ run, runtimeId, agentId, executionSt
     description: prompt,
     status: openClawTrajectoryWorkItemStatus(run, executionStatus),
     channel,
-    creator: { kind: "unknown", label: "不支持采集" },
+    creator: openClawCreatorFromTrajectoryRun(run) || { kind: "unknown", label: "不支持采集" },
     agentId,
     runtimeId,
     conversationId,
@@ -1173,6 +1311,54 @@ function createOpenClawTrajectoryWorkItem({ run, runtimeId, agentId, executionSt
     lastSeenAt: run.lastEventAt || run.endedAt || observedAt,
     sourceRefs: [{ source: "openclaw", externalId: String(run.runId) }],
   };
+}
+
+function openClawChannelFromTrajectoryRun(run, targetsByConversationId) {
+  const session = parseOpenClawDingTalkSession(run.sessionKey);
+  const conversationId = run.conversationId || session?.conversationId;
+  const channel = openClawDingTalkChannel(conversationId, targetsByConversationId, session?.kind || "group");
+  const metadataLabel = run.groupSubject || run.conversationLabel;
+  if (metadataLabel && String(channel.label || "").startsWith("DingTalk ")) {
+    return { ...channel, label: metadataLabel, ...(run.conversationId ? { externalId: run.conversationId } : {}) };
+  }
+  return channel;
+}
+
+function openClawCreatorFromTrajectoryRun(run) {
+  if (!run.senderName && !run.senderId) return undefined;
+  return {
+    kind: "human",
+    label: run.senderName || run.senderId || "未知发起人",
+    ...(run.senderId ? { externalId: run.senderId } : {}),
+  };
+}
+
+function applyOpenClawLinkedConversationEvidence(workItem, { runtimeId, sessionKey, channel }) {
+  if (!runtimeId || !sessionKey || !channel) return;
+  if (!shouldPreferOpenClawConversationEvidence(workItem.channel, channel)) return;
+  workItem.channel = channel;
+  workItem.conversationId = `${runtimeId}:conversation:${sanitizeId(sessionKey)}`;
+}
+
+function shouldPreferOpenClawConversationEvidence(current, candidate) {
+  if (!candidate) return false;
+  if (!current) return true;
+  if (current.kind !== "dingtalk" || candidate.kind !== "dingtalk") return false;
+
+  const currentGenerated = isGeneratedOpenClawDingTalkFallback(current.label);
+  const candidateGenerated = isGeneratedOpenClawDingTalkFallback(candidate.label);
+  if (!currentGenerated) return false;
+
+  if (isGeneratedOpenClawDingTalkDirect(candidate.label)) return true;
+  return !candidateGenerated;
+}
+
+function isGeneratedOpenClawDingTalkFallback(label) {
+  return /^DingTalk\s+(群聊|私聊)\s+.+$/i.test(String(label || "").trim());
+}
+
+function isGeneratedOpenClawDingTalkDirect(label) {
+  return /^DingTalk\s+私聊\s+.+$/i.test(String(label || "").trim());
 }
 
 function collectOpenClawWorkState(deviceId, observedAt) {
@@ -1197,6 +1383,7 @@ function collectOpenClawWorkState(deviceId, observedAt) {
   const trajectoryRuns = readOpenClawTrajectoryRuns();
   const workItemByMessageId = new Map();
   const workItemIdByMessageId = new Map();
+  const messageLinkCandidates = [];
   const workItemByTaskId = new Map();
   const workItemByTrajectoryRunId = new Map();
   const coveredRunIds = new Set();
@@ -1238,6 +1425,15 @@ function collectOpenClawWorkState(deviceId, observedAt) {
       "active",
     );
     const workItemId = `${runtimeId}:work-item:${sanitizeId(message.msgId)}`;
+    messageLinkCandidates.push({
+      messageId: message.msgId,
+      sessionKey: message.sessionKey,
+      conversationId: message.conversationId,
+      text: message.text,
+      senderId: message.senderId,
+      senderName: message.senderName,
+      occurredAt: message.updatedAt || message.createdAt,
+    });
     const workItem = {
       id: workItemId,
       source: "openclaw",
@@ -1269,13 +1465,18 @@ function collectOpenClawWorkState(deviceId, observedAt) {
     const origin = extractOpenClawOrigin(task);
     const messageId = extractOpenClawMessageId(task);
     const executionStatus = normalizeOpenClawExecutionStatus(task.status);
+    const sessionChannel = sessionKey ? openClawChannelFromDingTalkSession(sessionKey, dingtalkState.targetsByConversationId) : undefined;
     let workItemId = messageId ? workItemIdByMessageId.get(String(messageId)) : undefined;
+    let executionConversationId = sessionKey ? `${runtimeId}:conversation:${sanitizeId(sessionKey)}` : undefined;
     if (messageId && workItemId) {
       const workItem = workItemByMessageId.get(String(messageId));
-      if (workItem) workItem.status = normalizeOpenClawMessageStatus(executionStatus);
+      if (workItem) {
+        workItem.status = normalizeOpenClawMessageStatus(executionStatus);
+        applyOpenClawLinkedConversationEvidence(workItem, { runtimeId, sessionKey, channel: sessionChannel });
+        executionConversationId = workItem.conversationId || executionConversationId;
+      }
     }
     if (sessionKey) {
-      const sessionChannel = openClawChannelFromDingTalkSession(sessionKey, dingtalkState.targetsByConversationId);
       addOpenClawSession(
         sessionMap,
         runtimeId,
@@ -1315,7 +1516,7 @@ function collectOpenClawWorkState(deviceId, observedAt) {
       runtimeId,
       agentId,
       ...(workItemId ? { workItemId } : {}),
-      ...(sessionKey ? { conversationId: `${runtimeId}:conversation:${sanitizeId(sessionKey)}` } : {}),
+      ...(executionConversationId ? { conversationId: executionConversationId } : {}),
       status: executionStatus,
       ...(toIsoTimestamp(task.createdAt || task.created_at) ? { queuedAt: toIsoTimestamp(task.createdAt || task.created_at) } : {}),
       ...(toIsoTimestamp(task.startedAt || task.started_at) ? { startedAt: toIsoTimestamp(task.startedAt || task.started_at) } : {}),
@@ -1347,23 +1548,48 @@ function collectOpenClawWorkState(deviceId, observedAt) {
       observedAt,
       executionStatus === "running" ? "active" : "idle",
     );
-    const workItem = createOpenClawTrajectoryWorkItem({
-      run,
-      runtimeId,
-      agentId,
-      executionStatus,
-      observedAt,
-      dingtalkState,
-    });
-    workItemByTrajectoryRunId.set(String(run.runId), workItem);
+    const linkedMessageId = run.messageId
+      ? String(run.messageId)
+      : findOpenClawMessageLink(messageLinkCandidates, {
+          sessionKey: run.sessionKey,
+          conversationId: run.conversationId,
+          text: run.prompt,
+          senderId: run.senderId,
+          senderName: run.senderName,
+          occurredAt: run.startedAt || run.lastEventAt || run.endedAt,
+        });
+    let workItemId = linkedMessageId ? workItemIdByMessageId.get(linkedMessageId) : undefined;
+    let conversationId = `${runtimeId}:conversation:${sanitizeId(run.sessionKey)}`;
+    if (linkedMessageId && workItemId) {
+      const linkedWorkItem = workItemByMessageId.get(linkedMessageId);
+      if (linkedWorkItem) {
+        linkedWorkItem.status = normalizeOpenClawMessageStatus(executionStatus);
+        linkedWorkItem.updatedAt = run.endedAt || run.lastEventAt || linkedWorkItem.updatedAt;
+        linkedWorkItem.lastSeenAt = run.lastEventAt || run.endedAt || observedAt;
+        applyOpenClawLinkedConversationEvidence(linkedWorkItem, { runtimeId, sessionKey: run.sessionKey, channel });
+        conversationId = linkedWorkItem.conversationId || conversationId;
+      }
+    } else {
+      const workItem = createOpenClawTrajectoryWorkItem({
+        run,
+        runtimeId,
+        agentId,
+        executionStatus,
+        observedAt,
+        dingtalkState,
+      });
+      workItemByTrajectoryRunId.set(String(run.runId), workItem);
+      workItemId = workItem.id;
+      conversationId = workItem.conversationId;
+    }
     trajectoryExecutions.push({
       id: `${runtimeId}:execution:${sanitizeId(run.runId)}`,
       source: "openclaw",
       externalId: String(run.runId),
       runtimeId,
       agentId,
-      workItemId: workItem.id,
-      conversationId: workItem.conversationId,
+      ...(workItemId ? { workItemId } : {}),
+      conversationId,
       status: executionStatus,
       ...(run.startedAt ? { startedAt: run.startedAt } : {}),
       ...(run.endedAt ? { endedAt: run.endedAt } : {}),
@@ -1546,6 +1772,29 @@ function collectMulticaWorkState(deviceId, observedAt) {
 function normalizeSlockTask(rawTask, runtimeId, agentId, channel, observedAt) {
   const taskId = rawTask.id || rawTask.taskId || rawTask.messageId || rawTask.taskNumber || "task";
   const threadId = rawTask.threadId || rawTask.thread_id;
+  const assigneeLabel = readSlockParticipantLabel(rawTask, [
+    "claimedByName",
+    "claimed_by_name",
+    "assigneeName",
+    "assignee_name",
+    "assignedToName",
+    "assigned_to_name",
+    "claimedBy",
+    "claimed_by",
+    "assignee",
+    "assignedTo",
+    "assigned_to",
+  ]);
+  const creatorLabel = readSlockParticipantLabel(rawTask, [
+    "createdByName",
+    "created_by_name",
+    "creatorName",
+    "creator_name",
+    "createdBy",
+    "created_by",
+    "creator",
+    "author",
+  ]);
   return {
     id: `${runtimeId}:work-item:${sanitizeId(taskId)}`,
     source: "slock",
@@ -1553,8 +1802,8 @@ function normalizeSlockTask(rawTask, runtimeId, agentId, channel, observedAt) {
     title: rawTask.title || rawTask.content || rawTask.summary || String(taskId),
     status: normalizeSlockWorkItemStatus(rawTask.status || rawTask.taskStatus || rawTask.task_status),
     channel: { kind: "slock", label: channel.label, externalId: channel.externalId },
-    ...(rawTask.claimedByName || rawTask.assigneeName ? { assignee: { kind: "agent", label: rawTask.claimedByName || rawTask.assigneeName } } : {}),
-    ...(rawTask.createdByName || rawTask.creatorName ? { creator: { kind: "human", label: rawTask.createdByName || rawTask.creatorName } } : {}),
+    ...(assigneeLabel ? { assignee: { kind: "agent", label: assigneeLabel } } : {}),
+    ...(creatorLabel ? { creator: { kind: "human", label: creatorLabel } } : {}),
     agentId,
     runtimeId,
     ...(threadId ? { conversationId: `${runtimeId}:conversation:${sanitizeId(threadId)}` } : {}),
@@ -1563,6 +1812,25 @@ function normalizeSlockTask(rawTask, runtimeId, agentId, channel, observedAt) {
     lastSeenAt: toIsoTimestamp(rawTask.updatedAt || rawTask.updated_at || rawTask.completedAt || rawTask.completed_at || rawTask.createdAt || rawTask.created_at) || observedAt,
     sourceRefs: [{ source: "slock", externalId: String(rawTask.taskNumber || rawTask.task_number || taskId) }],
   };
+}
+
+function readSlockParticipantLabel(source, keys) {
+  for (const key of keys) {
+    const label = readNamedValue(source?.[key]);
+    if (label) return label;
+  }
+  return "";
+}
+
+function readNamedValue(value) {
+  if (!value) return "";
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  if (typeof value !== "object") return "";
+  for (const key of ["displayName", "display_name", "name", "username", "handle", "label", "id"]) {
+    const nested = value[key];
+    if (typeof nested === "string" || typeof nested === "number") return String(nested);
+  }
+  return "";
 }
 
 function readSlockAgentContexts(config) {
@@ -1653,7 +1921,7 @@ async function collectSlockWorkState(deviceId, observedAt, config) {
   const configuredChannels = Array.isArray(config.slockTaskChannels) ? config.slockTaskChannels : [];
   const hasWorkspace = existsSync(path.join(homeDir(), ".slock", "agents"));
   const agentContexts = readSlockAgentContexts(config);
-  const serverUrl = config.slockServerUrl || process.env.SLOCK_SERVER_URL || "";
+  const serverUrl = config.slockServerUrl || process.env.SLOCK_SERVER_URL || DEFAULT_SLOCK_SERVER_URL;
   const workItems = [];
   const conversations = [];
   const warnings = [];
@@ -1783,7 +2051,16 @@ async function collectWorkStateSnapshot(config, args) {
     ...(args.deviceName ? { deviceName: args.deviceName } : {}),
   };
   const observedAt = isoNow();
-  const device = createDevice(mergedConfig, observedAt);
+  let device;
+  if (args.fixturePath) {
+    try {
+      device = applyDeviceOverrides(readJsonFile(args.fixturePath), mergedConfig).device;
+    } catch {
+      device = createDevice(mergedConfig, observedAt);
+    }
+  } else {
+    device = createDevice(mergedConfig, observedAt);
+  }
   const slock = await collectSlockWorkState(device.id, observedAt, mergedConfig);
   const collected = mergeWorkStateParts([
     collectOpenClawWorkState(device.id, observedAt),
@@ -1808,6 +2085,24 @@ async function runWorkStateOnce(config, args) {
   if (serverUrl && !args.printOnly) await postWorkStateSnapshot(serverUrl, snapshot);
   if (args.printOnly || !serverUrl) console.log(JSON.stringify(snapshot, null, 2));
   return snapshot;
+}
+
+async function refreshSnapshots(config, args) {
+  const inventorySnapshot = await runOnce(config, args);
+  const workStateSnapshot = await runWorkStateOnce(config, args);
+  return { inventorySnapshot, workStateSnapshot };
+}
+
+function createRefreshRunner(config, args) {
+  let inFlight;
+  return () => {
+    if (!inFlight) {
+      inFlight = refreshSnapshots(config, args).finally(() => {
+        inFlight = undefined;
+      });
+    }
+    return inFlight;
+  };
 }
 
 function resolveServerUrl(config, args) {
@@ -1864,7 +2159,7 @@ function createControlDevice(config, args, observedAt) {
   return createDevice(mergedControlConfig(config, args), observedAt);
 }
 
-async function handleControlMessage(socket, rawMessage, config, args, seenCommandIds) {
+async function handleControlMessage(socket, rawMessage, config, args, seenCommandIds, refresh) {
   let message;
   try {
     message = JSON.parse(String(rawMessage));
@@ -1897,13 +2192,16 @@ async function handleControlMessage(socket, rawMessage, config, args, seenComman
   });
 
   try {
-    const snapshot = await runOnce(config, args);
+    const { inventorySnapshot, workStateSnapshot } = await refresh();
     sendControlMessage(socket, {
       type: "command.result",
       commandId: message.commandId,
-      deviceId: snapshot.device.id,
+      deviceId: inventorySnapshot.device.id,
       status: "succeeded",
-      result: { observedAt: snapshot.observedAt },
+      result: {
+        observedAt: inventorySnapshot.observedAt,
+        workStateObservedAt: workStateSnapshot.observedAt,
+      },
     });
   } catch (error) {
     sendControlMessage(socket, {
@@ -1916,7 +2214,7 @@ async function handleControlMessage(socket, rawMessage, config, args, seenComman
   }
 }
 
-function startControlChannel(config, args) {
+function startControlChannel(config, args, refresh) {
   const wsUrl = resolveWsUrl(config, args);
   if (!wsUrl || typeof WebSocket === "undefined") return;
 
@@ -1949,7 +2247,7 @@ function startControlChannel(config, args) {
     });
 
     socket.addEventListener("message", (event) => {
-      void handleControlMessage(socket, event.data, config, args, seenCommandIds);
+      void handleControlMessage(socket, event.data, config, args, seenCommandIds, refresh);
     });
 
     socket.addEventListener("close", () => {
@@ -1984,10 +2282,11 @@ async function main() {
     return;
   }
 
-  await runOnce(config, args);
-  startControlChannel(config, args);
+  const refresh = createRefreshRunner(config, args);
+  startControlChannel(config, args, refresh);
+  await refresh();
   setInterval(() => {
-    runOnce(config, args).catch((error) => {
+    refresh().catch((error) => {
       console.error(`[agentlane-device-collector] ${error instanceof Error ? error.message : String(error)}`);
     });
   }, Number.isFinite(args.intervalMs) && args.intervalMs > 0 ? args.intervalMs : DEFAULT_INTERVAL_MS);

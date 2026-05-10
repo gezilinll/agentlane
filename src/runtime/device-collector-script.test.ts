@@ -44,6 +44,8 @@ describe("device collector scripts", () => {
       "Test Device",
       "--ws-url",
       "ws://agentlane.local/api/device-control/ws",
+      "--slock-server-url",
+      "https://api.slock.ai",
       "--once",
       "--no-service",
       "--fixture",
@@ -60,6 +62,7 @@ describe("device collector scripts", () => {
       deviceId: "test-device",
       deviceName: "Test Device",
       wsUrl: "ws://agentlane.local/api/device-control/ws",
+      slockServerUrl: "https://api.slock.ai",
     });
     expect(snapshot.device.id).toBe("test-device");
     expect(snapshot.device.name).toBe("Test Device");
@@ -570,6 +573,288 @@ describe("device collector scripts", () => {
     expect(snapshot.workItems.map((item: { externalId: string }) => item.externalId)).not.toContain("trajectory-run-heartbeat");
   });
 
+  it("links OpenClaw trajectory runs to DingTalk message context from session runtime metadata", () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-trajectory-link-home-"));
+    const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-trajectory-link-bin-"));
+    const conversationId = "cidOQk/D4niJC8l2j8FlIA5Wg==";
+    const sessionKey = `agent:main:dingtalk:group:${conversationId}`;
+
+    writeOpenClawDingTalkState(fakeHome, {
+      conversationId,
+      groupTitle: "insMind工具数据日报和告警",
+      msgId: "msgIv6wEOv4t9ONgYa21mfm1Q==",
+      senderId: "023160384927511676",
+      senderName: "tiger",
+      text: "你个败家娘们，浪费token啊，退下吧",
+      createdAt: "2026-05-09T09:10:00.000Z",
+    });
+    writeOpenClawTrajectoryWithSessionMetadata(fakeHome, {
+      agentId: "main",
+      sessionId: "trajectory-linked-session",
+      runId: "trajectory-linked-run",
+      sessionKey,
+      prompt: "你个败家娘们，浪费token啊，退下吧",
+      runtimeContext: {
+        message_id: "msgIv6wEOv4t9ONgYa21mfm1Q==",
+        sender_id: "023160384927511676",
+        sender: "tiger",
+        chat_id: conversationId,
+        group_subject: "insMind工具数据日报和告警",
+        group_channel: sessionKey,
+      },
+      startedAt: "2026-05-09T09:10:02.000Z",
+      endedAt: "2026-05-09T09:11:00.000Z",
+    });
+    writeFakeOpenClaw(fakeBin, {
+      health: { ok: true, agents: [{ id: "main" }] },
+      status: { gateway: { url: "ws://127.0.0.1:18789", reachable: true } },
+      tasks: { tasks: [] },
+    });
+
+    const output = execFileSync(process.execPath, [
+      collectorScript,
+      "--work-state-once",
+      "--device-id",
+      "openclaw-trajectory-link-device",
+      "--print-only",
+    ], {
+      encoding: "utf8",
+      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
+    });
+
+    const snapshot = JSON.parse(output);
+    const workItems = snapshot.workItems.filter((item: { title: string }) => item.title === "你个败家娘们");
+
+    expect(workItems).toHaveLength(1);
+    expect(workItems[0]).toMatchObject({
+      source: "openclaw",
+      externalId: "msgIv6wEOv4t9ONgYa21mfm1Q==",
+      status: "done",
+      creator: { kind: "human", label: "tiger", externalId: "023160384927511676" },
+      channel: {
+        kind: "dingtalk",
+        label: "insMind工具数据日报和告警",
+        externalId: conversationId,
+      },
+    });
+    expect(snapshot.executions).toContainEqual(expect.objectContaining({
+      source: "openclaw",
+      externalId: "trajectory-linked-run",
+      status: "succeeded",
+      workItemId: workItems[0].id,
+      conversationId: workItems[0].conversationId,
+    }));
+  });
+
+  it("upgrades linked OpenClaw DingTalk messages to direct chat when trajectory session metadata proves DM", () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-trajectory-direct-link-home-"));
+    const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-trajectory-direct-link-bin-"));
+    const messageConversationId = "cidrYPQCCFAqjoPOplBhOADv8iE20fEdIk0LAOIWK8thfg=";
+    const directConversationId = "0403085742945013";
+    const sessionKey = `agent:main:dingtalk:direct:${directConversationId}`;
+
+    writeOpenClawDingTalkMessages(fakeHome, [{
+      msgId: "msgTcetRGuqtUW2ISdkEux5zg==",
+      direction: "inbound",
+      accountId: "default",
+      conversationId: messageConversationId,
+      createdAt: "2026-05-09T11:20:00.000Z",
+      updatedAt: "2026-05-09T11:20:01.000Z",
+      messageType: "text",
+      text: "怎么解决",
+      senderId: directConversationId,
+      senderName: "林奈",
+    }]);
+    writeOpenClawTrajectoryWithSessionMetadata(fakeHome, {
+      agentId: "main",
+      sessionId: "trajectory-direct-linked-session",
+      runId: "trajectory-direct-linked-run",
+      sessionKey,
+      prompt: "怎么解决",
+      runtimeContext: {
+        message_id: "msgTcetRGuqtUW2ISdkEux5zg==",
+        sender_id: directConversationId,
+        sender: "林奈",
+        chat_id: directConversationId,
+      },
+      startedAt: "2026-05-09T11:20:02.000Z",
+      endedAt: "2026-05-09T11:21:00.000Z",
+    });
+    writeFakeOpenClaw(fakeBin, {
+      health: { ok: true, agents: [{ id: "main" }] },
+      status: { gateway: { url: "ws://127.0.0.1:18789", reachable: true } },
+      tasks: { tasks: [] },
+    });
+
+    const output = execFileSync(process.execPath, [
+      collectorScript,
+      "--work-state-once",
+      "--device-id",
+      "openclaw-trajectory-direct-link-device",
+      "--print-only",
+    ], {
+      encoding: "utf8",
+      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
+    });
+
+    const snapshot = JSON.parse(output);
+    const workItem = snapshot.workItems.find((item: { externalId: string }) => item.externalId === "msgTcetRGuqtUW2ISdkEux5zg==");
+
+    expect(workItem).toMatchObject({
+      source: "openclaw",
+      title: "怎么解决",
+      status: "done",
+      creator: { kind: "human", label: "林奈", externalId: directConversationId },
+      channel: {
+        kind: "dingtalk",
+        label: "DingTalk 私聊 040308...5013",
+        externalId: directConversationId,
+      },
+      conversationId: "openclaw-trajectory-direct-link-device:openclaw:gateway-ws-127.0.0.1-18789:conversation:agent-main-dingtalk-direct-0403085742945013",
+    });
+    expect(snapshot.executions).toContainEqual(expect.objectContaining({
+      source: "openclaw",
+      externalId: "trajectory-direct-linked-run",
+      status: "succeeded",
+      workItemId: workItem.id,
+      conversationId: workItem.conversationId,
+    }));
+  });
+
+  it("links direct OpenClaw trajectory runs to DingTalk message context by sender when message id is missing", () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-trajectory-direct-sender-link-home-"));
+    const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-trajectory-direct-sender-link-bin-"));
+    const directConversationId = "0403085742945013";
+    const sessionKey = `agent:main:dingtalk:direct:${directConversationId}`;
+
+    writeOpenClawDingTalkMessages(fakeHome, [{
+      msgId: "msgDirectFallback",
+      direction: "inbound",
+      accountId: "default",
+      conversationId: "cidDirectFallback",
+      createdAt: "2026-05-09T05:58:00.000Z",
+      updatedAt: "2026-05-09T05:58:01.000Z",
+      messageType: "text",
+      text: "为什么工具层没接住调用，怎么解决",
+      senderId: directConversationId,
+      senderName: "林奈",
+    }]);
+    writeOpenClawTrajectoryWithSessionMetadata(fakeHome, {
+      agentId: "main",
+      sessionId: "trajectory-direct-sender-linked-session",
+      runId: "trajectory-direct-sender-linked-run",
+      sessionKey,
+      prompt: "为什么工具层没接住调用，怎么解决",
+      runtimeContext: {
+        sender_id: directConversationId,
+        sender: "林奈",
+        chat_id: directConversationId,
+      },
+      startedAt: "2026-05-09T05:58:10.000Z",
+      endedAt: "2026-05-09T05:59:00.000Z",
+    });
+    writeFakeOpenClaw(fakeBin, {
+      health: { ok: true, agents: [{ id: "main" }] },
+      status: { gateway: { url: "ws://127.0.0.1:18789", reachable: true } },
+      tasks: { tasks: [] },
+    });
+
+    const output = execFileSync(process.execPath, [
+      collectorScript,
+      "--work-state-once",
+      "--device-id",
+      "openclaw-trajectory-direct-sender-link-device",
+      "--print-only",
+    ], {
+      encoding: "utf8",
+      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
+    });
+
+    const snapshot = JSON.parse(output);
+
+    expect(snapshot.workItems).toHaveLength(1);
+    expect(snapshot.workItems[0]).toMatchObject({
+      source: "openclaw",
+      externalId: "msgDirectFallback",
+      status: "done",
+      creator: { kind: "human", label: "林奈", externalId: directConversationId },
+      channel: {
+        kind: "dingtalk",
+        label: "DingTalk 私聊 040308...5013",
+        externalId: directConversationId,
+      },
+      conversationId: "openclaw-trajectory-direct-sender-link-device:openclaw:gateway-ws-127.0.0.1-18789:conversation:agent-main-dingtalk-direct-0403085742945013",
+    });
+    expect(snapshot.executions).toContainEqual(expect.objectContaining({
+      source: "openclaw",
+      externalId: "trajectory-direct-sender-linked-run",
+      status: "succeeded",
+      workItemId: snapshot.workItems[0].id,
+      conversationId: snapshot.workItems[0].conversationId,
+    }));
+  });
+
+  it("links OpenClaw trajectory runs to DingTalk message context by prompt and session when runtime metadata is missing", () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-trajectory-fallback-link-home-"));
+    const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-trajectory-fallback-link-bin-"));
+    const conversationId = "cidOQk/D4niJC8l2j8FlIA5Wg==";
+    const sessionKey = `agent:main:dingtalk:group:${conversationId}`;
+
+    writeOpenClawDingTalkState(fakeHome, {
+      conversationId,
+      groupTitle: "insMind工具数据日报和告警",
+      msgId: "msgIv6wEOv4t9ONgYa21mfm1Q==",
+      senderId: "023160384927511676",
+      senderName: "tiger",
+      text: "你个败家娘们，浪费token啊，退下吧",
+      createdAt: "2026-05-09T09:10:00.000Z",
+    });
+    writeOpenClawTrajectory(fakeHome, "main", "trajectory-fallback-linked-session", [{
+      runId: "trajectory-fallback-linked-run",
+      sessionKey,
+      prompt: "你个败家娘们，浪费token啊，退下吧",
+      finalStatus: "success",
+      endedStatus: "success",
+      assistantTexts: ["已回复"],
+      startedAt: "2026-05-09T09:10:02.000Z",
+      endedAt: "2026-05-09T09:11:00.000Z",
+    }]);
+    writeFakeOpenClaw(fakeBin, {
+      health: { ok: true, agents: [{ id: "main" }] },
+      status: { gateway: { url: "ws://127.0.0.1:18789", reachable: true } },
+      tasks: { tasks: [] },
+    });
+
+    const output = execFileSync(process.execPath, [
+      collectorScript,
+      "--work-state-once",
+      "--device-id",
+      "openclaw-trajectory-fallback-link-device",
+      "--print-only",
+    ], {
+      encoding: "utf8",
+      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
+    });
+
+    const snapshot = JSON.parse(output);
+    const workItems = snapshot.workItems.filter((item: { title: string }) => item.title === "你个败家娘们");
+
+    expect(workItems).toHaveLength(1);
+    expect(workItems[0]).toMatchObject({
+      source: "openclaw",
+      externalId: "msgIv6wEOv4t9ONgYa21mfm1Q==",
+      status: "done",
+      creator: { kind: "human", label: "tiger", externalId: "023160384927511676" },
+    });
+    expect(snapshot.executions).toContainEqual(expect.objectContaining({
+      source: "openclaw",
+      externalId: "trajectory-fallback-linked-run",
+      status: "succeeded",
+      workItemId: workItems[0].id,
+      conversationId: workItems[0].conversationId,
+    }));
+  });
+
   it("keeps OpenClaw execution ids unique when the platform repeats run ids", () => {
     const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-duplicate-home-"));
     const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-duplicate-bin-"));
@@ -762,6 +1047,43 @@ describe("device collector scripts", () => {
     }
   });
 
+  it("uses the default Slock server URL when local agent tokens exist and config omits it", async () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-slock-default-api-home-"));
+    const agentDir = path.join(fakeHome, ".slock", "agents", "tester", ".slock");
+    mkdirSync(agentDir, { recursive: true });
+    writeFileSync(path.join(agentDir, "agent-token"), "test-agent-token");
+    const { server, baseUrl } = await startSlockInternalApiServer();
+    const configDir = mkdtempSync(path.join(tmpdir(), "agentlane-slock-default-api-config-"));
+    const configPath = path.join(configDir, "config.json");
+    writeFileSync(configPath, JSON.stringify({ deviceId: "slock-default-api-device" }));
+
+    try {
+      const output = await runNodeScript([
+        collectorScript,
+        "--work-state-once",
+        "--config",
+        configPath,
+        "--print-only",
+      ], {
+        env: {
+          ...process.env,
+          AGENTLANE_COLLECTOR_HOME: fakeHome,
+          SLOCK_DEFAULT_SERVER_URL: baseUrl,
+          PATH: "/usr/bin:/bin",
+        },
+      });
+
+      const snapshot = JSON.parse(output);
+      expect(snapshot.workItems).toContainEqual(expect.objectContaining({
+        source: "slock",
+        title: "修复登录回调异常",
+        status: "in_progress",
+      }));
+    } finally {
+      server.close();
+    }
+  });
+
   it("posts a runtime work-state once snapshot to the Agentlane backend when server url is configured", async () => {
     const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-work-state-post-home-"));
     const { server, receivedSnapshot, baseUrl } = await startWorkStateServer();
@@ -786,8 +1108,9 @@ describe("device collector scripts", () => {
     }
   });
 
-  it("connects to the control channel and handles inventory refresh commands in daemon mode", async () => {
+  it("connects to the control channel and refreshes inventory plus work-state in daemon mode", async () => {
     const controlServer = await startControlServer();
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-control-home-"));
     const child = spawn(process.execPath, [
       collectorScript,
       "--fixture",
@@ -798,6 +1121,7 @@ describe("device collector scripts", () => {
       "100000",
     ], {
       stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
     });
 
     try {
@@ -813,11 +1137,13 @@ describe("device collector scripts", () => {
         commandId: "cmd-refresh-1",
         deviceId: "fixture-mac",
         status: "succeeded",
+        result: {
+          observedAt: expect.any(String),
+          workStateObservedAt: expect.any(String),
+        },
       });
-      expect(result.snapshots.map((snapshot) => (snapshot.device as { id: string }).id)).toEqual([
-        "fixture-mac",
-        "fixture-mac",
-      ]);
+      expect(result.snapshots.map((snapshot) => (snapshot.device as { id: string }).id)).toEqual(["fixture-mac"]);
+      expect(result.workStateSnapshots.map((snapshot) => snapshot.deviceId)).toEqual(["fixture-mac"]);
     } finally {
       child.kill();
       controlServer.close();
@@ -1068,6 +1394,68 @@ function writeOpenClawTrajectory(fakeHome: string, agentId: string, sessionId: s
   );
 }
 
+function writeOpenClawTrajectoryWithSessionMetadata(fakeHome: string, input: {
+  agentId: string;
+  sessionId: string;
+  runId: string;
+  sessionKey: string;
+  prompt: string;
+  runtimeContext: Record<string, unknown>;
+  startedAt: string;
+  endedAt: string;
+}): void {
+  const sessionsDir = path.join(fakeHome, ".openclaw", "agents", input.agentId, "sessions");
+  mkdirSync(sessionsDir, { recursive: true });
+  const sessionFile = path.join(sessionsDir, `${input.sessionId}.jsonl`);
+  writeFileSync(sessionFile, `${[
+    {
+      role: "user",
+      ts: input.startedAt,
+      content: input.prompt,
+    },
+    {
+      type: "custom_message",
+      ts: input.startedAt,
+      customType: "openclaw.runtime-context",
+      content: `Conversation info (untrusted metadata):\n\`\`\`json\n${JSON.stringify(input.runtimeContext, null, 2)}\n\`\`\``,
+    },
+  ].map((line) => JSON.stringify(line)).join("\n")}\n`);
+  writeFileSync(path.join(sessionsDir, `${input.sessionId}.trajectory.jsonl`), `${[
+    {
+      type: "session.started",
+      ts: input.startedAt,
+      sessionId: input.sessionId,
+      sessionKey: input.sessionKey,
+      runId: input.runId,
+      data: {
+        sessionFile,
+        agentId: input.agentId,
+        messageProvider: "dingtalk",
+      },
+    },
+    {
+      type: "trace.artifacts",
+      ts: input.endedAt,
+      sessionId: input.sessionId,
+      sessionKey: input.sessionKey,
+      runId: input.runId,
+      data: {
+        finalStatus: "success",
+        assistantTexts: ["已回复"],
+        didSendViaMessagingTool: true,
+      },
+    },
+    {
+      type: "session.ended",
+      ts: input.endedAt,
+      sessionId: input.sessionId,
+      sessionKey: input.sessionKey,
+      runId: input.runId,
+      data: { status: "success" },
+    },
+  ].map((line) => JSON.stringify(line)).join("\n")}\n`);
+}
+
 function writeFakeMultica(fakeBin: string, payload: {
   runtimes: unknown;
   agents: unknown;
@@ -1240,9 +1628,9 @@ async function startSlockInternalApiServer(): Promise<{
           id: "task-1",
           taskNumber: 12,
           title: "修复登录回调异常",
-          status: "in_progress",
-          createdByName: "@zhangsan",
-          claimedByName: "@tester",
+          status: "IN PROGRESS",
+          creator: { name: "@zhangsan" },
+          assignee: { name: "@tester" },
           createdAt: "2026-05-09T06:30:00.000Z",
           updatedAt: "2026-05-09T06:45:00.000Z",
           messageId: "message-1",
@@ -1270,9 +1658,11 @@ async function startControlServer(): Promise<{
     hello: Record<string, unknown>;
     commandResult: Record<string, unknown>;
     snapshots: Array<Record<string, unknown>>;
+    workStateSnapshots: Array<Record<string, unknown>>;
   }>;
 }> {
   const snapshots: Array<Record<string, unknown>> = [];
+  const workStateSnapshots: Array<Record<string, unknown>> = [];
   let webSocketServer: WebSocketServer | undefined;
   let server: Server | undefined;
   let helloMessage: Record<string, unknown> | undefined;
@@ -1281,11 +1671,12 @@ async function startControlServer(): Promise<{
     hello: Record<string, unknown>;
     commandResult: Record<string, unknown>;
     snapshots: Array<Record<string, unknown>>;
+    workStateSnapshots: Array<Record<string, unknown>>;
   }>((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error("collector control refresh timed out")), 5000);
 
     server = createServer((request, response) => {
-      if (request.method !== "POST" || request.url !== "/api/device-snapshots") {
+      if (request.method !== "POST" || !["/api/device-snapshots", "/api/runtime-work-state-snapshots"].includes(request.url ?? "")) {
         response.writeHead(404);
         response.end();
         return;
@@ -1297,7 +1688,9 @@ async function startControlServer(): Promise<{
         body += chunk;
       });
       request.on("end", () => {
-        snapshots.push(JSON.parse(body));
+        const snapshot = JSON.parse(body);
+        if (request.url === "/api/device-snapshots") snapshots.push(snapshot);
+        if (request.url === "/api/runtime-work-state-snapshots") workStateSnapshots.push(snapshot);
         response.writeHead(201, { "content-type": "application/json" });
         response.end(JSON.stringify({ ok: true }));
       });
@@ -1330,6 +1723,7 @@ async function startControlServer(): Promise<{
             hello: helloMessage ?? {},
             commandResult: message,
             snapshots,
+            workStateSnapshots,
           });
         }
       });

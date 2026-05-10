@@ -22,7 +22,7 @@ const backendSnapshot: RuntimeWorkStateSnapshot = {
   capabilities: [...openclaw.capabilities, ...multica.capabilities, ...slock.capabilities],
 };
 
-test.describe("Runtime Work Board", () => {
+test.describe("Runs / Work Board", () => {
   test("filters Slock work by task context, opens details, and stays responsive", async ({ page, request }) => {
     const seedResponse = await request.post("/api/runtime-work-state-snapshots", { data: backendSnapshot });
     expect(seedResponse.ok()).toBe(true);
@@ -38,7 +38,7 @@ test.describe("Runtime Work Board", () => {
     }
     await expect(page.getByRole("button", { name: /帮我检查今天的线上异常/ })).toBeVisible();
 
-    await page.getByLabel("Runtime").selectOption("slock");
+    await page.getByLabel("来源 Runtime").selectOption("slock");
     await page.getByPlaceholder("搜索任务、消息、发起人、Agent 或会话/群组").fill("@fixture-human");
 
     await expect(page.getByRole("button", { name: /Example in progress card/ })).toBeVisible();
@@ -50,7 +50,7 @@ test.describe("Runtime Work Board", () => {
 
     await page.getByRole("button", { name: /Example in progress card/ }).click();
     const detail = page.getByRole("complementary", { name: "工作项详情" });
-    await expect(detail).toContainText("Runtime: Slock");
+    await expect(detail).toContainText("来源 Runtime: Slock");
     await expect(detail).toContainText("Channel: Slock");
     await expect(detail).toContainText("发起人: @fixture-human");
     await expect(detail).toContainText("承接 Agent: @example-agent");
@@ -115,7 +115,7 @@ test.describe("Runtime Work Board", () => {
 
     await page.goto("/");
     await page.getByRole("button", { name: "Runs" }).click();
-    await page.getByLabel("Runtime").selectOption("slock");
+    await page.getByLabel("来源 Runtime").selectOption("slock");
 
     await expect(page.getByRole("button", { name: /Slock 监听未就绪/ })).not.toBeVisible();
     await expect(page.getByRole("button", { name: /缺少 Slock task board 或 API adapter/ })).not.toBeVisible();

@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import fixtureSnapshot from "../../fixtures/runtime/collector-snapshot.sample.json";
 import {
   channelKindLabels,
+  deriveManagedAgentDisplayStatus,
+  deriveRuntimeOperatingStatus,
   filterRuntimeFleet,
   formatRuntimeTimestamp,
   getRuntimeFleetDetail,
@@ -10,6 +12,7 @@ import {
   runtimeAgentLastSeenAt,
   runtimeHealthLabels,
   runtimeKindLabels,
+  runtimeOperatingStatusLabels,
   summarizeRuntimeFleet,
   type RuntimeFleetDetail,
   type RuntimeFleetFilters,
@@ -23,6 +26,7 @@ import {
   type RuntimeInventorySnapshot,
   type RuntimeKind,
 } from "./runtime-normalize";
+import type { RuntimeWorkStateSnapshot } from "./runtime-work-state";
 
 const fixtureRuntimeSnapshot = fixtureSnapshot as RuntimeInventorySnapshot;
 const autoRefreshIntervalMs = 30_000;
@@ -38,6 +42,7 @@ type RuntimeFleetSelection = {
 /** First Runtime Fleet surface: inspect registered device, runtimes, agents, and channel exposure. */
 export function RuntimeFleetPage() {
   const [snapshot, setSnapshot] = useState<RuntimeInventorySnapshot>(fixtureRuntimeSnapshot);
+  const [workStateSnapshot, setWorkStateSnapshot] = useState<RuntimeWorkStateSnapshot | null>(null);
   const [dataSource, setDataSource] = useState<"fixture" | "backend">("fixture");
   const [refreshState, setRefreshState] = useState<{
     status: "idle" | "running" | "success" | "error";
@@ -58,16 +63,32 @@ export function RuntimeFleetPage() {
     return (await response.json()) as RuntimeInventorySnapshot;
   }
 
-  function applySnapshot(latestSnapshot: RuntimeInventorySnapshot) {
+  async function fetchLatestWorkStateSnapshot(): Promise<RuntimeWorkStateSnapshot | null> {
+    const requestUrl = new URL("/api/runtime-work-state/latest", window.location.origin);
+    const response = await fetch(requestUrl);
+    if (response.status === 404) return null;
+    if (!response.ok) return null;
+    const body = (await response.json()) as Partial<RuntimeWorkStateSnapshot>;
+    if (!Array.isArray(body.workItems) || !Array.isArray(body.conversations) || !Array.isArray(body.executions)) {
+      return null;
+    }
+    return body as RuntimeWorkStateSnapshot;
+  }
+
+  function applySnapshot(latestSnapshot: RuntimeInventorySnapshot, latestWorkState: RuntimeWorkStateSnapshot | null) {
     setSnapshot(latestSnapshot);
+    setWorkStateSnapshot(latestWorkState);
     setDataSource("backend");
     setLastLoadedAt(new Date().toISOString());
   }
 
   async function loadLatestSnapshot(options: { silent?: boolean } = {}): Promise<RuntimeInventorySnapshot | null> {
     try {
-      const latestSnapshot = await fetchLatestSnapshot();
-      if (latestSnapshot) applySnapshot(latestSnapshot);
+      const [latestSnapshot, latestWorkState] = await Promise.all([
+        fetchLatestSnapshot(),
+        fetchLatestWorkStateSnapshot(),
+      ]);
+      if (latestSnapshot) applySnapshot(latestSnapshot, latestWorkState);
       return latestSnapshot;
     } catch (error) {
       if (!options.silent) {
@@ -85,8 +106,11 @@ export function RuntimeFleetPage() {
 
     async function loadInitialSnapshot() {
       try {
-        const latestSnapshot = await fetchLatestSnapshot();
-        if (!cancelled && latestSnapshot) applySnapshot(latestSnapshot);
+        const [latestSnapshot, latestWorkState] = await Promise.all([
+          fetchLatestSnapshot(),
+          fetchLatestWorkStateSnapshot(),
+        ]);
+        if (!cancelled && latestSnapshot) applySnapshot(latestSnapshot, latestWorkState);
       } catch {
         // The page remains useful with the bundled fixture when no local backend is running.
       }
@@ -107,8 +131,8 @@ export function RuntimeFleetPage() {
     [channelKind, query, runtimeKind, runtimeStatus],
   );
   const result = useMemo(() => filterRuntimeFleet(snapshot, filters), [filters, snapshot]);
-  const summary = useMemo(() => summarizeRuntimeFleet(snapshot), [snapshot]);
-  const detail = selection ? getRuntimeFleetDetail(snapshot, selection.kind, selection.id) : null;
+  const summary = useMemo(() => summarizeRuntimeFleet(snapshot, workStateSnapshot), [snapshot, workStateSnapshot]);
+  const detail = selection ? getRuntimeFleetDetail(snapshot, selection.kind, selection.id, workStateSnapshot) : null;
   const isRefreshRunning = refreshState.status === "running";
   const refreshButtonLabel = dataSource === "backend" ? "请求设备刷新" : "读取最新快照";
 
@@ -224,12 +248,12 @@ export function RuntimeFleetPage() {
         </label>
 
         <label className="toolbarField">
-          <span className="controlLabel">状态</span>
+          <span className="controlLabel">可用性</span>
           <select
             value={runtimeStatus}
             onChange={(event) => setRuntimeStatus(event.target.value as RuntimeHealthStatus | "all")}
           >
-            <option value="all">全部状态</option>
+            <option value="all">全部可用性</option>
             {runtimeStatusOptions.map((status) => (
               <option key={status} value={status}>
                 {runtimeHealthLabels[status]}
@@ -266,6 +290,8 @@ export function RuntimeFleetPage() {
           <DevicePanel snapshot={snapshot} onSelect={() => setSelection({ kind: "device", id: result.device.id })} />
           <RuntimeTable
             deviceName={snapshot.device.name}
+            snapshot={snapshot}
+            workStateSnapshot={workStateSnapshot}
             runtimes={result.runtimes}
             selectedId={selection?.kind === "runtime" ? selection.id : undefined}
             onSelect={(runtime) => setSelection({ kind: "runtime", id: runtime.id })}
@@ -274,6 +300,7 @@ export function RuntimeFleetPage() {
             agents={result.agents}
             runtimes={snapshot.runtimes}
             snapshot={snapshot}
+            workStateSnapshot={workStateSnapshot}
             selectedId={selection?.kind === "agent" ? selection.id : undefined}
             onSelect={(agent) => setSelection({ kind: "agent", id: agent.id })}
           />
@@ -326,11 +353,15 @@ function DevicePanel({
 
 function RuntimeTable({
   deviceName,
+  snapshot,
+  workStateSnapshot,
   runtimes,
   selectedId,
   onSelect,
 }: {
   deviceName: string;
+  snapshot: RuntimeInventorySnapshot;
+  workStateSnapshot: RuntimeWorkStateSnapshot | null;
   runtimes: AgentlaneRuntime[];
   selectedId?: string;
   onSelect: (runtime: AgentlaneRuntime) => void;
@@ -352,39 +383,49 @@ function RuntimeTable({
             <span role="columnheader">名称</span>
             <span role="columnheader">Runtime</span>
             <span role="columnheader">所属设备</span>
-            <span role="columnheader">状态</span>
+            <span role="columnheader">可用性</span>
+            <span role="columnheader">运行状态</span>
             <span role="columnheader">最近同步</span>
           </div>
-          {runtimes.map((runtime) => (
-            <button
-              className={
-                runtime.id === selectedId
-                  ? "assetRow assetDataRow runtimeTableRow tableRowActive"
-                  : "assetRow assetDataRow runtimeTableRow"
-              }
-              key={runtime.id}
-              type="button"
-              role="row"
-              onClick={() => onSelect(runtime)}
-            >
-              <span className="nameCell" role="cell">
-                <strong>{runtime.name}</strong>
-                <small>{runtime.id}</small>
-              </span>
-              <span role="cell">
-                <Badge>{runtimeKindLabels[runtime.kind]}</Badge>
-              </span>
-              <span className="mutedAssetText" role="cell">
-                {deviceName}
-              </span>
-              <span role="cell">
-                <StatusBadge label={runtimeHealthLabels[runtime.status]} status={runtime.status} />
-              </span>
-              <span className="mutedAssetText" role="cell">
-                {formatRuntimeTimestamp(runtime.lastSeenAt)}
-              </span>
-            </button>
-          ))}
+          {runtimes.map((runtime) => {
+            const operatingStatus = deriveRuntimeOperatingStatus(snapshot, runtime, workStateSnapshot);
+            return (
+              <button
+                className={
+                  runtime.id === selectedId
+                    ? "assetRow assetDataRow runtimeTableRow tableRowActive"
+                    : "assetRow assetDataRow runtimeTableRow"
+                }
+                key={runtime.id}
+                type="button"
+                role="row"
+                onClick={() => onSelect(runtime)}
+              >
+                <span className="nameCell" role="cell">
+                  <strong>{runtime.name}</strong>
+                  <small>{runtime.id}</small>
+                </span>
+                <span role="cell">
+                  <Badge>{runtimeKindLabels[runtime.kind]}</Badge>
+                </span>
+                <span className="mutedAssetText" role="cell">
+                  {deviceName}
+                </span>
+                <span role="cell">
+                  <StatusBadge label={runtimeHealthLabels[runtime.status]} status={runtime.status} />
+                </span>
+                <span role="cell">
+                  <StatusBadge
+                    label={runtimeOperatingStatusLabels[operatingStatus]}
+                    status={operatingStatus}
+                  />
+                </span>
+                <span className="mutedAssetText" role="cell">
+                  {formatRuntimeTimestamp(runtime.lastSeenAt)}
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
     </section>
@@ -395,12 +436,14 @@ function AgentTable({
   agents,
   runtimes,
   snapshot,
+  workStateSnapshot,
   selectedId,
   onSelect,
 }: {
   agents: ManagedRuntimeAgent[];
   runtimes: AgentlaneRuntime[];
   snapshot: RuntimeInventorySnapshot;
+  workStateSnapshot: RuntimeWorkStateSnapshot | null;
   selectedId?: string;
   onSelect: (agent: ManagedRuntimeAgent) => void;
 }) {
@@ -426,40 +469,43 @@ function AgentTable({
             <span role="columnheader">状态</span>
             <span role="columnheader">最近同步</span>
           </div>
-          {agents.map((agent) => (
-            <button
-              className={
-                agent.id === selectedId
-                  ? "assetRow assetDataRow agentTableRow tableRowActive"
-                  : "assetRow assetDataRow agentTableRow"
-              }
-              key={agent.id}
-              type="button"
-              role="row"
-              onClick={() => onSelect(agent)}
-            >
-              <span className="nameCell" role="cell">
-                <strong>{agent.name}</strong>
-                <small>{agent.id}</small>
-              </span>
-              <span className="mutedAssetText" role="cell">
-                {runtimeById.get(agent.runtimeId)?.name ?? agent.runtimeId}
-              </span>
-              <span className="channelList" role="cell">
-              {agent.channelBindings.map((binding, index) => (
-                <Badge key={`${agent.id}-${binding.kind}-${binding.externalId ?? index}`}>
-                  {binding.label || channelKindLabels[binding.kind]}
-                </Badge>
-              ))}
-              </span>
-              <span role="cell">
-                <StatusBadge label={managedAgentStatusLabels[agent.status]} status={agent.status} />
-              </span>
-              <span className="mutedAssetText" role="cell">
-                {formatRuntimeTimestamp(runtimeAgentLastSeenAt(agent, runtimeById.get(agent.runtimeId), snapshot))}
-              </span>
-            </button>
-          ))}
+          {agents.map((agent) => {
+            const displayStatus = deriveManagedAgentDisplayStatus(snapshot, agent, workStateSnapshot);
+            return (
+              <button
+                className={
+                  agent.id === selectedId
+                    ? "assetRow assetDataRow agentTableRow tableRowActive"
+                    : "assetRow assetDataRow agentTableRow"
+                }
+                key={agent.id}
+                type="button"
+                role="row"
+                onClick={() => onSelect(agent)}
+              >
+                <span className="nameCell" role="cell">
+                  <strong>{agent.name}</strong>
+                  <small>{agent.id}</small>
+                </span>
+                <span className="mutedAssetText" role="cell">
+                  {runtimeById.get(agent.runtimeId)?.name ?? agent.runtimeId}
+                </span>
+                <span className="channelList" role="cell">
+                {agent.channelBindings.map((binding, index) => (
+                  <Badge key={`${agent.id}-${binding.kind}-${binding.externalId ?? index}`}>
+                    {binding.label || channelKindLabels[binding.kind]}
+                  </Badge>
+                ))}
+                </span>
+                <span role="cell">
+                  <StatusBadge label={managedAgentStatusLabels[displayStatus]} status={displayStatus} />
+                </span>
+                <span className="mutedAssetText" role="cell">
+                  {formatRuntimeTimestamp(runtimeAgentLastSeenAt(agent, runtimeById.get(agent.runtimeId), snapshot))}
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
     </section>

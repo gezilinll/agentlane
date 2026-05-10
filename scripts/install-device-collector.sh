@@ -13,6 +13,7 @@ Options:
   --device-id <id>        Device id to register
   --device-name <name>    Human-readable device name
   --device-token <token>  Optional future auth token; stored but not enforced in v1
+  --slock-server-url <url> Optional Slock server URL for task-board discovery
   --interval-ms <ms>      Collector interval for service mode (default: 60000)
   --once                  Run a one-time collection after install
   --no-service            Do not install launchd/systemd service
@@ -28,6 +29,7 @@ WS_URL=""
 DEVICE_ID=""
 DEVICE_NAME=""
 DEVICE_TOKEN=""
+SLOCK_SERVER_URL=""
 INTERVAL_MS="60000"
 ONCE="false"
 NO_SERVICE="false"
@@ -61,6 +63,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --device-token)
       DEVICE_TOKEN="$2"
+      shift 2
+      ;;
+    --slock-server-url)
+      SLOCK_SERVER_URL="$2"
       shift 2
       ;;
     --interval-ms)
@@ -142,10 +148,10 @@ fi
 mkdir -p "$INSTALL_DIR"
 install -m 0755 "$SOURCE_COLLECTOR" "$INSTALL_DIR/agentlane-device-collector.mjs"
 
-"$NODE_BIN" - "$INSTALL_DIR/config.json" "$INSTALL_DIR" "$SERVER_URL" "$WS_URL" "$DEVICE_ID" "$DEVICE_NAME" "$DEVICE_TOKEN" "$INTERVAL_MS" <<'NODE'
+"$NODE_BIN" - "$INSTALL_DIR/config.json" "$INSTALL_DIR" "$SERVER_URL" "$WS_URL" "$DEVICE_ID" "$DEVICE_NAME" "$DEVICE_TOKEN" "$SLOCK_SERVER_URL" "$INTERVAL_MS" <<'NODE'
 const fs = require("node:fs");
 
-const [configPath, installDir, serverUrl, wsUrl, deviceId, deviceName, deviceToken, intervalMs] = process.argv.slice(2);
+const [configPath, installDir, serverUrl, wsUrl, deviceId, deviceName, deviceToken, slockServerUrl, intervalMs] = process.argv.slice(2);
 const config = {
   installDir,
   serverUrl,
@@ -153,6 +159,7 @@ const config = {
   deviceId,
   deviceName,
   deviceToken,
+  slockServerUrl,
   intervalMs: Number(intervalMs),
   createdAt: new Date().toISOString(),
 };

@@ -288,9 +288,6 @@ function deriveSlockStage(input: RuntimeWorkStageDerivationInput): RuntimeWorkSt
   if (input.executionStatus === "queued" || input.executionStatus === "running") {
     return stage("processing", "direct", "Slock execution evidence indicates queued or running activity.");
   }
-  if (input.workItemStatus === "in_progress") {
-    return stage("processing", "partial", "Slock task-board in_progress is a business phase, not execution proof.");
-  }
   return deriveGenericStage(input, "Slock task-board status");
 }
 

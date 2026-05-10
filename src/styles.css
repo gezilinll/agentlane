@@ -576,7 +576,7 @@ button.tableRow:hover,
 }
 
 .runtimeTableRow {
-  grid-template-columns: minmax(240px, 1.4fr) 120px minmax(150px, 0.8fr) 110px minmax(180px, 1fr);
+  grid-template-columns: minmax(220px, 1.4fr) 110px minmax(130px, 0.8fr) 90px 100px minmax(150px, 0.9fr);
 }
 
 .agentTableRow {

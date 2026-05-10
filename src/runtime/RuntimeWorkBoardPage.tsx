@@ -125,7 +125,7 @@ export function RuntimeWorkBoardPage() {
     <section className="workspace">
       <header className="pageHeader">
         <div>
-          <p className="eyebrow">Runtime / Work State</p>
+          <p className="eyebrow">Agent / Work Board</p>
           <h1>工作看板</h1>
           <p className="pageSubtitle">
             统一查看 Agent 承接的工作项、发起人、Channel、会话/群组、消息摘要和当前阶段。当前数据源：
@@ -171,7 +171,7 @@ export function RuntimeWorkBoardPage() {
         </label>
 
         <label className="toolbarField">
-          <span className="controlLabel">Runtime</span>
+          <span className="controlLabel">来源 Runtime</span>
           <select value={source} onChange={(event) => setSource(event.target.value as RuntimeSource | "all")}>
             {sourceOptions.map((option) => (
               <option key={option} value={option}>
@@ -290,7 +290,7 @@ function WorkItemDetail({
       <DetailList
         title="任务上下文"
         items={[
-          `Runtime: ${item.runtimeLabel}`,
+          `来源 Runtime: ${item.runtimeLabel}`,
           `Channel: ${item.channelKindLabel ?? "不支持采集"}`,
           `发起人: ${item.creatorLabel}`,
           `承接 Agent: ${item.assigneeLabel}`,
@@ -302,7 +302,7 @@ function WorkItemDetail({
         items={[
           `最近同步: ${formatRuntimeTimestamp(item.lastSeenAt)}`,
           `工作项状态: ${workItemStatusLabel(item.workItemStatus)}`,
-          `执行状态: ${executionStatusLabel(item.executionStatus)}`,
+          ...(item.executionStatus ? [`执行状态: ${executionStatusLabel(item.executionStatus)}`] : []),
         ]}
       />
       <DetailBlock title="消息摘要">{item.requestExcerpt}</DetailBlock>
@@ -376,5 +376,5 @@ function executionStatusLabel(status: RuntimeWorkBoardItem["executionStatus"]): 
   if (status === "failed") return "失败";
   if (status === "cancelled") return "已取消";
   if (status === "unknown") return "未知";
-  return "不支持采集";
+  return "未知";
 }

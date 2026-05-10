@@ -10,6 +10,14 @@ import type {
   RuntimeInventorySnapshot,
   RuntimeKind,
 } from "./runtime-normalize";
+import {
+  deriveRuntimeWorkStage,
+  type RuntimeExecution,
+  type RuntimeObservationCapability,
+  type RuntimeWorkParticipant,
+  type RuntimeWorkItem,
+  type RuntimeWorkStateSnapshot,
+} from "./runtime-work-state";
 
 /** Runtime kind labels used by the Runtime Fleet page. */
 export const runtimeKindLabels: Record<RuntimeKind, string> = {
@@ -34,6 +42,17 @@ export const channelKindLabels: Record<ChannelKind, string> = {
 export const runtimeHealthLabels: Record<RuntimeHealthStatus, string> = {
   online: "在线",
   degraded: "降级",
+  offline: "离线",
+  unknown: "未知",
+};
+
+/** Runtime operating state derived by Agentlane from linked Agent work evidence. */
+export type RuntimeOperatingStatus = "working" | "idle" | "offline" | "unknown";
+
+/** Runtime operating labels for Runtime Fleet. */
+export const runtimeOperatingStatusLabels: Record<RuntimeOperatingStatus, string> = {
+  working: "工作中",
+  idle: "空闲",
   offline: "离线",
   unknown: "未知",
 };
@@ -77,6 +96,65 @@ export function runtimeAgentLastSeenAt(
   snapshot?: RuntimeInventorySnapshot,
 ): string | undefined {
   return agent.lastSeenAt ?? runtime?.lastSeenAt ?? snapshot?.observedAt;
+}
+
+/** Derive a runtime's coarse operating state without exposing source-platform raw states. */
+export function deriveRuntimeOperatingStatus(
+  snapshot: RuntimeInventorySnapshot,
+  runtime: AgentlaneRuntime,
+  workState?: RuntimeWorkStateSnapshot | null,
+): RuntimeOperatingStatus {
+  if (snapshot.device.status === "offline" || runtime.status === "offline") return "offline";
+
+  const runtimeAgentIds = new Set(
+    snapshot.agents.filter((agent) => agent.runtimeId === runtime.id).map((agent) => agent.id),
+  );
+
+  const linkedWorkItems = (workState?.workItems ?? []).filter((workItem) =>
+    isWorkItemLinkedToRuntime(workItem, runtime, runtimeAgentIds),
+  );
+  if (linkedWorkItems.some((workItem) => isProcessingWorkItem(workItem, workState))) return "working";
+
+  const linkedExecutions = selectLatestExecutions(workState?.executions ?? []).filter((execution) =>
+    isExecutionLinkedToRuntime(execution, runtime, runtimeAgentIds),
+  );
+  if (linkedExecutions.some((execution) => execution.status === "queued" || execution.status === "running")) {
+    return "working";
+  }
+
+  if (linkedWorkItems.length > 0 || linkedExecutions.length > 0) return "idle";
+
+  if (workState && canObserveRuntimeWork(workState.capabilities, runtime)) return "idle";
+
+  return "unknown";
+}
+
+/** Derive an Agent's display state from Agentlane work evidence before falling back to raw inventory state. */
+export function deriveManagedAgentDisplayStatus(
+  snapshot: RuntimeInventorySnapshot,
+  agent: ManagedRuntimeAgent,
+  workState?: RuntimeWorkStateSnapshot | null,
+): ManagedAgentStatus {
+  if (agent.status === "inactive" || agent.status === "degraded") return agent.status;
+  if (!workState) return agent.status;
+
+  const runtime = snapshot.runtimes.find((candidate) => candidate.id === agent.runtimeId);
+  if (runtime?.status === "offline" || snapshot.device.status === "offline") return agent.status;
+
+  const linkedWorkItems = workState.workItems.filter((workItem) => isWorkItemLinkedToAgent(workItem, agent));
+  if (linkedWorkItems.some((workItem) => isProcessingWorkItem(workItem, workState))) return "active";
+
+  const linkedExecutions = selectLatestExecutions(workState.executions).filter(
+    (execution) => execution.agentId === agent.id,
+  );
+  if (linkedExecutions.some((execution) => execution.status === "queued" || execution.status === "running")) {
+    return "active";
+  }
+
+  if (linkedWorkItems.length > 0 || linkedExecutions.length > 0) return "idle";
+  if (canObserveAgentWork(workState.capabilities, agent)) return "idle";
+
+  return agent.status;
 }
 
 /** Filter state supported by the first Runtime Fleet page. */
@@ -133,7 +211,7 @@ interface RuntimeFleetDetailBase {
   /** Detail subtitle. */
   subtitle: string;
   /** Normalized status used for badge styling and automation. */
-  status: RuntimeHealthStatus | ManagedAgentStatus;
+  status: RuntimeHealthStatus | ManagedAgentStatus | RuntimeOperatingStatus;
   /** Human-readable status label. */
   statusLabel: string;
   /** Sectioned details for display. */
@@ -159,12 +237,15 @@ export type RuntimeFleetDetail =
     });
 
 /** Summarize one device snapshot for Runtime Fleet cards. */
-export function summarizeRuntimeFleet(snapshot: RuntimeInventorySnapshot): RuntimeFleetSummary {
+export function summarizeRuntimeFleet(
+  snapshot: RuntimeInventorySnapshot,
+  workState?: RuntimeWorkStateSnapshot | null,
+): RuntimeFleetSummary {
   const runtimeIssues = snapshot.runtimes.filter((runtime) =>
     ["degraded", "offline", "unknown"].includes(runtime.status),
   ).length;
   const agentIssues = snapshot.agents.filter((agent) =>
-    ["inactive", "degraded", "unknown"].includes(agent.status),
+    ["inactive", "degraded", "unknown"].includes(deriveManagedAgentDisplayStatus(snapshot, agent, workState)),
   ).length;
 
   return {
@@ -234,6 +315,7 @@ export function getRuntimeFleetDetail(
   snapshot: RuntimeInventorySnapshot,
   kind: RuntimeFleetDetail["kind"],
   id: string,
+  workState?: RuntimeWorkStateSnapshot | null,
 ): RuntimeFleetDetail | null {
   if (kind === "device" && snapshot.device.id === id) {
     return {
@@ -273,15 +355,16 @@ export function getRuntimeFleetDetail(
     const runtime = snapshot.runtimes.find((candidate) => candidate.id === id);
     if (!runtime) return null;
     const agents = snapshot.agents.filter((agent) => agent.runtimeId === runtime.id);
+    const operatingStatus = deriveRuntimeOperatingStatus(snapshot, runtime, workState);
 
     return {
       kind: "runtime",
       id: runtime.id,
       title: runtime.name,
-      subtitle: `${runtimeKindLabels[runtime.kind]} · ${runtimeHealthLabels[runtime.status]}`,
+      subtitle: `${runtimeKindLabels[runtime.kind]} · ${runtimeOperatingStatusLabels[operatingStatus]}`,
       runtimeKindLabel: runtimeKindLabels[runtime.kind],
-      status: runtime.status,
-      statusLabel: runtimeHealthLabels[runtime.status],
+      status: operatingStatus,
+      statusLabel: runtimeOperatingStatusLabels[operatingStatus],
       sections: [
         {
           title: "身份信息",
@@ -289,16 +372,14 @@ export function getRuntimeFleetDetail(
             `Runtime ID: ${runtime.id}`,
             `Runtime: ${runtimeKindLabels[runtime.kind]}`,
             `Version: ${runtime.version ?? "unknown"}`,
+            `可用性: ${runtimeHealthLabels[runtime.status]}`,
+            `运行状态: ${runtimeOperatingStatusLabels[operatingStatus]}`,
             `最近同步: ${formatRuntimeTimestamp(runtime.lastSeenAt)}`,
           ],
         },
         {
           title: "归属关系",
           items: [`所属设备: ${snapshot.device.name}`, `Agent 数量: ${agents.length}`],
-        },
-        {
-          title: "运行统计",
-          items: runtimeStatisticsItems(runtime.health),
         },
       ],
     };
@@ -308,22 +389,23 @@ export function getRuntimeFleetDetail(
     const agent = snapshot.agents.find((candidate) => candidate.id === id);
     if (!agent) return null;
     const runtime = snapshot.runtimes.find((candidate) => candidate.id === agent.runtimeId);
+    const displayStatus = deriveManagedAgentDisplayStatus(snapshot, agent, workState);
 
     return {
       kind: "agent",
       id: agent.id,
       title: agent.name,
-      subtitle: `${sourceLabel(agent.origin)} · ${managedAgentStatusLabels[agent.status]}`,
+      subtitle: `${sourceLabel(agent.origin)} · ${managedAgentStatusLabels[displayStatus]}`,
       runtimeName: runtime?.name ?? agent.runtimeId,
-      status: agent.status,
-      statusLabel: managedAgentStatusLabels[agent.status],
+      status: displayStatus,
+      statusLabel: managedAgentStatusLabels[displayStatus],
       sections: [
         {
           title: "身份信息",
           items: [
             `Agent ID: ${agent.id}`,
             `Runtime: ${sourceLabel(agent.origin)}`,
-            `状态: ${managedAgentStatusLabels[agent.status]}`,
+            `状态: ${managedAgentStatusLabels[displayStatus]}`,
             `最近同步: ${formatRuntimeTimestamp(runtimeAgentLastSeenAt(agent, runtime, snapshot))}`,
           ],
         },
@@ -337,7 +419,7 @@ export function getRuntimeFleetDetail(
         },
         {
           title: "运行统计",
-          items: runtimeStatisticsItems(agent.load),
+          items: runtimeStatisticsItems(deriveAgentRuntimeStats(agent, workState)),
         },
       ],
     };
@@ -348,6 +430,160 @@ export function getRuntimeFleetDetail(
 
 function normalizeSearch(value: string): string {
   return value.trim().toLowerCase();
+}
+
+function isWorkItemLinkedToRuntime(
+  workItem: RuntimeWorkItem,
+  runtime: AgentlaneRuntime,
+  runtimeAgentIds: Set<string>,
+): boolean {
+  return workItem.runtimeId === runtime.id || Boolean(workItem.agentId && runtimeAgentIds.has(workItem.agentId));
+}
+
+function isExecutionLinkedToRuntime(
+  execution: RuntimeExecution,
+  runtime: AgentlaneRuntime,
+  runtimeAgentIds: Set<string>,
+): boolean {
+  return execution.runtimeId === runtime.id || Boolean(execution.agentId && runtimeAgentIds.has(execution.agentId));
+}
+
+function isConversationLinkedToAgent(
+  conversation: NonNullable<RuntimeWorkStateSnapshot["conversations"]>[number],
+  agent: ManagedRuntimeAgent,
+  linkedWorkItemIds: Set<string>,
+): boolean {
+  return conversation.agentId === agent.id || Boolean(conversation.workItemId && linkedWorkItemIds.has(conversation.workItemId));
+}
+
+function isWorkItemLinkedToAgent(workItem: RuntimeWorkItem, agent: ManagedRuntimeAgent): boolean {
+  if (workItem.source === "slock" && workItem.assignee?.label) {
+    return participantMatchesAgent(workItem.assignee, agent);
+  }
+  if (participantMatchesAgent(workItem.assignee, agent)) return true;
+  return workItem.agentId === agent.id;
+}
+
+function participantMatchesAgent(
+  participant: RuntimeWorkParticipant | undefined,
+  agent: ManagedRuntimeAgent,
+): boolean {
+  if (!participant) return false;
+  if (participant.objectId === agent.id) return true;
+  return normalizeParticipantLabel(participant.label) === normalizeParticipantLabel(agent.name);
+}
+
+function normalizeParticipantLabel(value: string | undefined): string {
+  return (value ?? "").trim().replace(/^@+/, "").toLowerCase();
+}
+
+function deriveAgentRuntimeStats(
+  agent: ManagedRuntimeAgent,
+  workState?: RuntimeWorkStateSnapshot | null,
+): RuntimeActivityStats & { lastError?: string } | undefined {
+  if (!workState) return agent.load;
+
+  const linkedWorkItems = workState.workItems.filter((workItem) => isWorkItemLinkedToAgent(workItem, agent));
+  const linkedWorkItemIds = new Set(linkedWorkItems.map((workItem) => workItem.id));
+  const linkedExecutions = selectLatestExecutions(workState.executions).filter((execution) =>
+    execution.agentId === agent.id || Boolean(execution.workItemId && linkedWorkItemIds.has(execution.workItemId)),
+  );
+  const linkedConversations = workState.conversations.filter((conversation) =>
+    isConversationLinkedToAgent(conversation, agent, linkedWorkItemIds),
+  );
+  const hasObservableAgentWork = linkedWorkItems.length > 0 ||
+    linkedExecutions.length > 0 ||
+    linkedConversations.length > 0 ||
+    canObserveAgentWork(workState.capabilities, agent);
+
+  if (!hasObservableAgentWork) return agent.load;
+
+  const activeWorkItems = linkedWorkItems.filter((workItem) =>
+    deriveRuntimeWorkStage({
+      source: workItem.source,
+      workItemStatus: workItem.status,
+      executionStatus: linkedExecutions.find((execution) => execution.workItemId === workItem.id)?.status,
+    }).stage === "processing",
+  ).length;
+  const queuedWorkItems = linkedWorkItems.filter((workItem) =>
+    deriveRuntimeWorkStage({
+      source: workItem.source,
+      workItemStatus: workItem.status,
+      executionStatus: linkedExecutions.find((execution) => execution.workItemId === workItem.id)?.status,
+    }).stage === "pending",
+  ).length;
+  const standaloneRunningExecutions = linkedExecutions.filter((execution) =>
+    !execution.workItemId && (execution.status === "queued" || execution.status === "running"),
+  );
+
+  return {
+    ...agent.load,
+    activeTasks: activeWorkItems + standaloneRunningExecutions.filter((execution) => execution.status === "running").length,
+    queuedTasks: queuedWorkItems + standaloneRunningExecutions.filter((execution) => execution.status === "queued").length,
+    activeSessions: linkedConversations.filter((conversation) => conversation.status === "active" || conversation.status === "open").length,
+    historicalSessions: linkedConversations.length,
+  };
+}
+
+function isProcessingWorkItem(workItem: RuntimeWorkItem, workState?: RuntimeWorkStateSnapshot | null): boolean {
+  const execution = selectLatestExecutions(workState?.executions ?? []).find(
+    (candidate) => candidate.workItemId === workItem.id,
+  );
+  return deriveRuntimeWorkStage({
+    source: workItem.source,
+    workItemStatus: workItem.status,
+    executionStatus: execution?.status,
+  }).stage === "processing";
+}
+
+function selectLatestExecutions(executions: RuntimeExecution[]): RuntimeExecution[] {
+  const latestByWork = new Map<string, RuntimeExecution>();
+  for (const execution of executions) {
+    const key = execution.workItemId ?? execution.id;
+    const current = latestByWork.get(key);
+    if (!current || isExecutionMoreRecent(execution, current)) latestByWork.set(key, execution);
+  }
+  return Array.from(latestByWork.values());
+}
+
+function isExecutionMoreRecent(candidate: RuntimeExecution, current: RuntimeExecution): boolean {
+  const candidateTime = executionObservedTime(candidate);
+  const currentTime = executionObservedTime(current);
+  if (Number.isFinite(candidateTime) && Number.isFinite(currentTime) && candidateTime !== currentTime) {
+    return candidateTime > currentTime;
+  }
+  if (Number.isFinite(candidateTime) && !Number.isFinite(currentTime)) return true;
+  return false;
+}
+
+function executionObservedTime(execution: RuntimeExecution): number {
+  return Date.parse(execution.lastSeenAt ?? execution.endedAt ?? execution.startedAt ?? execution.queuedAt ?? "");
+}
+
+function canObserveRuntimeWork(
+  capabilities: RuntimeObservationCapability[],
+  runtime: AgentlaneRuntime,
+): boolean {
+  const runtimeSources = new Set([runtime.kind, ...runtime.sourceRefs.map((ref) => ref.source)]);
+  return capabilities.some((capability) =>
+    runtimeSources.has(capability.source) &&
+    [capability.workItems.support, capability.executions.support].some((support) =>
+      support === "supported" || support === "partial",
+    ),
+  );
+}
+
+function canObserveAgentWork(
+  capabilities: RuntimeObservationCapability[],
+  agent: ManagedRuntimeAgent,
+): boolean {
+  const agentSources = new Set([agent.origin, ...agent.sourceRefs.map((ref) => ref.source)]);
+  return capabilities.some((capability) =>
+    agentSources.has(capability.source) &&
+    [capability.workItems.support, capability.executions.support].some((support) =>
+      support === "supported" || support === "partial",
+    ),
+  );
 }
 
 function includesQuery(values: Array<string | undefined>, query: string): boolean {

@@ -148,6 +148,107 @@ describe("runtime work state adapters", () => {
     });
   });
 
+  it("upgrades linked OpenClaw DingTalk message context when trajectory evidence proves a direct chat", () => {
+    const result = mapOpenClawWorkState({
+      ...openClawWorkStateFixture,
+      dingtalkTargets: [],
+      dingtalkMessages: [{
+        msgId: "msgTcetRGuqtUW2ISdkEux5zg==",
+        conversationId: "cidrYPQCCFAqjoPOplBhOADv8iE20fEdIk0LAOIWK8thfg=",
+        direction: "inbound",
+        text: "怎么解决",
+        senderId: "0403085742945013",
+        senderName: "林奈",
+        createdAt: "2026-05-09T11:20:00.000Z",
+        updatedAt: "2026-05-09T11:20:01.000Z",
+      }],
+      tasks: [],
+      trajectoryRuns: [{
+        runId: "trajectory-direct-linked-run",
+        sessionKey: "agent:main:dingtalk:direct:0403085742945013",
+        prompt: "怎么解决",
+        messageId: "msgTcetRGuqtUW2ISdkEux5zg==",
+        senderId: "0403085742945013",
+        senderName: "林奈",
+        finalStatus: "success",
+        endedStatus: "success",
+        didSendViaMessagingTool: true,
+        startedAt: "2026-05-09T11:20:02.000Z",
+        endedAt: "2026-05-09T11:21:00.000Z",
+      }],
+    });
+
+    const workItem = result.workItems.find((item) => item.externalId === "msgTcetRGuqtUW2ISdkEux5zg==");
+
+    expect(workItem).toMatchObject({
+      source: "openclaw",
+      title: "怎么解决",
+      status: "done",
+      creator: { kind: "human", label: "林奈", externalId: "0403085742945013" },
+      channel: {
+        kind: "dingtalk",
+        label: "DingTalk 私聊 040308...5013",
+        externalId: "0403085742945013",
+      },
+      conversationId: "fixture-device:openclaw:gateway:conversation:agent-main-dingtalk-direct-0403085742945013",
+    });
+    expect(result.executions).toContainEqual(expect.objectContaining({
+      source: "openclaw",
+      externalId: "trajectory-direct-linked-run",
+      status: "succeeded",
+      workItemId: workItem?.id,
+      conversationId: workItem?.conversationId,
+    }));
+  });
+
+  it("links direct OpenClaw trajectories to message context by sender and prompt when message id is missing", () => {
+    const result = mapOpenClawWorkState({
+      ...openClawWorkStateFixture,
+      dingtalkTargets: [],
+      dingtalkMessages: [{
+        msgId: "msgDirectFallback",
+        conversationId: "cidDirectFallback",
+        direction: "inbound",
+        text: "为什么工具层没接住调用，怎么解决",
+        senderId: "0403085742945013",
+        senderName: "林奈",
+        createdAt: "2026-05-09T05:58:00.000Z",
+        updatedAt: "2026-05-09T05:58:01.000Z",
+      }],
+      tasks: [],
+      trajectoryRuns: [{
+        runId: "trajectory-direct-no-message-id",
+        sessionKey: "agent:main:dingtalk:direct:0403085742945013",
+        prompt: "为什么工具层没接住调用，怎么解决",
+        senderId: "0403085742945013",
+        senderName: "林奈",
+        finalStatus: "success",
+        endedStatus: "success",
+        didSendViaMessagingTool: true,
+        startedAt: "2026-05-09T05:58:10.000Z",
+        endedAt: "2026-05-09T05:59:00.000Z",
+      }],
+    });
+
+    expect(result.workItems).toHaveLength(1);
+    expect(result.workItems[0]).toMatchObject({
+      externalId: "msgDirectFallback",
+      status: "done",
+      creator: { kind: "human", label: "林奈", externalId: "0403085742945013" },
+      channel: {
+        kind: "dingtalk",
+        label: "DingTalk 私聊 040308...5013",
+        externalId: "0403085742945013",
+      },
+      conversationId: "fixture-device:openclaw:gateway:conversation:agent-main-dingtalk-direct-0403085742945013",
+    });
+    expect(result.executions).toContainEqual(expect.objectContaining({
+      externalId: "trajectory-direct-no-message-id",
+      workItemId: result.workItems[0]?.id,
+      conversationId: result.workItems[0]?.conversationId,
+    }));
+  });
+
   it("maps OpenClaw DingTalk trajectory runs into work items when durable task data is absent", () => {
     const result = mapOpenClawWorkState({
       ...openClawWorkStateFixture,
@@ -228,6 +329,117 @@ describe("runtime work state adapters", () => {
     }));
   });
 
+  it("links OpenClaw trajectory runs back to DingTalk message context when message id is available", () => {
+    const result = mapOpenClawWorkState({
+      ...openClawWorkStateFixture,
+      dingtalkTargets: [{
+        conversationId: "cidOQk/D4niJC8l2j8FlIA5Wg==",
+        kind: "group",
+        label: "insMind工具数据日报和告警",
+        lastSeenAt: "2026-05-09T08:00:00.000Z",
+      }],
+      dingtalkMessages: [{
+        msgId: "msgIv6wEOv4t9ONgYa21mfm1Q==",
+        sessionKey: "agent:main:dingtalk:group:cidOQk/D4niJC8l2j8FlIA5Wg==",
+        conversationId: "cidOQk/D4niJC8l2j8FlIA5Wg==",
+        direction: "inbound",
+        text: "你个败家娘们，浪费token啊，退下吧",
+        senderId: "023160384927511676",
+        senderName: "tiger",
+        createdAt: "2026-05-09T09:10:00.000Z",
+        updatedAt: "2026-05-09T09:10:01.000Z",
+      }],
+      tasks: [],
+      trajectoryRuns: [{
+        runId: "trajectory-run-tiger",
+        sessionKey: "agent:main:dingtalk:group:cidoqk/d4nijc8l2j8flia5wg==",
+        prompt: "你个败家娘们，浪费token啊，退下吧",
+        finalStatus: "success",
+        endedStatus: "success",
+        didSendViaMessagingTool: true,
+        messageId: "msgIv6wEOv4t9ONgYa21mfm1Q==",
+        senderId: "023160384927511676",
+        senderName: "tiger",
+        startedAt: "2026-05-09T09:10:02.000Z",
+        endedAt: "2026-05-09T09:11:00.000Z",
+      }],
+    });
+
+    const workItems = result.workItems.filter((item) => item.title === "你个败家娘们");
+
+    expect(workItems).toHaveLength(1);
+    expect(workItems[0]).toMatchObject({
+      externalId: "msgIv6wEOv4t9ONgYa21mfm1Q==",
+      status: "done",
+      creator: { kind: "human", label: "tiger", externalId: "023160384927511676" },
+      channel: {
+        kind: "dingtalk",
+        label: "insMind工具数据日报和告警",
+        externalId: "cidOQk/D4niJC8l2j8FlIA5Wg==",
+      },
+    });
+    expect(result.executions).toContainEqual(expect.objectContaining({
+      externalId: "trajectory-run-tiger",
+      status: "succeeded",
+      workItemId: workItems[0]?.id,
+      conversationId: workItems[0]?.conversationId,
+    }));
+  });
+
+  it("links OpenClaw trajectory runs back to DingTalk messages by prompt and session when message id is missing", () => {
+    const result = mapOpenClawWorkState({
+      ...openClawWorkStateFixture,
+      dingtalkTargets: [{
+        conversationId: "cidOQk/D4niJC8l2j8FlIA5Wg==",
+        kind: "group",
+        label: "insMind工具数据日报和告警",
+        lastSeenAt: "2026-05-09T08:00:00.000Z",
+      }],
+      dingtalkMessages: [{
+        msgId: "msgIv6wEOv4t9ONgYa21mfm1Q==",
+        sessionKey: "agent:main:dingtalk:group:cidOQk/D4niJC8l2j8FlIA5Wg==",
+        conversationId: "cidOQk/D4niJC8l2j8FlIA5Wg==",
+        direction: "inbound",
+        text: "你个败家娘们，浪费token啊，退下吧",
+        senderId: "023160384927511676",
+        senderName: "tiger",
+        createdAt: "2026-05-09T09:10:00.000Z",
+        updatedAt: "2026-05-09T09:10:01.000Z",
+      }],
+      tasks: [],
+      trajectoryRuns: [{
+        runId: "trajectory-run-without-message-id",
+        sessionKey: "agent:main:dingtalk:group:cidoqk/d4nijc8l2j8flia5wg==",
+        prompt: "你个败家娘们，浪费token啊，退下吧",
+        finalStatus: "success",
+        endedStatus: "success",
+        didSendViaMessagingTool: true,
+        startedAt: "2026-05-09T09:10:02.000Z",
+        endedAt: "2026-05-09T09:11:00.000Z",
+      }],
+    });
+
+    const workItems = result.workItems.filter((item) => item.title === "你个败家娘们");
+
+    expect(workItems).toHaveLength(1);
+    expect(workItems[0]).toMatchObject({
+      externalId: "msgIv6wEOv4t9ONgYa21mfm1Q==",
+      status: "done",
+      creator: { kind: "human", label: "tiger", externalId: "023160384927511676" },
+      channel: {
+        kind: "dingtalk",
+        label: "insMind工具数据日报和告警",
+        externalId: "cidOQk/D4niJC8l2j8FlIA5Wg==",
+      },
+    });
+    expect(result.executions).toContainEqual(expect.objectContaining({
+      externalId: "trajectory-run-without-message-id",
+      status: "succeeded",
+      workItemId: workItems[0]?.id,
+      conversationId: workItems[0]?.conversationId,
+    }));
+  });
+
   it("maps Multica issues and runs into work items and executions", () => {
     const result = mapMulticaWorkState(multicaWorkStateFixture);
 
@@ -242,10 +454,25 @@ describe("runtime work state adapters", () => {
   });
 
   it("maps Slock task board and activity evidence without treating server active as execution running", () => {
-    const result = mapSlockWorkState(slockWorkStateFixture);
+    const boardOnlyResult = mapSlockWorkState(slockWorkStateFixture);
+    const result = mapSlockWorkState({
+      ...slockWorkStateFixture,
+      activities: [{
+        id: "activity-1",
+        activity: "working",
+        taskId: "fixture-slock-task-1",
+        threadId: "fixture-thread-1",
+        updatedAt: "2026-05-09T07:56:00.000Z",
+      }],
+    });
 
     expect(result.workItems.map((item) => item.status)).toContain("in_review");
     expect(result.workItems.map((item) => item.status)).toContain("in_progress");
+    expect(boardOnlyResult.executions).toEqual([]);
+    expect(boardOnlyResult.capabilities[0]).toMatchObject({
+      source: "slock",
+      executions: { support: "unknown" },
+    });
     expect(result.executions).toContainEqual(expect.objectContaining({
       source: "slock",
       status: "running",
@@ -255,6 +482,47 @@ describe("runtime work state adapters", () => {
     expect(result.capabilities[0]).toMatchObject({
       source: "slock",
       executions: { support: "partial" },
+    });
+  });
+
+  it("maps Slock official board status variants to Agentlane work item states", () => {
+    const result = mapSlockWorkState({
+      ...slockWorkStateFixture,
+      tasks: [
+        {
+          id: "fixture-slock-upper-task",
+          taskNumber: 4,
+          title: "Uppercase in progress example",
+          status: "IN PROGRESS",
+          createdByName: "@fixture-human",
+          claimedByName: "@example-agent",
+          messageId: "fixture-message-4",
+          threadId: "fixture-thread-4",
+        },
+        {
+          id: "fixture-slock-closed-task",
+          taskNumber: 5,
+          title: "Won't do example",
+          status: "closed",
+          createdByName: "@fixture-human",
+          claimedByName: "@example-agent",
+          messageId: "fixture-message-5",
+          threadId: "fixture-thread-5",
+        },
+      ],
+      activities: [],
+    });
+
+    expect(result.workItems[0]).toMatchObject({
+      source: "slock",
+      status: "in_progress",
+    });
+    expect(result.workItems[1]).toMatchObject({
+      source: "slock",
+      status: "cancelled",
+    });
+    expect(result.conversations[1]).toMatchObject({
+      status: "closed",
     });
   });
 });
