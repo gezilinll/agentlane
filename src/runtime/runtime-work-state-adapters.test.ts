@@ -104,6 +104,50 @@ describe("runtime work state adapters", () => {
     expect(result.workItems.map((item) => item.externalId)).not.toContain("system-recovery-1");
   });
 
+  it("maps OpenClaw DingTalk direct session ids to readable channel labels", () => {
+    const result = mapOpenClawWorkState({
+      ...openClawWorkStateFixture,
+      dingtalkTargets: [{
+        conversationId: "0403085742945013",
+        kind: "direct",
+        label: "0403085742945013",
+        lastSeenAt: "2026-05-09T07:58:00.000Z",
+      }],
+      dingtalkMessages: [],
+      tasks: [
+        {
+          taskId: "direct-task-1",
+          runId: "direct-run-1",
+          task: "帮我检查私聊里的 Agent 回复",
+          status: "succeeded",
+          requesterSessionKey: "agent:main:dingtalk:direct:0403085742945013",
+          sourceId: "direct-source-1",
+          createdAt: "2026-05-09T07:50:00.000Z",
+          startedAt: "2026-05-09T07:51:00.000Z",
+          endedAt: "2026-05-09T07:55:00.000Z",
+        },
+      ],
+      trajectoryRuns: [],
+    });
+
+    expect(result.workItems[0]).toMatchObject({
+      source: "openclaw",
+      channel: {
+        kind: "dingtalk",
+        label: "DingTalk 私聊 040308...5013",
+        externalId: "0403085742945013",
+      },
+    });
+    const conversation = result.conversations.find((item) => item.externalId === "agent:main:dingtalk:direct:0403085742945013");
+    expect(conversation).toMatchObject({
+      title: "DingTalk 私聊 040308...5013",
+      channel: {
+        kind: "dingtalk",
+        label: "DingTalk 私聊 040308...5013",
+      },
+    });
+  });
+
   it("maps OpenClaw DingTalk trajectory runs into work items when durable task data is absent", () => {
     const result = mapOpenClawWorkState({
       ...openClawWorkStateFixture,

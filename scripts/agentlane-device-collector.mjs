@@ -1068,12 +1068,7 @@ function openClawChannelFromOrigin(origin, targetsByConversationId) {
   if (!channel) return undefined;
   if (channel === "dingtalk") {
     const conversationId = normalizeOpenClawOriginConversationId(origin);
-    const target = conversationId ? targetsByConversationId.get(conversationId) || targetsByConversationId.get(String(conversationId).toLowerCase()) : undefined;
-    return {
-      kind: "dingtalk",
-      label: target?.label || "DingTalk",
-      ...(conversationId ? { externalId: conversationId } : {}),
-    };
+    return openClawDingTalkChannel(conversationId, targetsByConversationId, "group");
   }
   if (channel === "webchat") return { kind: "other", label: "OpenClaw Webchat" };
   if (channel === "cron") return { kind: "other", label: "OpenClaw Cron" };
@@ -1081,19 +1076,39 @@ function openClawChannelFromOrigin(origin, targetsByConversationId) {
 }
 
 function parseOpenClawDingTalkSession(sessionKey) {
-  const match = /^agent:[^:]+:dingtalk:(?:group|direct):(.+)$/.exec(String(sessionKey || ""));
-  return match?.[1] ? { conversationId: match[1] } : null;
+  const match = /^agent:[^:]+:dingtalk:(group|direct):(.+)$/.exec(String(sessionKey || ""));
+  return match?.[2] ? { kind: match[1], conversationId: match[2] } : null;
 }
 
 function openClawChannelFromDingTalkSession(sessionKey, targetsByConversationId) {
   const parsed = parseOpenClawDingTalkSession(sessionKey);
   if (!parsed) return undefined;
-  const target = targetsByConversationId.get(parsed.conversationId) || targetsByConversationId.get(parsed.conversationId.toLowerCase());
+  return openClawDingTalkChannel(parsed.conversationId, targetsByConversationId, parsed.kind);
+}
+
+function openClawDingTalkChannel(conversationId, targetsByConversationId, fallbackKind) {
+  const target = conversationId
+    ? targetsByConversationId.get(conversationId) || targetsByConversationId.get(String(conversationId).toLowerCase())
+    : undefined;
   return {
     kind: "dingtalk",
-    label: target?.label || "DingTalk",
-    externalId: parsed.conversationId,
+    label: formatOpenClawDingTalkLabel(conversationId, target, fallbackKind),
+    ...(conversationId ? { externalId: conversationId } : {}),
   };
+}
+
+function formatOpenClawDingTalkLabel(conversationId, target, fallbackKind) {
+  const rawLabel = typeof target?.label === "string" ? target.label.trim() : "";
+  if (rawLabel && rawLabel.toLowerCase() !== String(conversationId || "").toLowerCase()) return rawLabel;
+  if (!conversationId) return "DingTalk";
+  const prefix = (target?.kind || fallbackKind) === "direct" ? "DingTalk 私聊" : "DingTalk 群聊";
+  return `${prefix} ${compactExternalId(conversationId)}`;
+}
+
+function compactExternalId(value) {
+  const normalized = String(value || "").trim();
+  if (normalized.length <= 12) return normalized;
+  return `${normalized.slice(0, 6)}...${normalized.slice(-4)}`;
 }
 
 function createOpenClawTaskWorkItem({ task, origin, runtimeId, agentId, sessionKey, executionStatus, observedAt, dingtalkState }) {
@@ -1138,7 +1153,7 @@ function hasOpenClawTrajectoryDeliveryEvidence(run) {
 
 function createOpenClawTrajectoryWorkItem({ run, runtimeId, agentId, executionStatus, observedAt, dingtalkState }) {
   const channel = openClawChannelFromDingTalkSession(run.sessionKey, dingtalkState.targetsByConversationId) ||
-    { kind: "dingtalk", label: "DingTalk", externalId: parseOpenClawDingTalkSession(run.sessionKey)?.conversationId };
+    openClawDingTalkChannel(parseOpenClawDingTalkSession(run.sessionKey)?.conversationId, dingtalkState.targetsByConversationId, "group");
   const conversationId = `${runtimeId}:conversation:${sanitizeId(run.sessionKey)}`;
   const prompt = cleanOpenClawPromptText(run.prompt);
   return {
@@ -1202,7 +1217,7 @@ function collectOpenClawWorkState(deviceId, observedAt) {
   for (const message of dingtalkState.messages) {
     if (message.direction !== "inbound") continue;
     const target = dingtalkState.targetsByConversationId.get(message.conversationId);
-    const channel = { kind: "dingtalk", label: target?.label || "DingTalk", externalId: message.conversationId };
+    const channel = openClawDingTalkChannel(message.conversationId, dingtalkState.targetsByConversationId, target?.kind || "group");
     const creator = message.senderName || message.senderId
       ? { kind: "human", label: message.senderName || message.senderId || "未知发起人", ...(message.senderId ? { externalId: message.senderId } : {}) }
       : undefined;
@@ -1260,12 +1275,14 @@ function collectOpenClawWorkState(deviceId, observedAt) {
       if (workItem) workItem.status = normalizeOpenClawMessageStatus(executionStatus);
     }
     if (sessionKey) {
+      const sessionChannel = openClawChannelFromDingTalkSession(sessionKey, dingtalkState.targetsByConversationId);
       addOpenClawSession(
         sessionMap,
         runtimeId,
         agentId,
         {
           sessionKey,
+          ...(sessionChannel ? { title: sessionChannel.label, channel: sessionChannel } : {}),
           lastEventAt: task.lastEventAt || task.last_event_at || task.startedAt || task.started_at,
           status: executionStatus === "running" ? "active" : "idle",
         },

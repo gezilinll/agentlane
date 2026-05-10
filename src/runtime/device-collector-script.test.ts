@@ -325,6 +325,85 @@ describe("device collector scripts", () => {
     }));
   });
 
+  it("maps live OpenClaw DingTalk direct session ids to readable channel labels", () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-direct-home-"));
+    const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-direct-bin-"));
+    const stateDir = path.join(fakeHome, ".openclaw", "agents", "default", "sessions", "dingtalk-state");
+    mkdirSync(stateDir, { recursive: true });
+    writeFileSync(path.join(stateDir, "targets.directory.account-default.json"), JSON.stringify({
+      version: 1,
+      groups: {},
+      users: {
+        "0403085742945013": {
+          lastSeenAt: "2026-05-09T08:10:00.000Z",
+        },
+      },
+    }));
+    writeOpenClawDingTalkMessages(fakeHome, []);
+    writeFakeOpenClaw(fakeBin, {
+      health: {
+        ok: true,
+        agents: [{
+          id: "main",
+          sessions: {
+            recent: [{
+              sessionKey: "agent:main:dingtalk:direct:0403085742945013",
+              updatedAt: "2026-05-09T08:10:00.000Z",
+              status: "idle",
+            }],
+          },
+        }],
+      },
+      status: { gateway: { url: "ws://127.0.0.1:18789", reachable: true } },
+      tasks: {
+        tasks: [
+          {
+            taskId: "direct-task-live-1",
+            runId: "direct-run-live-1",
+            task: "帮我检查私聊里的 Agent 回复",
+            status: "succeeded",
+            agentId: "main",
+            requesterSessionKey: "agent:main:dingtalk:direct:0403085742945013",
+            createdAt: 1778308800000,
+            startedAt: 1778308860000,
+            endedAt: 1778309100000,
+          },
+        ],
+      },
+    });
+
+    const output = execFileSync(process.execPath, [
+      collectorScript,
+      "--work-state-once",
+      "--device-id",
+      "openclaw-direct-device",
+      "--print-only",
+    ], {
+      encoding: "utf8",
+      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
+    });
+
+    const snapshot = JSON.parse(output);
+    const workItem = snapshot.workItems.find((item: { externalId: string }) => item.externalId === "direct-task-live-1");
+
+    expect(workItem).toMatchObject({
+      source: "openclaw",
+      channel: {
+        kind: "dingtalk",
+        label: "DingTalk 私聊 040308...5013",
+        externalId: "0403085742945013",
+      },
+    });
+    expect(snapshot.conversations).toContainEqual(expect.objectContaining({
+      externalId: "agent:main:dingtalk:direct:0403085742945013",
+      title: "DingTalk 私聊 040308...5013",
+      channel: expect.objectContaining({
+        kind: "dingtalk",
+        label: "DingTalk 私聊 040308...5013",
+      }),
+    }));
+  });
+
   it("maps live OpenClaw DingTalk task sessions into work items when message context is empty", () => {
     const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-origin-home-"));
     const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-origin-bin-"));

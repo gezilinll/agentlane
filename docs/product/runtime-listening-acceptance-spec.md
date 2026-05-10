@@ -69,6 +69,8 @@ Slock：
 
 - OpenClaw 当前可接受状态是：有 DingTalk message context、DingTalk requester session、task origin 或 trajectory `prompt.submitted` 与 execution 关联时 `ready_for_runs`；只有裸 execution 时 `execution_only`。
 - OpenClaw `messages.context*.json.records` 必须同时支持数组和以 msgId 为 key 的对象 map，且能从 `senderName/senderId` 生成 creator。
+- OpenClaw DingTalk `direct/group` session 必须在 adapter / collector 层转成可读会话标签；缺少群名或人名时可显示 `DingTalk 私聊/群聊 + 短 id`，但前端不能直接展示完整原始会话 id。
+- OpenClaw 未暴露 assignee 字段时，可用已关联的 `agentId` 尾段作为承接 Agent；不能显示成“不支持采集”，也不能用 Runtime 名称冒充。
 - Multica 目标状态是 `ready_for_runs`。
 - Slock 目标状态是 `ready_for_runs`，但 executionStatus 可以先是 `unknown`；它不能阻塞 task board 进入 Runs。
 - workspace 文件、daemon 进程、agent 在线状态都不能单独证明任务监听已到位。

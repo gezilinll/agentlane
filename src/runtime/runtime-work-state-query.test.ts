@@ -63,6 +63,21 @@ describe("runtime work state query", () => {
     });
   });
 
+  it("uses the linked OpenClaw agent id when an item has no explicit assignee", () => {
+    const openClawOnly = mapOpenClawWorkState(openClawWorkStateFixture);
+    const board = createRuntimeWorkBoard({
+      observedAt: "2026-05-09T08:00:00.000Z",
+      deviceId: "fixture-device",
+      workItems: openClawOnly.workItems,
+      conversations: openClawOnly.conversations,
+      executions: openClawOnly.executions,
+      capabilities: openClawOnly.capabilities,
+    });
+
+    expect(board.visibleItems).not.toHaveLength(0);
+    expect(board.visibleItems.every((item) => item.assigneeLabel === "main")).toBe(true);
+  });
+
   it("summarizes confidence and unsupported capability signals", () => {
     const board = createRuntimeWorkBoard(snapshot);
 

@@ -185,8 +185,8 @@ function createWorkItemBoardItem(workItem: RuntimeWorkItem, execution?: RuntimeE
     agentId: workItem.agentId,
     channelLabel: workItem.channel?.label,
     channelKindLabel: channelLabel(workItem.channel?.kind),
-    creatorLabel: participantLabel(workItem.creator),
-    assigneeLabel: participantLabel(workItem.assignee) || compactObjectId(workItem.agentId),
+    creatorLabel: participantLabel(workItem.creator, "不支持采集"),
+    assigneeLabel: participantLabel(workItem.assignee, compactObjectId(workItem.agentId)),
     requestExcerpt: createRequestExcerpt(workItem.description ?? workItem.title),
     lastSeenAt: workItem.lastSeenAt ?? workItem.updatedAt ?? execution?.lastSeenAt,
     workItem,
@@ -277,8 +277,8 @@ function channelLabel(kind: ChannelKind | undefined): string | undefined {
   return "默认渠道";
 }
 
-function participantLabel(participant: RuntimeWorkItem["creator"]): string {
-  return participant?.label?.trim() || "不支持采集";
+function participantLabel(participant: RuntimeWorkItem["creator"], fallback: string): string {
+  return participant?.label?.trim() || fallback;
 }
 
 function compactObjectId(value: string | undefined): string {
