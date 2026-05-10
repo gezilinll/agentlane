@@ -2,7 +2,7 @@
 
 版本：TinySpec v0.8
 
-本文记录 Agentlane 对 OpenClaw、Multica、Slock 在工作项、会话和执行态上的探测结果。它用于指导后续 Runs / Work Board、Agent 工作管理和调度能力，不代表已经开始接管聊天入口或任务调度。
+本文记录 Agentlane 对 OpenClaw、Multica、Slock 在工作项、会话和执行态上的当前采集规则。它用于指导 Runs / Work Board、Agent 工作管理和调度能力，不代表已经开始接管聊天入口或任务调度。
 
 工作态归属于 Agent，而不是 Device 或 Runtime。Runtime adapter 可以是采集入口，但采集到的 WorkItem、Conversation、Execution 必须在 adapter / query 层关联回 Agent；Device 只负责连接与承载，Runtime 只负责执行环境可用性和粗粒度忙闲。
 
@@ -106,7 +106,7 @@ Multica 特别规则：
 
 - `tasks list` 可返回上千个历史和当前 task。
 - 状态包括 `succeeded`、`lost`、`timed_out`、`failed`、`cancelled`。
-- 2026-05-10 在 `gezilinll-claw` 上复核：`tasks list` 中 DingTalk task 有 72 条，但按旧规则只有 4 条可生成用户任务卡；trajectory 文件必须按 `runId` 分组，因为同一个 trajectory 文件可能包含多次 run。按 runId 分组并过滤 heartbeat、async approval followup 和 system recovery 后，collector 可生成 257 个 OpenClaw 工作项，其中 `done=221`、`blocked=33`、`in_progress=3`。这批数据包含历史执行账本，不等于“当前活跃任务”。
+- 2026-05-10 在 `gezilinll-claw` 上复核：`tasks list` 中 DingTalk task 有 72 条；trajectory 文件必须按 `runId` 分组，因为同一个 trajectory 文件可能包含多次 run。按当前用户任务卡规则分组并过滤 heartbeat、async approval followup 和 system recovery 后，collector 可生成 257 个 OpenClaw 工作项，其中 `done=221`、`blocked=33`、`in_progress=3`。这批数据包含历史执行账本，不等于“当前活跃任务”。
 - `health` 返回 main agent 的 session count 和 recent session keys。
 - DingTalk channel 当前可观测连接态和最近事件时间。
 - 本地 DingTalk message context 能定位群组、发起人和消息摘要；task 的 requester origin / message id 可把 execution 关联回消息。
@@ -211,7 +211,7 @@ Multica 特别规则：
 - Slock 能满足业务看板态和部分会话态。
 - Slock 当前能通过本地 agent token 调 internal task API 满足 task board / conversation linkage；真实执行态仍不能仅靠 CLI/server info 满足，需要 activity API、observer 或 proxy 方案补齐。
 
-## 当前设计判断
+## 设计规则
 
 - Adapter 可以选择不同采集策略，但必须输出 Agentlane 统一模型。
 - WorkItem 状态和 Execution 状态必须分开：看板 `in_progress` 代表 Agent 正在承接工作，但不代表已经有一条 `RuntimeExecution.running` 记录。
@@ -220,13 +220,13 @@ Multica 特别规则：
 - Slock 作为 task board 强来源，优先使用本地 agent token + internal API；execution state 需要单独方案。
 - 网络 proxy 可以作为增强策略，但 v1 不应默认要求 TLS 明文拦截；优先使用平台 API/CLI 和低侵入 observer。
 
-## 当前 Collector 落地规则
+## Collector 落地规则
 
 `scripts/agentlane-device-collector.mjs --work-state-once` 必须是 live-first。它不再生成内置 work-state fixture，也不允许在探测失败时伪造工作项、会话或执行态。
 
 Collector 常驻模式和控制面 `inventory.refresh` 命令也必须刷新 work-state。`--once` 只适合一次性 inventory smoke；正式 daemon 启动、周期刷新和远程刷新都要同时上报 `POST /api/device-snapshots` 与 `POST /api/runtime-work-state-snapshots`，避免 Runtime Fleet 已更新但 Runs 仍停留在旧工作态。
 
-当前实现：
+Collector 实现：
 
 - OpenClaw：读取 `openclaw health --json --timeout 5000`、`openclaw status --json --timeout 5000`、`openclaw tasks list --json`，并读取 `~/.openclaw/agents/*/sessions/dingtalk-state/messages.context*.json`、`targets.directory*.json` 与 `*.trajectory.jsonl`。有 message id、DingTalk requester session、task origin 或 trajectory prompt 关联时生成 `RuntimeWorkItem`、`RuntimeConversation` 和 `RuntimeExecution`；无关联的裸 execution 只保留为执行记录。
 - Multica：读取 `multica runtime list --output json`、`multica agent list --output json`、`multica issue list --output json`、`multica agent tasks <agent-id> --output json`。issue 生成 `RuntimeWorkItem`，agent task 生成 `RuntimeExecution`，`chat_session_id` 生成 `RuntimeConversation`。

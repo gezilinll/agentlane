@@ -4,7 +4,7 @@ Root guide for coding agents working in this repository. This file is operationa
 
 ## Project State
 
-Agentlane is currently in product definition and early engineering setup. The repository is becoming the control plane for operating an Agent Network. It now has an initial frontend Catalog page, a first Runtime Fleet page, a collector-backed runtime inventory model, and a local dev backend with latest snapshot storage plus an outbound WebSocket device control channel. It does not yet have a production backend, auth system, or runtime execution system.
+Agentlane is currently in product definition and early engineering setup. The repository is becoming the control plane for operating an Agent Network. It now has a Chinese-first Catalog page, a Runtime Fleet page, a read-only Runs / Work Board page, collector-backed runtime inventory and work-state models, and a local dev backend with latest snapshot storage plus an outbound WebSocket device control channel. It does not yet have a production backend, auth system, multi-device orchestration, or runtime execution control system.
 
 Current source of truth:
 
@@ -99,7 +99,7 @@ Keep the test layout simple and tied to what each harness can prove:
 
 ## Agent-Ready Growth
 
-Agentlane should become agent-ready by growing only the infrastructure the project actually needs. The current layer is **Catalog + Runtime Fleet Harness Ready** for the first frontend/runtime surfaces: root guide, TinySpecs, TypeScript object models, local dev API, outbound device control channel, unit/component tests, browser layout harness, and one full verification entry point.
+Agentlane should become agent-ready by growing only the infrastructure the project actually needs. The current layer is **Catalog + Runtime Fleet + Runs Work-State Harness Ready** for the first frontend/runtime surfaces: root guide, TinySpecs, TypeScript object models, local dev API, outbound device control channel, collector snapshot harnesses, unit/component tests, browser layout harness, and one full verification entry point.
 
 Extend this guide and `./scripts/verify.sh` only when a real project surface appears:
 

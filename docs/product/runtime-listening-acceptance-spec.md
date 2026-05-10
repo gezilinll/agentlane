@@ -97,10 +97,9 @@ Slock：
 - 前端不得把未关联上游 WorkItem 的裸 execution、OpenClaw `execution_only`、Slock `not_ready` 或 capability gap 伪造成任务卡。平台缺口留在诊断、spec 和日志中，不进入用户任务泳道。
 - OpenClaw gateway restart recovery、heartbeat、async approval followup 等内部/system 任务不得作为用户任务进入 Runs。
 
-## 当前下一步
+## 维护规则
 
-1. 用当前 collector 在 `gezilinll-claw` 上重新跑 live inventory 和 work-state probe。
-2. 用 `RuntimeListeningAcceptanceReport` 评估真实快照字段覆盖。
-3. 针对 OpenClaw 继续用真实 DingTalk 消息验证 message context、requester session、target directory、task origin、trajectory prompt 和 delivery evidence 的关联稳定性。
-4. 针对 Slock 使用本地 agent token 只读调用 internal API，并从 `/server` 自动发现 channel 后拉 task board；再评估 activity / execution 证据。
-5. 针对 Multica 增加真实响应脱敏 fixture，锁定 creator、assignee、issue、run、chat session 字段。
+- Adapter 采集策略变化时，必须同步更新本 spec、`runtime-work-state-probe.md` 和对应 harness。
+- 真实设备验证结果只能沉淀为当前规则、字段约束或脱敏 fixture；不要保留临时排查步骤、个人机器路径、原始 token 或过程性 checklist。
+- `RuntimeListeningAcceptanceReport` 是验收入口：OpenClaw、Multica、Slock 的 readiness、字段覆盖和 gaps 必须由归一化 snapshot 推导，不能由前端临时解释平台原始字段。
+- 新增平台或新增 channel 时，先在 adapter 层转成 Agentlane 的 Runtime、Channel、WorkItem、Conversation、Execution，再让页面消费统一模型。

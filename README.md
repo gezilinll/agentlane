@@ -78,13 +78,17 @@ A single Run may contain multiple Tasks. For example, one Workflow Run may creat
 
 ## Current Status
 
-Agentlane is in product definition and early engineering. The first implemented surfaces are a Chinese-first Catalog / Registry page and a Runtime Fleet page backed by the initial TypeScript Catalog Object model, normalized runtime inventory model, collector snapshot fixture, local file-backed dev API, and outbound device control channel for refreshing runtime inventory. Runtime and device registration can now complete a local development loop, while production backend persistence, auth, and real execution control are still being built.
+Agentlane is in product definition and early engineering. The first implemented surfaces are a Chinese-first Catalog / Registry page, a Runtime Fleet page, and a read-only Runs / Work Board for Agent work-state visibility. These surfaces are backed by the initial TypeScript Catalog Object model, normalized runtime inventory and work-state models, a device collector, local file-backed dev APIs, and an outbound WebSocket device control channel for refreshing inventory plus work-state snapshots.
+
+Runtime and device registration can now complete a local development loop against OpenClaw, Multica, and Slock-style sources. The current backend is still a local development backend; production persistence, auth, multi-device orchestration, and execution control are still being built.
 
 The first product design package is available here:
 
 - [Product UI/UX Design](docs/product/ui-design.md)
 - [Runtime & Device Registration Spec](docs/product/runtime-device-registration-spec.md)
 - [Runtime Fleet Page Spec](docs/product/runtime-fleet-page-spec.md)
+- [Runtime Work State Spec](docs/product/runtime-work-state-probe.md)
+- [Runtime Listening Acceptance Spec](docs/product/runtime-listening-acceptance-spec.md)
 - [Agent Network Runtime Panorama](docs/product/agent-network-runtime-panorama.png)
 - [Agent Network Build Object Map](docs/product/agent-network-build-objects.png)
 - [Product UI Assets](assets/product-ui)
