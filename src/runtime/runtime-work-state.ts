@@ -253,8 +253,20 @@ function deriveOpenClawStage(input: RuntimeWorkStageDerivationInput): RuntimeWor
   if (input.executionStatus === "failed" || input.executionStatus === "cancelled" || input.executionStatus === "unknown") {
     return stage("attention", "direct", "OpenClaw execution is terminal failure, cancelled, or unknown.");
   }
-  if (input.workItemStatus) {
-    return stage("attention", "unsupported", "OpenClaw does not expose project-management work item phases directly.");
+  if (input.workItemStatus === "todo") {
+    return stage("pending", "partial", "OpenClaw DingTalk message is waiting for execution evidence.");
+  }
+  if (input.workItemStatus === "in_progress") {
+    return stage("processing", "partial", "OpenClaw message-backed work item is marked in progress.");
+  }
+  if (input.workItemStatus === "done" || input.workItemStatus === "cancelled") {
+    return stage("closed", "partial", "OpenClaw message-backed work item reached a terminal state.");
+  }
+  if (input.workItemStatus === "blocked" || input.workItemStatus === "unknown") {
+    return stage("attention", "partial", "OpenClaw message-backed work item needs attention.");
+  }
+  if (input.workItemStatus === "in_review") {
+    return stage("attention", "unsupported", "OpenClaw has no review phase.");
   }
   return stage("attention", "unsupported", "OpenClaw stage requires execution evidence.");
 }

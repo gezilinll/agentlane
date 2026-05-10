@@ -1,9 +1,4 @@
-import type { RuntimeSource } from "./runtime-normalize";
-import {
-  createRuntimeListeningAcceptanceReport,
-  type RuntimeListeningReadiness,
-  type RuntimeSourceListeningReport,
-} from "./runtime-listening-acceptance";
+import type { ChannelKind, RuntimeSource } from "./runtime-normalize";
 import {
   deriveRuntimeWorkStage,
   WORK_STAGE_IDS,
@@ -17,7 +12,7 @@ import {
 
 /** Filters supported by the read-only Runtime Work Board query model. */
 export interface RuntimeWorkBoardFilters {
-  /** Source platform filter. */
+  /** Runtime source filter. */
   source?: RuntimeSource | "all";
   /** Unified stage filter. */
   stage?: RuntimeWorkStageId | "all";
@@ -39,7 +34,7 @@ export interface RuntimeWorkBoard {
   visibleItems: RuntimeWorkBoardItem[];
   /** Summary counts shown above the board. */
   summary: RuntimeWorkBoardSummary;
-  /** Capability notes that explain unsupported or partial platform surfaces. */
+  /** Capability notes kept for diagnostics and harness assertions, not for task-card rendering. */
   capabilityNotes: RuntimeWorkCapabilityNote[];
 }
 
@@ -61,6 +56,8 @@ export interface RuntimeWorkBoardItem {
   title: string;
   /** Source platform after adapter normalization. */
   source: RuntimeSource;
+  /** Human-readable runtime label used by task cards and details. */
+  runtimeLabel: string;
   /** Unified Agentlane-owned stage. */
   stage: RuntimeWorkStageId;
   /** Evidence confidence for the stage. */
@@ -68,7 +65,7 @@ export interface RuntimeWorkBoardItem {
   /** Short reasons explaining stage derivation. */
   reasons: string[];
   /** Item category used by details and visual treatment. */
-  kind: "work_item" | "listening_status";
+  kind: "work_item";
   /** Linked work item status when present. */
   workItemStatus?: RuntimeWorkItem["status"];
   /** Linked execution status when present. */
@@ -79,6 +76,8 @@ export interface RuntimeWorkBoardItem {
   agentId?: string;
   /** Channel label when the source exposes one. */
   channelLabel?: string;
+  /** Human-readable channel kind label when the source exposes one. */
+  channelKindLabel?: string;
   /** Work item creator label when the source exposes one. */
   creatorLabel: string;
   /** Agent or assignee currently carrying this item. */
@@ -91,8 +90,6 @@ export interface RuntimeWorkBoardItem {
   workItem?: RuntimeWorkItem;
   /** Original normalized execution, when this item has execution evidence. */
   execution?: RuntimeExecution;
-  /** Platform-level listening readiness when this item represents source status. */
-  listeningReadiness?: RuntimeListeningReadiness;
 }
 
 /** Summary counts shown above the board. */
@@ -109,7 +106,7 @@ export interface RuntimeWorkBoardSummary {
   unsupportedCapabilities: number;
 }
 
-/** Capability note surfaced to the UI when support is partial, unsupported, or unknown. */
+/** Capability note used for diagnostics when support is partial, unsupported, or unknown. */
 export interface RuntimeWorkCapabilityNote {
   /** Source platform. */
   source: RuntimeSource;
@@ -160,15 +157,10 @@ function createBoardItems(snapshot: RuntimeWorkStateSnapshot): RuntimeWorkBoardI
     }
   }
 
-  const workItemBackedItems = snapshot.workItems.map((workItem) => {
+  return snapshot.workItems.map((workItem) => {
     const execution = executionsByWorkItemId.get(workItem.id);
     return createWorkItemBoardItem(workItem, execution);
-  });
-
-  return [
-    ...workItemBackedItems,
-    ...createListeningStatusItems(snapshot),
-  ].sort(compareBoardItems);
+  }).sort(compareBoardItems);
 }
 
 function createWorkItemBoardItem(workItem: RuntimeWorkItem, execution?: RuntimeExecution): RuntimeWorkBoardItem {
@@ -182,6 +174,7 @@ function createWorkItemBoardItem(workItem: RuntimeWorkItem, execution?: RuntimeE
     id: workItem.id,
     title: workItem.title,
     source: workItem.source,
+    runtimeLabel: sourceLabel(workItem.source),
     stage: derivation.stage,
     confidence: derivation.confidence,
     reasons: derivation.reasons,
@@ -191,54 +184,13 @@ function createWorkItemBoardItem(workItem: RuntimeWorkItem, execution?: RuntimeE
     runtimeId: workItem.runtimeId,
     agentId: workItem.agentId,
     channelLabel: workItem.channel?.label,
+    channelKindLabel: channelLabel(workItem.channel?.kind),
     creatorLabel: participantLabel(workItem.creator),
     assigneeLabel: participantLabel(workItem.assignee) || compactObjectId(workItem.agentId),
     requestExcerpt: createRequestExcerpt(workItem.description ?? workItem.title),
     lastSeenAt: workItem.lastSeenAt ?? workItem.updatedAt ?? execution?.lastSeenAt,
     workItem,
     execution,
-  };
-}
-
-function createListeningStatusItems(snapshot: RuntimeWorkStateSnapshot): RuntimeWorkBoardItem[] {
-  const report = createRuntimeListeningAcceptanceReport(snapshot);
-  return (["openclaw", "multica", "slock"] as const).flatMap((source) => {
-    const sourceReport = report.sources[source];
-    const hasWorkItems = snapshot.workItems.some((item) => item.source === source);
-    if (sourceReport.readiness === "ready_for_runs" && hasWorkItems) return [];
-    if (sourceReport.readiness === "not_ready" || sourceReport.readiness === "execution_only") {
-      return [createListeningStatusItem(sourceReport, snapshot)];
-    }
-    return [];
-  });
-}
-
-function createListeningStatusItem(
-  report: RuntimeSourceListeningReport,
-  snapshot: RuntimeWorkStateSnapshot,
-): RuntimeWorkBoardItem {
-  const sourceExecutions = snapshot.executions.filter((execution) => execution.source === report.profile.source);
-  const sourceConversations = snapshot.conversations.filter((conversation) => conversation.source === report.profile.source);
-  const latestSeenAt = latestTimestamp([
-    ...sourceExecutions.map((execution) => execution.lastSeenAt ?? execution.endedAt ?? execution.startedAt ?? execution.queuedAt),
-    ...sourceConversations.map((conversation) => conversation.lastSeenAt ?? conversation.lastActivityAt ?? conversation.startedAt),
-    snapshot.observedAt,
-  ]);
-  return {
-    id: `${snapshot.deviceId}:${report.profile.source}:listening-status`,
-    title: listeningStatusTitle(report.profile.source, report.readiness),
-    source: report.profile.source,
-    stage: "attention",
-    confidence: report.readiness === "not_ready" ? "unsupported" : "partial",
-    reasons: [],
-    kind: "listening_status",
-    runtimeId: `${snapshot.deviceId}:${report.profile.source}`,
-    creatorLabel: "不支持采集",
-    assigneeLabel: sourceExecutions[0]?.agentId ? compactObjectId(sourceExecutions[0].agentId) : "不支持采集",
-    channelLabel: sourceConversations[0]?.channel?.label,
-    requestExcerpt: listeningStatusSummary(report, sourceExecutions.length, sourceConversations.length),
-    lastSeenAt: latestSeenAt,
-    listeningReadiness: report.readiness,
   };
 }
 
@@ -282,9 +234,11 @@ function matchesFilters(item: RuntimeWorkBoardItem, filters: RuntimeWorkBoardFil
   return [
     item.title,
     item.source,
+    item.runtimeLabel,
     item.runtimeId,
     item.agentId,
     item.channelLabel,
+    item.channelKindLabel,
     item.creatorLabel,
     item.assigneeLabel,
     item.requestExcerpt,
@@ -310,38 +264,21 @@ function sourceLabel(source: RuntimeSource): string {
   if (source === "slock") return "Slock";
   if (source === "codex") return "Codex";
   if (source === "claude_code") return "Claude Code";
+  if (source === "unknown") return "未知";
   return "Manual";
 }
 
-function listeningStatusTitle(source: RuntimeSource, readiness: RuntimeListeningReadiness): string {
-  if (source === "openclaw" && readiness === "execution_only") return "OpenClaw 执行监听已接入";
-  if (source === "slock" && readiness === "not_ready") return "Slock 监听未就绪";
-  if (source === "multica" && readiness === "not_ready") return "Multica 监听未就绪";
-  return `${sourceLabel(source)} 监听状态`;
-}
-
-function listeningStatusSummary(
-  report: RuntimeSourceListeningReport,
-  executionCount: number,
-  conversationCount: number,
-): string {
-  if (report.profile.source === "openclaw" && report.readiness === "execution_only") {
-    return `已监听执行 ${executionCount} 条、会话 ${conversationCount} 个；缺少上游 WorkItem 关联，不能定位到具体发起消息`;
-  }
-  return report.gaps[0] ?? "当前平台监听未达到 Runs 任务卡要求";
-}
-
-function latestTimestamp(values: Array<string | undefined>): string | undefined {
-  const timestamps = values
-    .filter((value): value is string => Boolean(value))
-    .map((value) => ({ value, time: Date.parse(value) }))
-    .filter((entry) => Number.isFinite(entry.time))
-    .sort((left, right) => right.time - left.time);
-  return timestamps[0]?.value;
+function channelLabel(kind: ChannelKind | undefined): string | undefined {
+  if (!kind) return undefined;
+  if (kind === "dingtalk") return "DingTalk";
+  if (kind === "slock") return "Slock";
+  if (kind === "multica") return "Multica";
+  if (kind === "openclaw") return "OpenClaw";
+  return "默认渠道";
 }
 
 function participantLabel(participant: RuntimeWorkItem["creator"]): string {
-  return participant?.label?.trim() || "";
+  return participant?.label?.trim() || "不支持采集";
 }
 
 function compactObjectId(value: string | undefined): string {

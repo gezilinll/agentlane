@@ -98,8 +98,8 @@ describe("Catalog page", () => {
     }
     expect(await screen.findByText(/当前数据源：Fixture/)).toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText("来源平台"), "slock");
-    await user.type(screen.getByPlaceholderText("搜索任务、消息、发起人、Agent 或群组"), "@fixture-human");
+    await user.selectOptions(screen.getByLabelText("Runtime"), "slock");
+    await user.type(screen.getByPlaceholderText("搜索任务、消息、发起人、Agent 或会话/群组"), "@fixture-human");
 
     expect(screen.getAllByText("Example in progress card").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/@fixture-human/).length).toBeGreaterThan(0);
@@ -108,18 +108,20 @@ describe("Catalog page", () => {
     expect(screen.queryByText(/OpenClaw execution/)).not.toBeInTheDocument();
     expect(screen.queryByText("直接证据")).not.toBeInTheDocument();
     expect(screen.queryByText(/OpenClaw has no/)).not.toBeInTheDocument();
+    expect(screen.queryByText("能力缺口")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /Example in progress card/ }));
 
     const detail = screen.getByRole("complementary", { name: "工作项详情" });
     expect(within(detail).getByRole("heading", { name: "Example in progress card" })).toBeInTheDocument();
-    expect(within(detail).getByText("来源平台: Slock")).toBeInTheDocument();
+    expect(within(detail).getByText("Runtime: Slock")).toBeInTheDocument();
+    expect(within(detail).getByText("Channel: Slock")).toBeInTheDocument();
     expect(within(detail).getByText("发起人: @fixture-human")).toBeInTheDocument();
     expect(within(detail).getByText("承接 Agent: @example-agent")).toBeInTheDocument();
-    expect(within(detail).getByText("群组/渠道: #example-board")).toBeInTheDocument();
+    expect(within(detail).getByText("会话/群组: #example-board")).toBeInTheDocument();
   });
 
-  it("keeps OpenClaw and Slock visible when they only have execution data or listening gaps", async () => {
+  it("does not turn OpenClaw executions or Slock listening gaps into Runs cards", async () => {
     const user = userEvent.setup();
     const backendSnapshot: RuntimeWorkStateSnapshot = {
       observedAt: "2026-05-09T08:00:00.000Z",
@@ -173,12 +175,14 @@ describe("Catalog page", () => {
     render(<App />);
 
     await user.click(screen.getByRole("button", { name: "Runs" }));
-    expect(await screen.findByText("OpenClaw 执行监听已接入")).toBeInTheDocument();
+    expect(await screen.findByText(/当前数据源：后端快照/)).toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText("来源平台"), "slock");
-    expect((await screen.findAllByText("Slock 监听未就绪")).length).toBeGreaterThan(0);
+    await user.selectOptions(screen.getByLabelText("Runtime"), "slock");
+    expect(screen.queryByText("Slock 监听未就绪")).not.toBeInTheDocument();
+    expect(screen.queryByText("OpenClaw 执行监听已接入")).not.toBeInTheDocument();
     expect(screen.queryByText(/OpenClaw execution/)).not.toBeInTheDocument();
     expect(screen.queryByText("直接证据")).not.toBeInTheDocument();
+    expect(screen.queryByText("能力缺口")).not.toBeInTheDocument();
   });
 
   it("opens Runtime Fleet and renders the fixture runtime inventory", async () => {
@@ -244,6 +248,43 @@ describe("Catalog page", () => {
     expect(within(detail).queryByText("slock: tester")).not.toBeInTheDocument();
     expect(within(detail).queryByText("事实")).not.toBeInTheDocument();
     expect(within(detail).queryByText("可用渠道")).not.toBeInTheDocument();
+  });
+
+  it("renders Runtime Fleet agents with multiple same-kind channel bindings without duplicate key warnings", async () => {
+    const user = userEvent.setup();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const backendSnapshot: RuntimeInventorySnapshot = {
+      ...(fixtureSnapshot as RuntimeInventorySnapshot),
+      agents: (fixtureSnapshot as RuntimeInventorySnapshot).agents.map((agent) => {
+        if (agent.id !== "fixture-mac:openclaw:gateway-18789:agent:main") return agent;
+        return {
+          ...agent,
+          channelBindings: [
+            { kind: "dingtalk", label: "DingTalk default", externalId: "default", status: "enabled" },
+            { kind: "dingtalk", label: "DingTalk backup", externalId: "backup", status: "enabled" },
+          ],
+        };
+      }),
+    };
+    globalThis.fetch = vi.fn(async (input) => {
+      const url = input.toString();
+      if (url.includes("/api/runtime-inventory/latest")) {
+        return new Response(JSON.stringify(backendSnapshot), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "unexpected request" }), { status: 500 });
+    }) as unknown as typeof fetch;
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Runtime Fleet" }));
+    expect(await screen.findByText("DingTalk backup")).toBeInTheDocument();
+
+    const duplicateKeyWarning = consoleError.mock.calls.some((call) =>
+      call.some((argument) => String(argument).includes("Encountered two children with the same key")),
+    );
+    expect(duplicateKeyWarning).toBe(false);
   });
 
   it("automatically refreshes the latest Runtime Fleet snapshot while mounted", async () => {

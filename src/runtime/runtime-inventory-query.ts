@@ -287,7 +287,7 @@ export function getRuntimeFleetDetail(
           title: "身份信息",
           items: [
             `Runtime ID: ${runtime.id}`,
-            `Kind: ${runtimeKindLabels[runtime.kind]}`,
+            `Runtime: ${runtimeKindLabels[runtime.kind]}`,
             `Version: ${runtime.version ?? "unknown"}`,
             `最近同步: ${formatRuntimeTimestamp(runtime.lastSeenAt)}`,
           ],
@@ -322,7 +322,7 @@ export function getRuntimeFleetDetail(
           title: "身份信息",
           items: [
             `Agent ID: ${agent.id}`,
-            `来源平台: ${sourceLabel(agent.origin)}`,
+            `Runtime: ${sourceLabel(agent.origin)}`,
             `状态: ${managedAgentStatusLabels[agent.status]}`,
             `最近同步: ${formatRuntimeTimestamp(runtimeAgentLastSeenAt(agent, runtime, snapshot))}`,
           ],

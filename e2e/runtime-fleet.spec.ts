@@ -72,4 +72,19 @@ test.describe("Runtime Fleet", () => {
     );
     expect(pageOverflows).toBe(false);
   });
+
+  test("keeps the Runtime Fleet toolbar within the viewport on laptop widths", async ({ page, request }) => {
+    const seedResponse = await request.post("/api/device-snapshots", { data: backendSnapshot });
+    expect(seedResponse.ok()).toBe(true);
+
+    await page.setViewportSize({ width: 1185, height: 900 });
+    await page.goto("/");
+    await page.getByRole("button", { name: "Runtime Fleet" }).click();
+    await expect(page.getByRole("heading", { name: "运行资产" })).toBeVisible();
+
+    const pageOverflows = await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth + 1,
+    );
+    expect(pageOverflows).toBe(false);
+  });
 });

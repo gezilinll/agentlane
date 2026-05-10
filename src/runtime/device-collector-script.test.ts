@@ -176,13 +176,31 @@ describe("device collector scripts", () => {
     ]));
   });
 
-  it("maps live OpenClaw task probes into executions without creating work items", () => {
+  it("maps live OpenClaw DingTalk message context into work items linked to executions", () => {
     const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-work-home-"));
     const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-work-bin-"));
+    writeOpenClawDingTalkState(fakeHome, {
+      conversationId: "group-live",
+      groupTitle: "研发值班群",
+      msgId: "msg-live-1",
+      senderId: "user-live-1",
+      senderName: "张三",
+      text: "帮我检查今天的线上异常，给出结论和下一步建议",
+      createdAt: "2026-05-09T06:40:30.000Z",
+    });
     writeFakeOpenClaw(fakeBin, {
       health: {
         ok: true,
-        agents: [{ id: "main", sessions: { recent: [{ sessionKey: "live-session", updatedAt: "2026-05-09T06:41:00.000Z", status: "active" }] } }],
+        agents: [{
+          id: "main",
+          sessions: {
+            recent: [{
+              sessionKey: "agent:main:dingtalk:group:group-live",
+              updatedAt: "2026-05-09T06:41:00.000Z",
+              status: "active",
+            }],
+          },
+        }],
       },
       status: { gateway: { url: "ws://127.0.0.1:18789", reachable: true } },
       tasks: {
@@ -192,7 +210,8 @@ describe("device collector scripts", () => {
             runId: "run-live-1",
             status: "running",
             agentId: "main",
-            requesterSessionKey: "live-session",
+            requesterSessionKey: "agent:main:dingtalk:group:group-live",
+            requesterOriginJson: JSON.stringify({ messageId: "msg-live-1" }),
             createdAt: 1778308800000,
             startedAt: 1778308860000,
             lastEventAt: 1778308920000,
@@ -223,23 +242,253 @@ describe("device collector scripts", () => {
     });
 
     const snapshot = JSON.parse(output);
+    const openclawWorkItem = snapshot.workItems.find((item: { source: string }) => item.source === "openclaw");
     const runningExecution = snapshot.executions.find((execution: { externalId: string }) => execution.externalId === "run-live-1");
     const failedExecution = snapshot.executions.find((execution: { externalId: string }) => execution.externalId === "run-live-2");
 
-    expect(snapshot.workItems.filter((item: { source: string }) => item.source === "openclaw")).toEqual([]);
+    expect(openclawWorkItem).toMatchObject({
+      source: "openclaw",
+      title: "帮我检查今天的线上异常",
+      description: "帮我检查今天的线上异常，给出结论和下一步建议",
+      status: "in_progress",
+      creator: { kind: "human", label: "张三", externalId: "user-live-1" },
+      channel: { kind: "dingtalk", label: "研发值班群", externalId: "group-live" },
+      conversationId: "openclaw-live-device:openclaw:gateway-ws-127.0.0.1-18789:conversation:agent-main-dingtalk-group-group-live",
+    });
     expect(runningExecution).toMatchObject({
       source: "openclaw",
       status: "running",
       queuedAt: "2026-05-09T06:40:00.000Z",
       startedAt: "2026-05-09T06:41:00.000Z",
-      conversationId: expect.stringContaining("conversation:live-session"),
+      workItemId: openclawWorkItem.id,
+      conversationId: openclawWorkItem.conversationId,
     });
     expect(failedExecution).toMatchObject({ source: "openclaw", status: "failed" });
     expect(snapshot.conversations).toContainEqual(expect.objectContaining({
       source: "openclaw",
-      externalId: "live-session",
+      externalId: "agent:main:dingtalk:group:group-live",
       status: "active",
+      title: "研发值班群",
     }));
+  });
+
+  it("maps OpenClaw DingTalk message context records stored as an object map", () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-map-home-"));
+    const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-map-bin-"));
+    writeOpenClawDingTalkTargetDirectory(fakeHome, {
+      conversationId: "group-map",
+      groupTitle: "Agentlane 研发群",
+      lastSeenAt: "2026-05-09T08:10:00.000Z",
+    });
+    const stateDir = path.join(fakeHome, ".openclaw", "agents", "default", "sessions", "dingtalk-state");
+    writeFileSync(path.join(stateDir, "messages.context.default.json"), JSON.stringify({
+      version: 1,
+      updatedAt: "2026-05-09T08:10:30.000Z",
+      records: {
+        "msg-map-1": {
+          msgId: "msg-map-1",
+          direction: "inbound",
+          conversationId: "group-map",
+          createdAt: "2026-05-09T08:10:00.000Z",
+          updatedAt: "2026-05-09T08:10:30.000Z",
+          messageType: "text",
+          text: "张良发起的真实消息应该能展示发起人",
+          senderId: "100854680226406967",
+          senderName: "张良",
+        },
+      },
+    }));
+    writeFakeOpenClaw(fakeBin, {
+      health: { ok: true },
+      status: { gateway: { url: "ws://127.0.0.1:18789", reachable: true } },
+      tasks: { tasks: [] },
+    });
+
+    const output = execFileSync(process.execPath, [
+      collectorScript,
+      "--work-state-once",
+      "--device-id",
+      "openclaw-map-device",
+      "--print-only",
+    ], {
+      encoding: "utf8",
+      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
+    });
+
+    const snapshot = JSON.parse(output);
+
+    expect(snapshot.workItems).toContainEqual(expect.objectContaining({
+      source: "openclaw",
+      title: "张良发起的真实消息应该能展示发起人",
+      creator: { kind: "human", label: "张良", externalId: "100854680226406967" },
+      channel: { kind: "dingtalk", label: "Agentlane 研发群", externalId: "group-map" },
+    }));
+  });
+
+  it("maps live OpenClaw DingTalk task sessions into work items when message context is empty", () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-origin-home-"));
+    const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-origin-bin-"));
+    writeOpenClawDingTalkTargetDirectory(fakeHome, {
+      conversationId: "Group-Origin",
+      groupTitle: "研发值班群",
+      lastSeenAt: "2026-05-09T06:40:30.000Z",
+    });
+    writeOpenClawDingTalkMessages(fakeHome, []);
+    writeFakeOpenClaw(fakeBin, {
+      health: {
+        ok: true,
+        agents: [{
+          id: "main",
+          sessions: {
+            recent: [{
+              sessionKey: "agent:main:dingtalk:group:group-origin",
+              updatedAt: "2026-05-09T06:41:00.000Z",
+              status: "active",
+            }],
+          },
+        }],
+      },
+      status: { gateway: { url: "ws://127.0.0.1:18789", reachable: true } },
+      tasks: {
+        tasks: [
+          {
+            taskId: "task-origin-1",
+            runId: "run-origin-1",
+            task: "请在当前钉钉群上下文中检查 ai-toolkit 定时放量任务，给出处理结论",
+            status: "succeeded",
+            agentId: "main",
+            requesterSessionKey: "agent:main:dingtalk:group:group-origin",
+            sourceId: "source-message-1",
+            createdAt: 1778308800000,
+            startedAt: 1778308860000,
+            endedAt: 1778309100000,
+          },
+          {
+            taskId: "task-origin-followup",
+            task: "[Fri May 09 2026] An async command the user already approved has completed.",
+            status: "succeeded",
+            agentId: "main",
+            requesterOriginJson: JSON.stringify({ channel: "dingtalk", to: "group-origin" }),
+            sourceId: "exec-approval-followup:task-origin-1",
+          },
+          {
+            taskId: "task-system-recovery",
+            task: "[Wed 2026-05-06 17:39 GMT+8] [System] Your previous turn was interrupted by a gateway restart.",
+            status: "cancelled",
+            agentId: "main",
+            requesterSessionKey: "agent:main:dingtalk:group:group-origin",
+            sourceId: "system-recovery",
+          },
+        ],
+      },
+    });
+
+    const output = execFileSync(process.execPath, [
+      collectorScript,
+      "--work-state-once",
+      "--device-id",
+      "openclaw-origin-device",
+      "--print-only",
+    ], {
+      encoding: "utf8",
+      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
+    });
+
+    const snapshot = JSON.parse(output);
+    const openclawWorkItems = snapshot.workItems.filter((item: { source: string }) => item.source === "openclaw");
+    const workItem = openclawWorkItems.find((item: { externalId: string }) => item.externalId === "task-origin-1");
+
+    expect(openclawWorkItems).toHaveLength(1);
+    expect(workItem).toMatchObject({
+      source: "openclaw",
+      title: "请在当前钉钉群上下文中检查 ai-toolkit 定时放量任务",
+      description: "请在当前钉钉群上下文中检查 ai-toolkit 定时放量任务，给出处理结论",
+      status: "done",
+      creator: { kind: "unknown", label: "不支持采集", externalId: "source-message-1" },
+      channel: { kind: "dingtalk", label: "研发值班群", externalId: "group-origin" },
+      conversationId: "openclaw-origin-device:openclaw:gateway-ws-127.0.0.1-18789:conversation:agent-main-dingtalk-group-group-origin",
+    });
+    expect(snapshot.executions).toContainEqual(expect.objectContaining({
+      source: "openclaw",
+      externalId: "run-origin-1",
+      workItemId: workItem.id,
+      conversationId: workItem.conversationId,
+      status: "succeeded",
+    }));
+    expect(snapshot.workItems.map((item: { externalId: string }) => item.externalId)).not.toContain("task-origin-followup");
+    expect(snapshot.workItems.map((item: { externalId: string }) => item.externalId)).not.toContain("task-system-recovery");
+  });
+
+  it("maps OpenClaw DingTalk trajectory runs when session JSONL is unavailable", () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-trajectory-home-"));
+    const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-trajectory-bin-"));
+    writeOpenClawDingTalkTargetDirectory(fakeHome, {
+      conversationId: "group-trajectory",
+      groupTitle: "研发值班群",
+      lastSeenAt: "2026-05-09T08:00:00.000Z",
+    });
+    writeOpenClawTrajectory(fakeHome, "main", "trajectory-session", [
+      {
+        runId: "trajectory-run-1",
+        sessionKey: "agent:main:dingtalk:group:group-trajectory",
+        prompt: "请总结昨天的告警，并给出后续动作",
+        finalStatus: "success",
+        endedStatus: "success",
+        assistantTexts: ["已完成"],
+        startedAt: "2026-05-09T08:01:00.000Z",
+        endedAt: "2026-05-09T08:02:00.000Z",
+      },
+      {
+        runId: "trajectory-run-heartbeat",
+        sessionKey: "agent:main:dingtalk:group:group-trajectory",
+        prompt: "[OpenClaw heartbeat poll]",
+        finalStatus: "success",
+        endedStatus: "success",
+        assistantTexts: ["HEARTBEAT_OK"],
+        startedAt: "2026-05-09T08:03:00.000Z",
+        endedAt: "2026-05-09T08:03:05.000Z",
+      },
+    ]);
+    writeFakeOpenClaw(fakeBin, {
+      health: { ok: true, agents: [{ id: "main" }] },
+      status: { gateway: { url: "ws://127.0.0.1:18789", reachable: true } },
+      tasks: { tasks: [] },
+    });
+
+    const output = execFileSync(process.execPath, [
+      collectorScript,
+      "--work-state-once",
+      "--device-id",
+      "openclaw-trajectory-device",
+      "--print-only",
+    ], {
+      encoding: "utf8",
+      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
+    });
+
+    const snapshot = JSON.parse(output);
+    const workItems = snapshot.workItems.filter((item: { source: string }) => item.source === "openclaw");
+    const workItem = workItems[0];
+
+    expect(workItems).toHaveLength(1);
+    expect(workItem).toMatchObject({
+      source: "openclaw",
+      externalId: "trajectory-run-1",
+      title: "请总结昨天的告警",
+      description: "请总结昨天的告警，并给出后续动作",
+      status: "done",
+      creator: { kind: "unknown", label: "不支持采集" },
+      channel: { kind: "dingtalk", label: "研发值班群", externalId: "group-trajectory" },
+      conversationId: "openclaw-trajectory-device:openclaw:gateway-ws-127.0.0.1-18789:conversation:agent-main-dingtalk-group-group-trajectory",
+    });
+    expect(snapshot.executions).toContainEqual(expect.objectContaining({
+      source: "openclaw",
+      externalId: "trajectory-run-1",
+      status: "succeeded",
+      workItemId: workItem.id,
+      conversationId: workItem.conversationId,
+    }));
+    expect(snapshot.workItems.map((item: { externalId: string }) => item.externalId)).not.toContain("trajectory-run-heartbeat");
   });
 
   it("keeps OpenClaw execution ids unique when the platform repeats run ids", () => {
@@ -380,6 +629,58 @@ describe("device collector scripts", () => {
       workItems: { support: "unknown" },
       executions: { support: "unknown" },
     });
+  });
+
+  it("maps Slock internal agent API task board into work items without requiring a local CLI", async () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-slock-api-home-"));
+    const agentDir = path.join(fakeHome, ".slock", "agents", "tester", ".slock");
+    mkdirSync(agentDir, { recursive: true });
+    writeFileSync(path.join(agentDir, "agent-token"), "test-agent-token");
+    const { server, baseUrl } = await startSlockInternalApiServer();
+    const configDir = mkdtempSync(path.join(tmpdir(), "agentlane-slock-api-config-"));
+    const configPath = path.join(configDir, "config.json");
+    writeFileSync(configPath, JSON.stringify({
+      deviceId: "slock-api-device",
+      slockServerUrl: baseUrl,
+    }));
+
+    try {
+      const output = await runNodeScript([
+        collectorScript,
+        "--work-state-once",
+        "--config",
+        configPath,
+        "--print-only",
+      ], {
+        env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
+      });
+
+      const snapshot = JSON.parse(output);
+      const workItem = snapshot.workItems.find((item: { source: string }) => item.source === "slock");
+      const slockCapability = snapshot.capabilities.find((capability: { source: string }) => capability.source === "slock");
+
+      expect(workItem).toMatchObject({
+        source: "slock",
+        title: "修复登录回调异常",
+        status: "in_progress",
+        creator: { kind: "human", label: "@zhangsan" },
+        assignee: { kind: "agent", label: "@tester" },
+        channel: { kind: "slock", label: "#研发项目群", externalId: "#研发项目群" },
+        conversationId: "slock-api-device:slock:slock-daemon:conversation:thread-1",
+      });
+      expect(snapshot.conversations).toContainEqual(expect.objectContaining({
+        source: "slock",
+        externalId: "thread-1",
+        title: "修复登录回调异常",
+      }));
+      expect(slockCapability).toMatchObject({
+        source: "slock",
+        workItems: { support: "supported" },
+        conversations: { support: "partial" },
+      });
+    } finally {
+      server.close();
+    }
   });
 
   it("posts a runtime work-state once snapshot to the Agentlane backend when server url is configured", async () => {
@@ -571,6 +872,123 @@ exec "${process.execPath}" "${script}" "$@"
   chmodSync(executable, 0o755);
 }
 
+function writeOpenClawDingTalkState(fakeHome: string, input: {
+  conversationId: string;
+  groupTitle: string;
+  msgId: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  createdAt: string;
+}): void {
+  writeOpenClawDingTalkTargetDirectory(fakeHome, {
+    conversationId: input.conversationId,
+    groupTitle: input.groupTitle,
+    lastSeenAt: input.createdAt,
+  });
+  writeOpenClawDingTalkMessages(fakeHome, [{
+    msgId: input.msgId,
+    direction: "inbound",
+    accountId: "default",
+    conversationId: input.conversationId,
+    createdAt: input.createdAt,
+    updatedAt: input.createdAt,
+    messageType: "text",
+    text: input.text,
+    senderId: input.senderId,
+    senderName: input.senderName,
+  }]);
+}
+
+function writeOpenClawDingTalkTargetDirectory(fakeHome: string, input: {
+  conversationId: string;
+  groupTitle: string;
+  lastSeenAt: string;
+}): void {
+  const stateDir = path.join(fakeHome, ".openclaw", "agents", "default", "sessions", "dingtalk-state");
+  mkdirSync(stateDir, { recursive: true });
+  writeFileSync(path.join(stateDir, "targets.directory.account-default.json"), JSON.stringify({
+    version: 1,
+    groups: {
+      [input.conversationId]: {
+        currentTitle: input.groupTitle,
+        lastSeenAt: input.lastSeenAt,
+      },
+    },
+    users: {},
+  }));
+}
+
+function writeOpenClawDingTalkMessages(fakeHome: string, records: Array<Record<string, unknown>>): void {
+  const stateDir = path.join(fakeHome, ".openclaw", "agents", "default", "sessions", "dingtalk-state");
+  mkdirSync(stateDir, { recursive: true });
+  writeFileSync(path.join(stateDir, "messages.context.default.json"), JSON.stringify({
+    version: 1,
+    updatedAt: "2026-05-09T06:40:30.000Z",
+    records,
+  }));
+}
+
+function writeOpenClawTrajectory(fakeHome: string, agentId: string, sessionId: string, runs: Array<{
+  runId: string;
+  sessionKey: string;
+  prompt: string;
+  finalStatus: string;
+  endedStatus: string;
+  assistantTexts: string[];
+  startedAt: string;
+  endedAt: string;
+}>): void {
+  const sessionsDir = path.join(fakeHome, ".openclaw", "agents", agentId, "sessions");
+  mkdirSync(sessionsDir, { recursive: true });
+  const lines = runs.flatMap((run) => [
+    {
+      type: "session.started",
+      ts: run.startedAt,
+      sessionId,
+      sessionKey: run.sessionKey,
+      runId: run.runId,
+      data: {
+        sessionFile: path.join(sessionsDir, `${sessionId}.missing.jsonl`),
+        agentId,
+        messageProvider: "dingtalk",
+      },
+    },
+    {
+      type: "prompt.submitted",
+      ts: run.startedAt,
+      sessionId,
+      sessionKey: run.sessionKey,
+      runId: run.runId,
+      data: { prompt: run.prompt },
+    },
+    {
+      type: "trace.artifacts",
+      ts: run.endedAt,
+      sessionId,
+      sessionKey: run.sessionKey,
+      runId: run.runId,
+      data: {
+        finalStatus: run.finalStatus,
+        assistantTexts: run.assistantTexts,
+        didSendViaMessagingTool: false,
+      },
+    },
+    {
+      type: "session.ended",
+      ts: run.endedAt,
+      sessionId,
+      sessionKey: run.sessionKey,
+      runId: run.runId,
+      data: { status: run.endedStatus },
+    },
+  ]);
+  writeFileSync(
+    path.join(sessionsDir, `${sessionId}.trajectory.jsonl`),
+    `${lines.map((line) => JSON.stringify(line)).join("\n")}\n`,
+  );
+}
+
 function writeFakeMultica(fakeBin: string, payload: {
   runtimes: unknown;
   agents: unknown;
@@ -713,6 +1131,57 @@ async function startWorkStateServer(): Promise<{
     receivedSnapshot,
     baseUrl: `http://127.0.0.1:${address.port}`,
   };
+}
+
+async function startSlockInternalApiServer(): Promise<{
+  server: Server;
+  baseUrl: string;
+}> {
+  const server = createServer((request, response) => {
+    expect(request.headers.authorization).toBe("Bearer test-agent-token");
+    expect(request.headers["x-agent-id"]).toBe("tester");
+    const url = new URL(request.url ?? "/", "http://127.0.0.1");
+    if (url.pathname === "/internal/agent/tester/server") {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({
+        runtimeContext: { agentId: "tester", serverId: "server-1" },
+        channels: [
+          { id: "channel-1", name: "研发项目群", type: "channel", joined: true },
+          { id: "channel-archived", name: "归档群", type: "channel", archivedAt: "2026-05-09T06:00:00.000Z", joined: true },
+        ],
+        agents: [{ id: "tester", name: "@tester" }],
+        humans: [{ id: "user-1", name: "@zhangsan" }],
+      }));
+      return;
+    }
+    if (url.pathname === "/internal/agent/tester/tasks" && url.searchParams.get("channel") === "#研发项目群") {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({
+        tasks: [{
+          id: "task-1",
+          taskNumber: 12,
+          title: "修复登录回调异常",
+          status: "in_progress",
+          createdByName: "@zhangsan",
+          claimedByName: "@tester",
+          createdAt: "2026-05-09T06:30:00.000Z",
+          updatedAt: "2026-05-09T06:45:00.000Z",
+          messageId: "message-1",
+          threadId: "thread-1",
+        }],
+      }));
+      return;
+    }
+    response.writeHead(404);
+    response.end();
+  });
+
+  await new Promise<void>((resolve) => {
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("missing test server address");
+  return { server, baseUrl: `http://127.0.0.1:${address.port}` };
 }
 
 async function startControlServer(): Promise<{

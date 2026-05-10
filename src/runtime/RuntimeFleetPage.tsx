@@ -350,7 +350,7 @@ function RuntimeTable({
         <div className="assetTable runtimeTable" role="table" aria-label="Runtime 列表">
           <div className="assetRow assetHeader runtimeTableRow" role="row">
             <span role="columnheader">名称</span>
-            <span role="columnheader">Kind</span>
+            <span role="columnheader">Runtime</span>
             <span role="columnheader">所属设备</span>
             <span role="columnheader">状态</span>
             <span role="columnheader">最近同步</span>
@@ -446,9 +446,11 @@ function AgentTable({
                 {runtimeById.get(agent.runtimeId)?.name ?? agent.runtimeId}
               </span>
               <span className="channelList" role="cell">
-                {agent.channelBindings.map((binding) => (
-                  <Badge key={`${agent.id}-${binding.kind}`}>{binding.label || channelKindLabels[binding.kind]}</Badge>
-                ))}
+              {agent.channelBindings.map((binding, index) => (
+                <Badge key={`${agent.id}-${binding.kind}-${binding.externalId ?? index}`}>
+                  {binding.label || channelKindLabels[binding.kind]}
+                </Badge>
+              ))}
               </span>
               <span role="cell">
                 <StatusBadge label={managedAgentStatusLabels[agent.status]} status={agent.status} />

@@ -21,44 +21,189 @@ export function mapOpenClawWorkState(input: {
   runtimeId: string;
   agentId: string;
   sessions: ReadonlyArray<{ sessionKey: string; updatedAt?: string; status?: string }>;
+  dingtalkTargets?: ReadonlyArray<{
+    conversationId: string;
+    kind?: "group" | "direct";
+    label?: string;
+    lastSeenAt?: string;
+  }>;
+  dingtalkMessages?: ReadonlyArray<{
+    msgId: string;
+    sessionKey?: string;
+    conversationId: string;
+    direction: "inbound" | "outbound";
+    text?: string;
+    senderId?: string;
+    senderName?: string;
+    createdAt?: string;
+    updatedAt?: string;
+  }>;
   tasks: ReadonlyArray<{
     taskId: string;
     runId?: string;
+    task?: string;
+    label?: string;
     status: string;
+    requesterSessionKey?: string;
+    sessionKey?: string;
+    messageId?: string;
+    requesterOriginJson?: string;
+    sourceId?: string;
     createdAt?: string;
     startedAt?: string;
     endedAt?: string;
     error?: string;
   }>;
+  trajectoryRuns?: ReadonlyArray<{
+    runId: string;
+    sessionKey: string;
+    prompt?: string;
+    finalStatus?: string;
+    endedStatus?: string;
+    didSendViaMessagingTool?: boolean;
+    assistantTexts?: ReadonlyArray<string>;
+    aborted?: boolean;
+    timedOut?: boolean;
+    idleTimedOut?: boolean;
+    startedAt?: string;
+    endedAt?: string;
+    lastEventAt?: string;
+    error?: string;
+  }>;
 }): RuntimeWorkStateAdapterResult {
-  return {
-    workItems: [],
-    conversations: input.sessions.map((session): RuntimeConversation => ({
-      id: `${input.runtimeId}:conversation:${session.sessionKey}`,
-      source: "openclaw",
-      externalId: session.sessionKey,
+  const targetByConversationId = new Map<string, NonNullable<Parameters<typeof mapOpenClawWorkState>[0]["dingtalkTargets"]>[number]>();
+  for (const target of input.dingtalkTargets ?? []) {
+    targetByConversationId.set(target.conversationId, target);
+    targetByConversationId.set(target.conversationId.toLowerCase(), target);
+  }
+  const workItemIdByMessageId = new Map<string, string>();
+  const workItemByMessageId = new Map<string, RuntimeWorkItem>();
+  const conversationById = new Map<string, RuntimeConversation>();
+  const coveredRunIds = new Set<string>();
+
+  for (const session of input.sessions) {
+    const conversation = createOpenClawConversation(input, session.sessionKey, {
       status: session.status === "active" ? "active" : "unknown",
+      lastActivityAt: session.updatedAt,
+    });
+    setOpenClawConversation(conversationById, conversation);
+  }
+
+  for (const message of input.dingtalkMessages ?? []) {
+    if (message.direction !== "inbound") continue;
+    const target = targetByConversationId.get(message.conversationId);
+    const sessionKey = message.sessionKey ?? createOpenClawDingTalkSessionKey(input.agentId, target?.kind ?? "group", message.conversationId);
+    const channel = { kind: "dingtalk" as const, label: target?.label ?? "DingTalk", externalId: message.conversationId };
+    const creator = message.senderName || message.senderId
+      ? { kind: "human" as const, label: message.senderName ?? message.senderId ?? "未知发起人", externalId: message.senderId }
+      : undefined;
+    const conversation = createOpenClawConversation(input, sessionKey, {
+      status: "active",
+      title: channel.label,
+      channel,
+      participants: creator ? [creator] : undefined,
+      lastActivityAt: message.updatedAt ?? message.createdAt ?? target?.lastSeenAt,
+    });
+    setOpenClawConversation(conversationById, conversation);
+
+    const workItemId = `${input.runtimeId}:work-item:${normalizeObjectKey(message.msgId)}`;
+    workItemIdByMessageId.set(message.msgId, workItemId);
+    workItemByMessageId.set(message.msgId, {
+      id: workItemId,
+      source: "openclaw",
+      externalId: message.msgId,
+      title: createMessageTitle(message.text ?? "DingTalk 消息"),
+      description: message.text,
+      status: "todo",
+      channel,
+      creator,
       agentId: input.agentId,
       runtimeId: input.runtimeId,
-      lastActivityAt: session.updatedAt,
+      conversationId: conversation.id,
+      createdAt: message.createdAt,
+      updatedAt: message.updatedAt,
       lastSeenAt: input.observedAt,
-      sourceRefs: [{ source: "openclaw", externalId: session.sessionKey }],
-    })),
-    executions: input.tasks.map((task): RuntimeExecution => ({
-      id: `${input.runtimeId}:execution:${task.runId ?? task.taskId}`,
+      sourceRefs: [{ source: "openclaw", externalId: message.msgId }],
+    });
+  }
+
+  const executions = input.tasks.map((task): RuntimeExecution => {
+    const executionStatus = mapOpenClawExecutionStatus(task.status);
+    coveredRunIds.add(task.runId ?? task.taskId);
+    const sessionKey = task.requesterSessionKey ?? task.sessionKey;
+    const conversation = sessionKey
+      ? createOpenClawConversation(input, sessionKey, {
+          status: executionStatus === "running" ? "active" : "idle",
+          lastActivityAt: task.endedAt ?? task.startedAt ?? task.createdAt,
+        })
+      : undefined;
+    if (conversation) setOpenClawConversation(conversationById, conversation);
+    const origin = parseJsonMaybe(task.requesterOriginJson);
+    let workItemId = task.messageId ? workItemIdByMessageId.get(task.messageId) : undefined;
+    if (task.messageId && workItemId) {
+      const workItem = workItemByMessageId.get(task.messageId);
+      if (workItem) workItem.status = openClawMessageStatusFromExecution(executionStatus);
+    }
+    if (!workItemId && shouldCreateOpenClawTaskWorkItem(task, origin)) {
+      const workItem = createOpenClawTaskWorkItem(input, task, origin, executionStatus, conversation?.id);
+      workItemByMessageId.set(`task:${task.taskId}`, workItem);
+      workItemId = workItem.id;
+    }
+    return {
+      id: `${input.runtimeId}:execution:${normalizeObjectKey(task.runId ?? task.taskId)}`,
       source: "openclaw",
       externalId: task.runId ?? task.taskId,
       runtimeId: input.runtimeId,
       agentId: input.agentId,
-      conversationId: undefined,
-      status: mapOpenClawExecutionStatus(task.status),
+      workItemId,
+      conversationId: conversation?.id,
+      status: executionStatus,
       queuedAt: task.createdAt,
       startedAt: task.startedAt,
       endedAt: task.endedAt,
       lastSeenAt: input.observedAt,
       error: task.error,
       sourceRefs: [{ source: "openclaw", externalId: task.taskId }],
-    })),
+    };
+  });
+
+  const trajectoryExecutions: RuntimeExecution[] = [];
+  for (const run of input.trajectoryRuns ?? []) {
+    if (coveredRunIds.has(run.runId)) continue;
+    const prompt = cleanOpenClawPrompt(run.prompt);
+    if (!shouldCreateOpenClawTrajectoryWorkItem(run, prompt)) continue;
+    const executionStatus = mapOpenClawTrajectoryExecutionStatus(run);
+    const channel = openClawChannelFromDingTalkSession(run.sessionKey, input.dingtalkTargets);
+    const conversation = createOpenClawConversation(input, run.sessionKey, {
+      status: executionStatus === "running" ? "active" : "idle",
+      title: channel?.label,
+      channel,
+      lastActivityAt: run.lastEventAt ?? run.endedAt ?? run.startedAt,
+    });
+    setOpenClawConversation(conversationById, conversation);
+    const workItem = createOpenClawTrajectoryWorkItem(input, run, prompt, executionStatus, conversation.id);
+    workItemByMessageId.set(`trajectory:${run.runId}`, workItem);
+    trajectoryExecutions.push({
+      id: `${input.runtimeId}:execution:${normalizeObjectKey(run.runId)}`,
+      source: "openclaw",
+      externalId: run.runId,
+      runtimeId: input.runtimeId,
+      agentId: input.agentId,
+      workItemId: workItem.id,
+      conversationId: conversation.id,
+      status: executionStatus,
+      startedAt: run.startedAt,
+      endedAt: run.endedAt,
+      lastSeenAt: run.lastEventAt ?? run.endedAt ?? input.observedAt,
+      error: run.error,
+      sourceRefs: [{ source: "openclaw", externalId: run.runId }],
+    });
+  }
+
+  return {
+    workItems: Array.from(workItemByMessageId.values()),
+    conversations: Array.from(conversationById.values()),
+    executions: [...executions, ...trajectoryExecutions],
     capabilities: [openClawCapability(input.observedAt)],
   };
 }
@@ -160,7 +305,44 @@ export function mapSlockWorkState(input: {
     messageId?: string;
     threadId?: string;
   }>;
+  activities?: ReadonlyArray<{
+    id?: string;
+    activity: string;
+    taskId?: string;
+    messageId?: string;
+    threadId?: string;
+    updatedAt?: string;
+    error?: string;
+  }>;
 }): RuntimeWorkStateAdapterResult {
+  const taskById = new Map(input.tasks.map((task) => [task.id, task]));
+  const taskByThreadId = new Map(input.tasks.filter((task) => task.threadId).map((task) => [task.threadId as string, task]));
+  const executions = (input.activities ?? [])
+    .map((activity): RuntimeExecution | null => {
+      const status = mapSlockActivityStatus(activity.activity);
+      if (!status) return null;
+      const task = activity.taskId ? taskById.get(activity.taskId) : activity.threadId ? taskByThreadId.get(activity.threadId) : undefined;
+      const executionExternalId = activity.id ?? activity.taskId ?? activity.messageId ?? activity.threadId;
+      if (!executionExternalId) return null;
+      const threadId = task?.threadId ?? activity.threadId;
+      return {
+        id: `${input.runtimeId}:execution:${executionExternalId}`,
+        source: "slock",
+        externalId: executionExternalId,
+        runtimeId: input.runtimeId,
+        agentId: input.agentId,
+        workItemId: task ? `${input.runtimeId}:work-item:${task.id}` : undefined,
+        conversationId: threadId ? `${input.runtimeId}:conversation:${threadId}` : undefined,
+        status,
+        startedAt: status === "running" ? activity.updatedAt : undefined,
+        endedAt: status === "running" ? undefined : activity.updatedAt,
+        lastSeenAt: activity.updatedAt ?? input.observedAt,
+        error: activity.error,
+        sourceRefs: [{ source: "slock", externalId: executionExternalId }],
+      };
+    })
+    .filter((execution): execution is RuntimeExecution => Boolean(execution));
+
   return {
     workItems: input.tasks.map((task): RuntimeWorkItem => ({
       id: `${input.runtimeId}:work-item:${task.id}`,
@@ -195,9 +377,9 @@ export function mapSlockWorkState(input: {
         lastSeenAt: input.observedAt,
         sourceRefs: [{ source: "slock", externalId: task.messageId ?? task.id }],
       })),
-    executions: [],
+    executions,
     capabilities: [slockCapability(input.observedAt)],
-    warnings: ["Slock server active state is not treated as execution running evidence."],
+    warnings: executions.length ? [] : ["Slock server active state is not treated as execution running evidence."],
   };
 }
 
@@ -207,6 +389,18 @@ function mapOpenClawExecutionStatus(status: string): RuntimeExecutionStatus {
   if (status === "queued") return "queued";
   if (status === "running") return "running";
   if (status === "failed" || status === "lost" || status === "timed_out") return "failed";
+  return "unknown";
+}
+
+function mapOpenClawTrajectoryExecutionStatus(
+  run: NonNullable<Parameters<typeof mapOpenClawWorkState>[0]["trajectoryRuns"]>[number],
+): RuntimeExecutionStatus {
+  if (run.finalStatus === "success" || run.endedStatus === "success") return "succeeded";
+  if (run.finalStatus === "cancelled" || run.endedStatus === "cancelled") return "cancelled";
+  if (run.finalStatus === "error" || run.endedStatus === "error" || run.aborted || run.timedOut || run.idleTimedOut) {
+    return "failed";
+  }
+  if (!run.finalStatus && !run.endedStatus) return "running";
   return "unknown";
 }
 
@@ -239,15 +433,253 @@ function mapSlockWorkItemStatus(status: string): RuntimeWorkItemStatus {
   return "unknown";
 }
 
+function normalizeObjectKey(value: string): string {
+  return value
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function createOpenClawDingTalkSessionKey(agentId: string, kind: "group" | "direct", conversationId: string): string {
+  const agentExternalId = agentId.split(":agent:").at(-1) ?? "main";
+  return `agent:${agentExternalId}:dingtalk:${kind}:${conversationId}`;
+}
+
+function parseJsonMaybe(value: string | undefined): Record<string, unknown> | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+}
+
+function shouldCreateOpenClawTaskWorkItem(
+  task: { task?: string; label?: string; requesterSessionKey?: string; sessionKey?: string; sourceId?: string },
+  origin: Record<string, unknown> | null,
+): boolean {
+  if (!task.task && !task.label) return false;
+  if (task.sourceId?.startsWith("exec-approval-followup:")) return false;
+  const text = task.task ?? task.label ?? "";
+  if (/^\[[^\]]+\]\s+An async command the user already approved has completed/i.test(text)) return false;
+  if (/^\[[^\]]+\]\s+\[System\]/i.test(text)) return false;
+  return Boolean(origin?.channel || parseOpenClawDingTalkSession(task.requesterSessionKey ?? task.sessionKey));
+}
+
+function shouldCreateOpenClawTrajectoryWorkItem(
+  run: NonNullable<Parameters<typeof mapOpenClawWorkState>[0]["trajectoryRuns"]>[number],
+  prompt: string,
+): boolean {
+  if (!parseOpenClawDingTalkSession(run.sessionKey)) return false;
+  if (!prompt) return false;
+  if (prompt === "HEARTBEAT_OK" || /^\[OpenClaw heartbeat poll\]/i.test(prompt)) return false;
+  if (/^\[[^\]]+\]\s+An async command the user already approved has completed/i.test(prompt)) return false;
+  if (/^\[[^\]]+\]\s+\[System\]/i.test(prompt)) return false;
+  return true;
+}
+
+function createOpenClawTrajectoryWorkItem(
+  input: Parameters<typeof mapOpenClawWorkState>[0],
+  run: NonNullable<Parameters<typeof mapOpenClawWorkState>[0]["trajectoryRuns"]>[number],
+  prompt: string,
+  executionStatus: RuntimeExecutionStatus,
+  conversationId: string,
+): RuntimeWorkItem {
+  return {
+    id: `${input.runtimeId}:work-item:${normalizeObjectKey(run.runId)}`,
+    source: "openclaw",
+    externalId: run.runId,
+    title: createMessageTitle(prompt),
+    description: prompt,
+    status: openClawTrajectoryWorkItemStatus(run, executionStatus),
+    channel: openClawChannelFromDingTalkSession(run.sessionKey, input.dingtalkTargets),
+    creator: { kind: "unknown", label: "不支持采集" },
+    agentId: input.agentId,
+    runtimeId: input.runtimeId,
+    conversationId,
+    createdAt: run.startedAt,
+    updatedAt: run.endedAt ?? run.lastEventAt ?? run.startedAt,
+    lastSeenAt: run.lastEventAt ?? run.endedAt ?? input.observedAt,
+    sourceRefs: [{ source: "openclaw", externalId: run.runId }],
+  };
+}
+
+function openClawTrajectoryWorkItemStatus(
+  run: NonNullable<Parameters<typeof mapOpenClawWorkState>[0]["trajectoryRuns"]>[number],
+  executionStatus: RuntimeExecutionStatus,
+): RuntimeWorkItemStatus {
+  if (executionStatus === "succeeded" && !hasOpenClawDeliveryEvidence(run)) return "blocked";
+  return openClawMessageStatusFromExecution(executionStatus);
+}
+
+function hasOpenClawDeliveryEvidence(
+  run: NonNullable<Parameters<typeof mapOpenClawWorkState>[0]["trajectoryRuns"]>[number],
+): boolean {
+  if (run.didSendViaMessagingTool) return true;
+  return Boolean(run.assistantTexts?.some((text) => {
+    const normalized = text.trim();
+    return normalized && normalized !== "NO_REPLY" && normalized !== "HEARTBEAT_OK";
+  }));
+}
+
+function cleanOpenClawPrompt(value: string | undefined): string {
+  return (value ?? "")
+    .replace(/Conversation metadata:[\s\S]*?(?:\n\n|$)/i, "")
+    .replace(/<conversation-metadata>[\s\S]*?<\/conversation-metadata>/gi, "")
+    .replace(/\[media attached(?::| )[^\]]+\]/gi, "[media attached]")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function createOpenClawTaskWorkItem(
+  input: Parameters<typeof mapOpenClawWorkState>[0],
+  task: Parameters<typeof mapOpenClawWorkState>[0]["tasks"][number],
+  origin: Record<string, unknown> | null,
+  executionStatus: RuntimeExecutionStatus,
+  conversationId: string | undefined,
+): RuntimeWorkItem {
+  const sessionChannel = openClawChannelFromDingTalkSession(task.requesterSessionKey ?? task.sessionKey, input.dingtalkTargets);
+  const originChannel = openClawChannelFromOrigin(origin, input.dingtalkTargets);
+  const channel = originChannel ?? sessionChannel ?? { kind: "other" as const, label: "OpenClaw" };
+  const titleSource = task.label ?? task.task ?? task.taskId;
+
+  return {
+    id: `${input.runtimeId}:work-item:${normalizeObjectKey(task.taskId)}`,
+    source: "openclaw",
+    externalId: task.taskId,
+    title: createMessageTitle(titleSource),
+    description: task.task ?? titleSource,
+    status: openClawMessageStatusFromExecution(executionStatus),
+    channel,
+    creator: { kind: "unknown", label: "不支持采集", externalId: task.sourceId },
+    agentId: input.agentId,
+    runtimeId: input.runtimeId,
+    conversationId,
+    createdAt: task.createdAt,
+    updatedAt: task.endedAt ?? task.startedAt ?? task.createdAt,
+    lastSeenAt: input.observedAt,
+    sourceRefs: [{ source: "openclaw", externalId: task.taskId }],
+  };
+}
+
+function openClawChannelFromOrigin(
+  origin: Record<string, unknown> | null,
+  targets: Parameters<typeof mapOpenClawWorkState>[0]["dingtalkTargets"],
+): RuntimeWorkItem["channel"] | undefined {
+  const originChannel = typeof origin?.channel === "string" ? origin.channel : undefined;
+  if (!originChannel) return undefined;
+  if (originChannel === "dingtalk") {
+    const conversationId = typeof origin?.to === "string" ? origin.to : undefined;
+    const target = findOpenClawTarget(targets, conversationId);
+    return { kind: "dingtalk", label: target?.label ?? "DingTalk", externalId: conversationId };
+  }
+  if (originChannel === "webchat") return { kind: "other", label: "OpenClaw Webchat" };
+  if (originChannel === "cron") return { kind: "other", label: "OpenClaw Cron" };
+  return { kind: "other", label: originChannel };
+}
+
+function openClawChannelFromDingTalkSession(
+  sessionKey: string | undefined,
+  targets: Parameters<typeof mapOpenClawWorkState>[0]["dingtalkTargets"],
+): RuntimeWorkItem["channel"] | undefined {
+  const session = parseOpenClawDingTalkSession(sessionKey);
+  if (!session) return undefined;
+  const target = findOpenClawTarget(targets, session.conversationId);
+  return { kind: "dingtalk", label: target?.label ?? "DingTalk", externalId: session.conversationId };
+}
+
+function findOpenClawTarget(
+  targets: Parameters<typeof mapOpenClawWorkState>[0]["dingtalkTargets"],
+  conversationId: string | undefined,
+) {
+  if (!conversationId) return undefined;
+  return targets?.find((candidate) => candidate.conversationId === conversationId || candidate.conversationId.toLowerCase() === conversationId.toLowerCase());
+}
+
+function parseOpenClawDingTalkSession(sessionKey: string | undefined): { conversationId: string } | null {
+  const match = /^agent:[^:]+:dingtalk:(?:group|direct):(.+)$/.exec(sessionKey ?? "");
+  return match?.[1] ? { conversationId: match[1] } : null;
+}
+
+function createOpenClawConversation(
+  input: Pick<Parameters<typeof mapOpenClawWorkState>[0], "observedAt" | "runtimeId" | "agentId">,
+  sessionKey: string,
+  fields: Partial<RuntimeConversation>,
+): RuntimeConversation {
+  return {
+    id: `${input.runtimeId}:conversation:${normalizeObjectKey(sessionKey)}`,
+    source: "openclaw",
+    externalId: sessionKey,
+    status: fields.status ?? "unknown",
+    agentId: input.agentId,
+    runtimeId: input.runtimeId,
+    title: fields.title,
+    channel: fields.channel,
+    participants: fields.participants,
+    lastActivityAt: fields.lastActivityAt,
+    lastSeenAt: input.observedAt,
+    sourceRefs: [{ source: "openclaw", externalId: sessionKey }],
+  };
+}
+
+function setOpenClawConversation(map: Map<string, RuntimeConversation>, conversation: RuntimeConversation): void {
+  const existing = map.get(conversation.id);
+  if (!existing) {
+    map.set(conversation.id, conversation);
+    return;
+  }
+
+  map.set(conversation.id, {
+    ...existing,
+    ...conversation,
+    status: existing.status === "active" || conversation.status === "active" ? "active" : conversation.status,
+    title: existing.title ?? conversation.title,
+    channel: existing.channel ?? conversation.channel,
+    participants: existing.participants ?? conversation.participants,
+    lastActivityAt: latestIso(existing.lastActivityAt, conversation.lastActivityAt),
+    sourceRefs: existing.sourceRefs ?? conversation.sourceRefs,
+  });
+}
+
+function latestIso(left: string | undefined, right: string | undefined): string | undefined {
+  if (!left) return right;
+  if (!right) return left;
+  return Date.parse(left) >= Date.parse(right) ? left : right;
+}
+
+function createMessageTitle(value: string): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  const firstSentence = normalized.split(/[，。！？,.!?]/)[0]?.trim();
+  const title = firstSentence || normalized || "DingTalk 消息";
+  return title.length > 32 ? `${title.slice(0, 32)}...` : title;
+}
+
+function openClawMessageStatusFromExecution(status: RuntimeExecutionStatus): RuntimeWorkItemStatus {
+  if (status === "queued" || status === "running") return "in_progress";
+  if (status === "succeeded") return "done";
+  if (status === "cancelled") return "cancelled";
+  if (status === "failed" || status === "unknown") return "blocked";
+  return "unknown";
+}
+
+function mapSlockActivityStatus(activity: string): RuntimeExecutionStatus | null {
+  if (activity === "working" || activity === "thinking" || activity === "running") return "running";
+  if (activity === "failed" || activity === "error") return "failed";
+  if (activity === "cancelled" || activity === "canceled") return "cancelled";
+  if (activity === "completed" || activity === "succeeded" || activity === "done") return "succeeded";
+  return null;
+}
+
 function openClawCapability(collectedAt: string): RuntimeObservationCapability {
   return {
     source: "openclaw",
     collectedAt,
     workItems: {
-      support: "unsupported",
-      strategies: ["cli", "native_api"],
-      evidence: ["openclaw tasks list --json exposes executions, not project-management work items."],
-      limitations: ["OpenClaw has no pending or review phase without an upstream work item source."],
+      support: "partial",
+      strategies: ["local_state", "cli", "native_api"],
+      evidence: ["OpenClaw DingTalk message context, task origin, or trajectory prompt.submitted can produce message-backed work items."],
+      limitations: ["OpenClaw itself has no review phase; creator identity depends on channel message context."],
     },
     conversations: {
       support: "partial",
@@ -258,8 +690,8 @@ function openClawCapability(collectedAt: string): RuntimeObservationCapability {
     executions: {
       support: "supported",
       strategies: ["cli", "native_api"],
-      evidence: ["openclaw tasks list exposes task and run status."],
-      limitations: ["Lost and timed out statuses are normalized to failed."],
+      evidence: ["openclaw tasks list and trajectory trace.artifacts expose task and run status."],
+      limitations: ["Lost, timed out, and trajectory error states are normalized to failed."],
     },
   };
 }
@@ -306,9 +738,9 @@ function slockCapability(collectedAt: string): RuntimeObservationCapability {
       limitations: ["DM history depends on agent context."],
     },
     executions: {
-      support: "unknown",
-      strategies: ["network_proxy", "managed_launcher"],
-      evidence: ["daemon source has internal agent activity events, but CLI/server info does not expose running executions."],
+      support: "partial",
+      strategies: ["native_api", "network_proxy", "managed_launcher"],
+      evidence: ["Slock daemon emits agent activity events; task board and history provide task/message linkage."],
       limitations: ["Server active means online or available, not execution running."],
     },
   };

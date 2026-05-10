@@ -84,9 +84,18 @@ const profiles: Record<"openclaw" | "multica" | "slock", RuntimeListeningProfile
     source: "openclaw",
     role: "execution_source",
     runsBoardPolicy: "requires_upstream_work_item",
-    supportedStandaloneStages: ["processing", "closed", "attention"],
-    requiredForRuns: ["executionStatus", "conversationLink", "lastSeenAt"],
-    executionRule: "execution status can come from OpenClaw task/run state, but pending and review require an upstream WorkItem",
+    supportedStandaloneStages: ["pending", "processing", "closed", "attention"],
+    requiredForRuns: [
+      "creator",
+      "assigneeAgent",
+      "channel",
+      "requestExcerpt",
+      "workItemStatus",
+      "executionStatus",
+      "conversationLink",
+      "lastSeenAt",
+    ],
+    executionRule: "execution status can come from OpenClaw task/run/trajectory state, but pending and review require message or upstream WorkItem context",
   },
   multica: {
     source: "multica",
@@ -178,6 +187,10 @@ function createReadiness(
   executions: RuntimeExecution[],
 ): RuntimeListeningReadiness {
   if (profile.runsBoardPolicy === "requires_upstream_work_item") {
+    if (workItems.length > 0) {
+      const requiredFieldsReady = profile.requiredForRuns.every((field) => fields[field] === "supported" || fields[field] === "partial");
+      return requiredFieldsReady ? "ready_for_runs" : "not_ready";
+    }
     return executions.length > 0 ? "execution_only" : "not_ready";
   }
 
@@ -222,11 +235,16 @@ function participantFieldSupport(
 ): RuntimeListeningFieldSupport {
   const labels = workItems.map(select).filter((label): label is string => Boolean(label?.trim()));
   if (labels.length === 0) return workItemSupport(capability);
+  if (labels.every(isUnsupportedCollectionLabel)) return "partial";
   return labels.some((label) => !isLikelyOpaqueId(label)) ? "supported" : "partial";
 }
 
 function isLikelyOpaqueId(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.trim());
+}
+
+function isUnsupportedCollectionLabel(value: string): boolean {
+  return value.trim() === "不支持采集";
 }
 
 function workItemSupport(capability: RuntimeObservationCapability | undefined): RuntimeListeningFieldSupport {

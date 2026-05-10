@@ -3,6 +3,8 @@ import type { RuntimeControlChannel } from "./runtime-control-channel";
 import type { RuntimeInventoryStore } from "./runtime-inventory-store";
 import type { RuntimeWorkStateStore } from "./runtime-work-state-store";
 
+const maxJsonBodyChars = 10_000_000;
+
 /** Dependencies for the Runtime Fleet local HTTP API. */
 export interface RuntimeHttpApiHandlerOptions {
   /** Snapshot, connection, and command state store. */
@@ -129,7 +131,7 @@ function readJsonBody(request: IncomingMessage): Promise<unknown> {
     request.setEncoding("utf8");
     request.on("data", (chunk) => {
       body += chunk;
-      if (body.length > 2_000_000) {
+      if (body.length > maxJsonBodyChars) {
         reject(new Error("request body too large"));
         request.destroy();
       }

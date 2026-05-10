@@ -19,6 +19,7 @@ Current source of truth:
 - `src/catalog/catalog-seed.ts`: first reviewable seed data for the Catalog page.
 - `src/runtime/runtime-normalize.ts`: TypeScript source of truth for v1 runtime inventory normalization.
 - `src/runtime/runtime-work-state.ts`: TypeScript source of truth for work item, conversation, execution, and observation capability models.
+- `src/runtime/runtime-work-state-adapters.ts`: adapter normalization for OpenClaw, Multica, and Slock work-state inputs.
 - `src/runtime/runtime-work-state-query.ts`: frontend-facing query model for the read-only Runs / Work Board page.
 - `src/runtime/runtime-listening-acceptance.ts`: TypeScript source of truth for source-specific listening readiness and Runs lane policy.
 - `src/runtime/runtime-inventory-query.ts`: query and detail model for the Runtime Fleet page.
@@ -30,6 +31,7 @@ Current source of truth:
 - `e2e/catalog-workflow.spec.ts`: browser-level user workflow harness for the Catalog page.
 - `e2e/catalog-layout.spec.ts`: browser-level responsive layout harness for the Catalog page.
 - `e2e/runtime-fleet.spec.ts`: browser-level Runtime Fleet workflow and responsive layout harness.
+- `e2e/runtime-work-board.spec.ts`: browser-level Runs / Work Board workflow and responsive layout harness.
 - `docs/product/agent-network-runtime-panorama.png`: runtime panorama.
 - `docs/product/agent-network-build-objects.png`: build object map.
 - `assets/product-ui/`: UI and flow design assets.
@@ -45,8 +47,7 @@ Current source of truth:
 - Treat the device WebSocket as a control plane only. Do not use it for chat, arbitrary command execution, external platform protocol emulation, or task scheduling until a spec and harness explicitly introduce those behaviors.
 - Keep runtime/device secrets out of logs, fixtures, tests, docs, and UI screenshots. `deviceToken`, Slock keys, bearer tokens, and platform API keys may be passed through local config, but v1 does not implement full auth or secret management.
 - Runtime adapters must translate platform-specific fields into Agentlane-owned semantics before UI consumption. Do not make React components infer whether OpenClaw sessions, Multica tasks, or Slock workspaces mean `active`, `idle`, `lastSeenAt`, or runtime statistics.
-- Runs / Work Board must not turn bare platform executions into task cards, but target platforms must remain visible through normalized listening-status cards when they are `execution_only` or `not_ready`.
-- Runs / Work Board must stay task-context first: do not render unlinked runtime executions as task cards, and do not expose adapter evidence, raw limitations, command names, or debugging notes in user-facing UI. If a platform cannot provide creator, assignee, group/channel, message excerpt, or execution state, show a concise unsupported/unknown user label and keep details in logs/spec/harness.
+- Runs / Work Board must stay task-context first: do not render unlinked runtime executions, listening status, capability gaps, adapter evidence, raw limitations, command names, or debugging notes as user-facing task cards. If a platform cannot provide creator, assignee, group/channel, message excerpt, or execution state for a real work item, show a concise unsupported/unknown user label and keep details in logs/spec/harness.
 
 ## Spec And Harness Workflow
 

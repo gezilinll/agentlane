@@ -34,7 +34,7 @@ describe("runtime listening acceptance", () => {
       source: "openclaw",
       role: "execution_source",
       runsBoardPolicy: "requires_upstream_work_item",
-      supportedStandaloneStages: ["processing", "closed", "attention"],
+      supportedStandaloneStages: ["pending", "processing", "closed", "attention"],
     });
 
     expect(getRuntimeListeningProfile("multica")).toMatchObject({
@@ -64,16 +64,18 @@ describe("runtime listening acceptance", () => {
     expect(report.sources.slock.readiness).toBe("ready_for_runs");
     expect(report.sources.slock.fields.channel).toBe("supported");
     expect(report.sources.slock.fields.conversationLink).toBe("supported");
-    expect(report.sources.slock.fields.executionStatus).toBe("unknown");
+    expect(report.sources.slock.fields.executionStatus).toBe("supported");
   });
 
-  it("keeps OpenClaw as execution-only until an upstream task source links it", () => {
+  it("marks OpenClaw as usable when DingTalk messages are linked to execution evidence", () => {
     const report = createRuntimeListeningAcceptanceReport(fixtureSnapshot);
 
-    expect(report.sources.openclaw.readiness).toBe("execution_only");
+    expect(report.sources.openclaw.readiness).toBe("ready_for_runs");
+    expect(report.sources.openclaw.fields.creator).toBe("supported");
+    expect(report.sources.openclaw.fields.channel).toBe("supported");
     expect(report.sources.openclaw.fields.executionStatus).toBe("supported");
-    expect(report.sources.openclaw.fields.workItemStatus).toBe("unsupported");
-    expect(report.sources.openclaw.gaps).toContain("缺少上游 WorkItem 关联，不能单独进入 Runs 任务泳道");
+    expect(report.sources.openclaw.fields.workItemStatus).toBe("supported");
+    expect(report.sources.openclaw.gaps).not.toContain("缺少上游 WorkItem 关联，不能单独进入 Runs 任务泳道");
   });
 
   it("flags Slock workspace-only snapshots as not ready for real task listening", () => {

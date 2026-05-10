@@ -190,6 +190,10 @@ h1 {
   grid-template-columns: minmax(260px, 1fr) repeat(3, minmax(150px, 190px));
 }
 
+.runtimeToolbar {
+  grid-template-columns: minmax(260px, 1fr) repeat(3, minmax(150px, 190px));
+}
+
 .toolbarField {
   display: grid;
   gap: 6px;

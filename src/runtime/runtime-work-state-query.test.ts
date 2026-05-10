@@ -38,27 +38,24 @@ const snapshot: RuntimeWorkStateSnapshot = {
 };
 
 describe("runtime work state query", () => {
-  it("shows task cards plus source listening status cards without raw execution cards", () => {
+  it("shows only real work-item cards without platform listening placeholders", () => {
     const board = createRuntimeWorkBoard(snapshot);
 
     expect(board.lanes.map((lane) => lane.stage)).toEqual(["pending", "processing", "review", "closed", "attention"]);
     expect(board.lanes.find((lane) => lane.stage === "pending")?.items.map((item) => item.title)).toContain(
       "Unstarted example task",
     );
-    expect(board.lanes.find((lane) => lane.stage === "processing")?.items.some((item) => item.confidence === "partial")).toBe(
+    expect(board.lanes.find((lane) => lane.stage === "processing")?.items.some((item) => item.confidence === "direct")).toBe(
       true,
     );
+    expect(board.visibleItems.every((item) => item.kind === "work_item")).toBe(true);
     expect(board.visibleItems.some((item) => item.title.startsWith("OpenClaw execution"))).toBe(false);
-    expect(board.visibleItems).toContainEqual(expect.objectContaining({
-      kind: "listening_status",
-      source: "openclaw",
-      title: "OpenClaw 执行监听已接入",
-      stage: "attention",
-      listeningReadiness: "execution_only",
-    }));
+    expect(board.visibleItems.some((item) => item.title.includes("监听"))).toBe(false);
 
     const slockCard = board.visibleItems.find((item) => item.title === "Example in progress card");
     expect(slockCard).toMatchObject({
+      runtimeLabel: "Slock",
+      channelKindLabel: "Slock",
       creatorLabel: "@fixture-human",
       assigneeLabel: "@example-agent",
       channelLabel: "#example-board",
@@ -69,9 +66,9 @@ describe("runtime work state query", () => {
   it("summarizes confidence and unsupported capability signals", () => {
     const board = createRuntimeWorkBoard(snapshot);
 
-    expect(board.summary.totalItems).toBeGreaterThan(snapshot.workItems.length);
-    expect(board.summary.partialItems).toBeGreaterThan(0);
-    expect(board.summary.unsupportedCapabilities).toBeGreaterThan(0);
+    expect(board.summary.totalItems).toBe(snapshot.workItems.length);
+    expect(board.summary.partialItems).toBe(0);
+    expect(board.summary.unsupportedCapabilities).toBe(0);
     expect(board.capabilityNotes.some((note) => note.source === "slock" && note.surface === "executions")).toBe(true);
   });
 
@@ -79,7 +76,7 @@ describe("runtime work state query", () => {
     const board = createRuntimeWorkBoard(snapshot, {
       source: "slock",
       stage: "processing",
-      confidence: "partial",
+      confidence: "direct",
       search: "progress",
     });
 
@@ -87,12 +84,12 @@ describe("runtime work state query", () => {
     expect(board.visibleItems[0]).toMatchObject({
       source: "slock",
       stage: "processing",
-      confidence: "partial",
+      confidence: "direct",
       title: "Example in progress card",
     });
   });
 
-  it("shows a Slock listening gap card when task-board data is unavailable", () => {
+  it("keeps platform capability gaps out of Runs cards when task-board data is unavailable", () => {
     const board = createRuntimeWorkBoard({
       observedAt: "2026-05-09T08:00:00.000Z",
       deviceId: "fixture-device",
@@ -123,13 +120,11 @@ describe("runtime work state query", () => {
       }],
     }, { source: "slock" });
 
-    expect(board.visibleItems).toContainEqual(expect.objectContaining({
-      kind: "listening_status",
+    expect(board.visibleItems).toEqual([]);
+    expect(board.capabilityNotes).toContainEqual(expect.objectContaining({
       source: "slock",
-      title: "Slock 监听未就绪",
-      stage: "attention",
-      listeningReadiness: "not_ready",
-      requestExcerpt: "缺少 Slock task board 或 API adapter，不能确认任务卡、群组和发起消息",
+      surface: "workItems",
+      support: "unknown",
     }));
   });
 });

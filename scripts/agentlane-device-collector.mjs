@@ -569,6 +569,12 @@ function toArray(value, keys = []) {
   return [];
 }
 
+function toRecordArray(value) {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === "object") return Object.values(value);
+  return [];
+}
+
 function toIsoTimestamp(value) {
   if (value === undefined || value === null || value === "") return undefined;
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -594,10 +600,10 @@ function openClawWorkStateCapability(collectedAt, options = {}) {
     source: "openclaw",
     collectedAt,
     workItems: supportCapability(
-      "unsupported",
-      ["cli", "native_api"],
-      ["openclaw tasks list --json exposes executions, not project-management work items."],
-      ["OpenClaw has no pending or review phase without an upstream work item source."],
+      options.workItemsSupport || "unsupported",
+      options.workItemsStrategies || ["local_state", "cli", "native_api"],
+      options.workItemsEvidence || ["OpenClaw tasks, DingTalk local state, and trajectory prompt.submitted can expose message-backed work items."],
+      options.workItemsLimitations || ["OpenClaw has no pending or review phase without an upstream work item source."],
     ),
     conversations: supportCapability(
       options.conversationsSupport || "unknown",
@@ -608,8 +614,8 @@ function openClawWorkStateCapability(collectedAt, options = {}) {
     executions: supportCapability(
       options.executionsSupport || "unknown",
       ["cli", "native_api"],
-      options.executionsEvidence || ["openclaw tasks list --json was not available for this snapshot."],
-      options.executionsLimitations || ["Lost and timed out statuses are normalized to failed when task data is available."],
+      options.executionsEvidence || ["openclaw tasks list --json and trajectory trace.artifacts were not available for this snapshot."],
+      options.executionsLimitations || ["Lost, timed out, and trajectory error states are normalized to failed when task data is available."],
     ),
   };
 }
@@ -673,6 +679,14 @@ function normalizeOpenClawExecutionStatus(status) {
   return "unknown";
 }
 
+function normalizeOpenClawTrajectoryExecutionStatus(run) {
+  if (run.finalStatus === "success" || run.endedStatus === "success") return "succeeded";
+  if (run.finalStatus === "cancelled" || run.endedStatus === "cancelled") return "cancelled";
+  if (run.finalStatus === "error" || run.endedStatus === "error" || run.aborted || run.timedOut || run.idleTimedOut) return "failed";
+  if (!run.finalStatus && !run.endedStatus) return "running";
+  return "unknown";
+}
+
 function normalizeMulticaWorkItemStatus(status) {
   if (status === "todo" || status === "backlog" || status === "open") return "todo";
   if (status === "in_progress" || status === "running") return "in_progress";
@@ -714,16 +728,436 @@ function addOpenClawSession(sessionMap, runtimeId, agentId, session, observedAt,
   const existing = sessionMap.get(sessionKey) || {};
   const lastActivityAt = toIsoTimestamp(session?.updatedAt || session?.updated_at || session?.lastActivityAt || session?.last_activity_at || session?.lastEventAt);
   sessionMap.set(sessionKey, {
-    id: `${runtimeId}:conversation:${sanitizeId(sessionKey)}`,
+    id: existing.id || `${runtimeId}:conversation:${sanitizeId(sessionKey)}`,
     source: "openclaw",
     externalId: sessionKey,
-    status: session?.status === "active" || fallbackStatus === "active" ? "active" : existing.status || fallbackStatus,
+    status: existing.status === "active" || session?.status === "active" || fallbackStatus === "active"
+      ? "active"
+      : existing.status || fallbackStatus,
     agentId: existing.agentId || agentId,
     runtimeId,
-    ...(lastActivityAt || existing.lastActivityAt ? { lastActivityAt: lastActivityAt || existing.lastActivityAt } : {}),
+    ...(session?.title || existing.title ? { title: existing.title || session.title } : {}),
+    ...(session?.channel || existing.channel ? { channel: existing.channel || session.channel } : {}),
+    ...(session?.participants || existing.participants ? { participants: existing.participants || session.participants } : {}),
+    ...(lastActivityAt || existing.lastActivityAt ? { lastActivityAt: latestIsoTimestamp(existing.lastActivityAt, lastActivityAt) } : {}),
     lastSeenAt: observedAt,
-    sourceRefs: [{ source: "openclaw", externalId: sessionKey }],
+    sourceRefs: existing.sourceRefs || [{ source: "openclaw", externalId: sessionKey }],
   });
+}
+
+function latestIsoTimestamp(left, right) {
+  if (!left) return right;
+  if (!right) return left;
+  return Date.parse(left) >= Date.parse(right) ? left : right;
+}
+
+function readOpenClawDingTalkState() {
+  const agentsRoot = path.join(homeDir(), ".openclaw", "agents");
+  const messages = [];
+  const targetsByConversationId = new Map();
+  try {
+    for (const agentEntry of readdirSync(agentsRoot, { withFileTypes: true })) {
+      if (!agentEntry.isDirectory()) continue;
+      const stateDir = path.join(agentsRoot, agentEntry.name, "sessions", "dingtalk-state");
+      let stateEntries = [];
+      try {
+        stateEntries = readdirSync(stateDir, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+
+      for (const entry of stateEntries) {
+        if (!entry.isFile() || !entry.name.startsWith("targets.directory") || !entry.name.endsWith(".json")) continue;
+        try {
+          const directory = readJsonFile(path.join(stateDir, entry.name));
+          for (const [conversationId, group] of Object.entries(directory.groups || {})) {
+            const target = {
+              conversationId,
+              kind: "group",
+              label: group?.currentTitle || group?.title || conversationId,
+              lastSeenAt: toIsoTimestamp(group?.lastSeenAt || group?.updatedAt),
+            };
+            targetsByConversationId.set(conversationId, target);
+            targetsByConversationId.set(String(conversationId).toLowerCase(), target);
+          }
+          for (const [conversationId, user] of Object.entries(directory.users || {})) {
+            const target = {
+              conversationId,
+              kind: "direct",
+              label: user?.displayName || user?.name || user?.nick || conversationId,
+              lastSeenAt: toIsoTimestamp(user?.lastSeenAt || user?.updatedAt),
+            };
+            targetsByConversationId.set(conversationId, target);
+            targetsByConversationId.set(String(conversationId).toLowerCase(), target);
+          }
+        } catch {
+          // Ignore malformed local channel directory files.
+        }
+      }
+
+      for (const entry of stateEntries) {
+        if (!entry.isFile() || !entry.name.startsWith("messages.context") || !entry.name.endsWith(".json")) continue;
+        try {
+          const context = readJsonFile(path.join(stateDir, entry.name));
+          for (const record of toRecordArray(context.records)) {
+            if (!record?.msgId && !record?.messageId) continue;
+            if (!record?.conversationId) continue;
+            const target = targetsByConversationId.get(record.conversationId);
+            const sessionKind = target?.kind || "group";
+            messages.push({
+              msgId: String(record.msgId || record.messageId),
+              sessionKey: record.sessionKey || `agent:main:dingtalk:${sessionKind}:${record.conversationId}`,
+              conversationId: String(record.conversationId),
+              direction: record.direction === "outbound" ? "outbound" : "inbound",
+              text: typeof record.text === "string" ? record.text : typeof record.content === "string" ? record.content : undefined,
+              senderId: record.senderId ? String(record.senderId) : undefined,
+              senderName: record.senderName || record.senderNick || record.sender ? String(record.senderName || record.senderNick || record.sender) : undefined,
+              createdAt: toIsoTimestamp(record.createdAt || record.created_at),
+              updatedAt: toIsoTimestamp(record.updatedAt || record.updated_at || context.updatedAt),
+            });
+          }
+        } catch {
+          // Ignore malformed local message context files.
+        }
+      }
+    }
+  } catch {
+    return { messages: [], targetsByConversationId: new Map() };
+  }
+  return { messages, targetsByConversationId };
+}
+
+function walkOpenClawFiles(root, predicate, output = []) {
+  let entries = [];
+  try {
+    entries = readdirSync(root, { withFileTypes: true });
+  } catch {
+    return output;
+  }
+  for (const entry of entries) {
+    const fullPath = path.join(root, entry.name);
+    if (entry.isDirectory()) walkOpenClawFiles(fullPath, predicate, output);
+    else if (entry.isFile() && predicate(fullPath, entry)) output.push(fullPath);
+  }
+  return output;
+}
+
+function readOpenClawTrajectoryRuns() {
+  const agentsRoot = path.join(homeDir(), ".openclaw", "agents");
+  const runs = [];
+  let agentEntries = [];
+  try {
+    agentEntries = readdirSync(agentsRoot, { withFileTypes: true });
+  } catch {
+    return runs;
+  }
+
+  for (const agentEntry of agentEntries) {
+    if (!agentEntry.isDirectory()) continue;
+    const agentExternalId = agentEntry.name || "main";
+    const sessionsRoot = path.join(agentsRoot, agentEntry.name, "sessions");
+    const trajectoryFiles = walkOpenClawFiles(sessionsRoot, (filePath) => filePath.endsWith(".trajectory.jsonl"));
+    for (const trajectoryFile of trajectoryFiles) {
+      for (const run of readOpenClawTrajectoryFile(trajectoryFile, agentExternalId)) {
+        if (parseOpenClawDingTalkSession(run.sessionKey)) runs.push(run);
+      }
+    }
+  }
+
+  return runs;
+}
+
+function readOpenClawTrajectoryFile(trajectoryFile, fallbackAgentId) {
+  const runById = new Map();
+  let lines = [];
+  try {
+    lines = readFileSync(trajectoryFile, "utf8").split(/\n+/).filter(Boolean);
+  } catch {
+    return [];
+  }
+
+  for (const line of lines) {
+    if (!isOpenClawTrajectoryLineNeeded(line)) continue;
+    let event;
+    try {
+      event = JSON.parse(line);
+    } catch {
+      continue;
+    }
+
+    const runId = String(event.runId || event.run_id || event.data?.runId || event.data?.run_id || event.sessionId || path.basename(trajectoryFile, ".trajectory.jsonl"));
+    if (!runId) continue;
+    const current = runById.get(runId) || {
+      runId,
+      sessionKey: event.sessionKey || event.session_key || event.data?.sessionKey || event.data?.session_key || "",
+      agentExternalId: event.data?.agentId || event.agentId || fallbackAgentId || "main",
+    };
+    current.sessionKey ||= event.sessionKey || event.session_key || event.data?.sessionKey || event.data?.session_key || "";
+    current.agentExternalId ||= event.data?.agentId || event.agentId || fallbackAgentId || "main";
+    current.lastEventAt = latestIsoTimestamp(current.lastEventAt, toIsoTimestamp(event.ts || event.timestamp));
+
+    if (event.type === "session.started") {
+      current.startedAt = current.startedAt || toIsoTimestamp(event.ts || event.timestamp);
+      current.sessionFile = event.data?.sessionFile || event.data?.session_file || current.sessionFile;
+    } else if (event.type === "prompt.submitted") {
+      current.prompt = cleanOpenClawPromptText(extractOpenClawPrompt(event.data) || current.prompt);
+    } else if (event.type === "trace.artifacts") {
+      const data = event.data || {};
+      current.finalStatus = data.finalStatus || current.finalStatus;
+      current.aborted = Boolean(data.aborted || current.aborted);
+      current.timedOut = Boolean(data.timedOut || data.timed_out || current.timedOut);
+      current.idleTimedOut = Boolean(data.idleTimedOut || data.idle_timed_out || current.idleTimedOut);
+      current.didSendViaMessagingTool = Boolean(data.didSendViaMessagingTool || current.didSendViaMessagingTool);
+      current.assistantTexts = Array.isArray(data.assistantTexts) ? data.assistantTexts.map(String) : current.assistantTexts;
+      current.error = data.promptErrorSource || data.error || current.error;
+    } else if (event.type === "model.completed") {
+      const data = event.data || {};
+      current.aborted = Boolean(data.aborted || current.aborted);
+      current.timedOut = Boolean(data.timedOut || data.timed_out || current.timedOut);
+      current.idleTimedOut = Boolean(data.idleTimedOut || data.idle_timed_out || current.idleTimedOut);
+      current.assistantTexts = current.assistantTexts || (Array.isArray(data.assistantTexts) ? data.assistantTexts.map(String) : undefined);
+      current.error = data.promptErrorSource || data.error || current.error;
+    } else if (event.type === "session.ended") {
+      current.endedAt = toIsoTimestamp(event.ts || event.timestamp) || current.endedAt;
+      current.endedStatus = event.data?.status || event.status || current.endedStatus;
+      current.aborted = Boolean(event.data?.aborted || current.aborted);
+      current.timedOut = Boolean(event.data?.timedOut || event.data?.timed_out || current.timedOut);
+      current.idleTimedOut = Boolean(event.data?.idleTimedOut || event.data?.idle_timed_out || current.idleTimedOut);
+    }
+    runById.set(runId, current);
+  }
+
+  for (const run of runById.values()) {
+    if (!run.prompt && run.sessionFile) {
+      run.prompt = readLatestOpenClawUserPrompt(run.sessionFile);
+    }
+  }
+
+  return Array.from(runById.values()).filter((run) => run.sessionKey);
+}
+
+function isOpenClawTrajectoryLineNeeded(line) {
+  return line.includes('"session.started"') ||
+    line.includes('"prompt.submitted"') ||
+    line.includes('"model.completed"') ||
+    line.includes('"trace.artifacts"') ||
+    line.includes('"session.ended"');
+}
+
+function extractOpenClawPrompt(data) {
+  if (!data || typeof data !== "object") return "";
+  if (typeof data.prompt === "string" && data.prompt.trim()) return data.prompt;
+  const messages = Array.isArray(data.messages) ? data.messages : [];
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if ((message?.role || message?.message?.role) !== "user") continue;
+    const text = openClawTextFromContent(message.content ?? message.message?.content ?? message.text);
+    if (text.trim()) return text;
+  }
+  return "";
+}
+
+function readLatestOpenClawUserPrompt(sessionFile) {
+  let records = [];
+  try {
+    records = readFileSync(sessionFile, "utf8").split(/\n+/).filter(Boolean).map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    }).filter(Boolean);
+  } catch {
+    return "";
+  }
+
+  for (let index = records.length - 1; index >= 0; index -= 1) {
+    const record = records[index];
+    if ((record?.role || record?.message?.role || record?.data?.role) !== "user") continue;
+    const text = openClawTextFromContent(record.content ?? record.message?.content ?? record.data?.content);
+    if (text.trim()) return cleanOpenClawPromptText(text);
+  }
+  return "";
+}
+
+function openClawTextFromContent(content) {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content.map((part) => {
+      if (typeof part === "string") return part;
+      if (part && typeof part.text === "string") return part.text;
+      if (part && typeof part.content === "string") return part.content;
+      return "";
+    }).filter(Boolean).join("\n");
+  }
+  if (content && typeof content === "object") {
+    if (typeof content.text === "string") return content.text;
+    if (typeof content.content === "string") return content.content;
+  }
+  return "";
+}
+
+function cleanOpenClawPromptText(value) {
+  return String(value || "")
+    .replace(/Conversation metadata:[\s\S]*?(?:\n\n|$)/i, "")
+    .replace(/<conversation-metadata>[\s\S]*?<\/conversation-metadata>/gi, "")
+    .replace(/\[media attached(?::| )[^\]]+\]/gi, "[media attached]")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function shouldCreateOpenClawTrajectoryWorkItem(run) {
+  const prompt = cleanOpenClawPromptText(run?.prompt);
+  if (!prompt) return false;
+  if (prompt === "HEARTBEAT_OK" || /^\[OpenClaw heartbeat poll\]/i.test(prompt)) return false;
+  if (/^\[[^\]]+\]\s+An async command the user already approved has completed/i.test(prompt)) return false;
+  if (/^\[[^\]]+\]\s+\[System\]/i.test(prompt)) return false;
+  return Boolean(parseOpenClawDingTalkSession(run?.sessionKey));
+}
+
+function messageTitle(value) {
+  const normalized = String(value || "DingTalk 消息").replace(/\s+/g, " ").trim();
+  const firstSentence = normalized.split(/[，。！？,.!?]/)[0]?.trim();
+  const title = firstSentence || normalized || "DingTalk 消息";
+  return title.length > 32 ? `${title.slice(0, 32)}...` : title;
+}
+
+function parseJsonMaybe(value) {
+  if (!value) return null;
+  if (typeof value === "object") return value;
+  if (typeof value !== "string") return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function extractOpenClawMessageId(task) {
+  const origin = parseJsonMaybe(task.requesterOriginJson || task.requester_origin_json || task.requester_origin);
+  return task.messageId || task.message_id || task.msgId || origin?.messageId || origin?.message_id || origin?.msgId || origin?.msg_id;
+}
+
+function extractOpenClawOrigin(task) {
+  return parseJsonMaybe(task.requesterOriginJson || task.requester_origin_json || task.requester_origin);
+}
+
+function normalizeOpenClawMessageStatus(status) {
+  if (status === "queued" || status === "running") return "in_progress";
+  if (status === "succeeded") return "done";
+  if (status === "cancelled") return "cancelled";
+  if (status === "failed" || status === "unknown") return "blocked";
+  return "unknown";
+}
+
+function shouldCreateOpenClawTaskWorkItem(task, origin) {
+  if (!task?.task && !task?.label) return false;
+  if (String(task.sourceId || task.source_id || "").startsWith("exec-approval-followup:")) return false;
+  const text = String(task.task || task.label || "");
+  if (/^\[[^\]]+\]\s+An async command the user already approved has completed/i.test(text)) return false;
+  if (/^\[[^\]]+\]\s+\[System\]/i.test(text)) return false;
+  return Boolean(origin?.channel || parseOpenClawDingTalkSession(task.requesterSessionKey || task.requester_session_key || task.sessionKey || task.session_key));
+}
+
+function normalizeOpenClawOriginConversationId(origin) {
+  return origin?.to ? String(origin.to) : undefined;
+}
+
+function openClawChannelFromOrigin(origin, targetsByConversationId) {
+  const channel = origin?.channel ? String(origin.channel) : "";
+  if (!channel) return undefined;
+  if (channel === "dingtalk") {
+    const conversationId = normalizeOpenClawOriginConversationId(origin);
+    const target = conversationId ? targetsByConversationId.get(conversationId) || targetsByConversationId.get(String(conversationId).toLowerCase()) : undefined;
+    return {
+      kind: "dingtalk",
+      label: target?.label || "DingTalk",
+      ...(conversationId ? { externalId: conversationId } : {}),
+    };
+  }
+  if (channel === "webchat") return { kind: "other", label: "OpenClaw Webchat" };
+  if (channel === "cron") return { kind: "other", label: "OpenClaw Cron" };
+  return { kind: "other", label: channel };
+}
+
+function parseOpenClawDingTalkSession(sessionKey) {
+  const match = /^agent:[^:]+:dingtalk:(?:group|direct):(.+)$/.exec(String(sessionKey || ""));
+  return match?.[1] ? { conversationId: match[1] } : null;
+}
+
+function openClawChannelFromDingTalkSession(sessionKey, targetsByConversationId) {
+  const parsed = parseOpenClawDingTalkSession(sessionKey);
+  if (!parsed) return undefined;
+  const target = targetsByConversationId.get(parsed.conversationId) || targetsByConversationId.get(parsed.conversationId.toLowerCase());
+  return {
+    kind: "dingtalk",
+    label: target?.label || "DingTalk",
+    externalId: parsed.conversationId,
+  };
+}
+
+function createOpenClawTaskWorkItem({ task, origin, runtimeId, agentId, sessionKey, executionStatus, observedAt, dingtalkState }) {
+  const taskId = task.taskId || task.task_id || task.id || task.runId || "task";
+  const channel = openClawChannelFromOrigin(origin, dingtalkState.targetsByConversationId) ||
+    openClawChannelFromDingTalkSession(sessionKey, dingtalkState.targetsByConversationId) ||
+    { kind: "other", label: "OpenClaw" };
+  const conversationId = sessionKey ? `${runtimeId}:conversation:${sanitizeId(sessionKey)}` : undefined;
+  const titleSource = task.label || task.task || taskId;
+  return {
+    id: `${runtimeId}:work-item:${sanitizeId(taskId)}`,
+    source: "openclaw",
+    externalId: String(taskId),
+    title: messageTitle(titleSource),
+    description: typeof task.task === "string" ? task.task.slice(0, 500) : String(titleSource),
+    status: normalizeOpenClawMessageStatus(executionStatus),
+    channel,
+    creator: { kind: "unknown", label: "不支持采集", ...(task.sourceId || task.source_id ? { externalId: String(task.sourceId || task.source_id) } : {}) },
+    agentId,
+    runtimeId,
+    ...(conversationId ? { conversationId } : {}),
+    ...(toIsoTimestamp(task.createdAt || task.created_at) ? { createdAt: toIsoTimestamp(task.createdAt || task.created_at) } : {}),
+    ...(toIsoTimestamp(task.endedAt || task.ended_at || task.completedAt || task.completed_at || task.lastEventAt || task.last_event_at) ? { updatedAt: toIsoTimestamp(task.endedAt || task.ended_at || task.completedAt || task.completed_at || task.lastEventAt || task.last_event_at) } : {}),
+    lastSeenAt: toIsoTimestamp(task.lastEventAt || task.last_event_at || task.endedAt || task.ended_at || task.startedAt || task.started_at) || observedAt,
+    sourceRefs: [{ source: "openclaw", externalId: String(taskId) }],
+  };
+}
+
+function openClawTrajectoryWorkItemStatus(run, executionStatus) {
+  if (executionStatus === "succeeded" && !hasOpenClawTrajectoryDeliveryEvidence(run)) return "blocked";
+  return normalizeOpenClawMessageStatus(executionStatus);
+}
+
+function hasOpenClawTrajectoryDeliveryEvidence(run) {
+  if (run.didSendViaMessagingTool) return true;
+  if (!Array.isArray(run.assistantTexts)) return false;
+  return run.assistantTexts.some((text) => {
+    const normalized = String(text || "").trim();
+    return normalized && normalized !== "NO_REPLY" && normalized !== "HEARTBEAT_OK";
+  });
+}
+
+function createOpenClawTrajectoryWorkItem({ run, runtimeId, agentId, executionStatus, observedAt, dingtalkState }) {
+  const channel = openClawChannelFromDingTalkSession(run.sessionKey, dingtalkState.targetsByConversationId) ||
+    { kind: "dingtalk", label: "DingTalk", externalId: parseOpenClawDingTalkSession(run.sessionKey)?.conversationId };
+  const conversationId = `${runtimeId}:conversation:${sanitizeId(run.sessionKey)}`;
+  const prompt = cleanOpenClawPromptText(run.prompt);
+  return {
+    id: `${runtimeId}:work-item:${sanitizeId(run.runId)}`,
+    source: "openclaw",
+    externalId: String(run.runId),
+    title: messageTitle(prompt),
+    description: prompt,
+    status: openClawTrajectoryWorkItemStatus(run, executionStatus),
+    channel,
+    creator: { kind: "unknown", label: "不支持采集" },
+    agentId,
+    runtimeId,
+    conversationId,
+    ...(run.startedAt ? { createdAt: run.startedAt } : {}),
+    ...(run.endedAt || run.lastEventAt || run.startedAt ? { updatedAt: run.endedAt || run.lastEventAt || run.startedAt } : {}),
+    lastSeenAt: run.lastEventAt || run.endedAt || observedAt,
+    sourceRefs: [{ source: "openclaw", externalId: String(run.runId) }],
+  };
 }
 
 function collectOpenClawWorkState(deviceId, observedAt) {
@@ -744,6 +1178,13 @@ function collectOpenClawWorkState(deviceId, observedAt) {
   const gateway = status?.gateway;
   const runtimeId = makeRuntimeId(deviceId, "openclaw", gateway?.url ? `gateway-${gateway.url}` : "gateway-local");
   const sessionMap = new Map();
+  const dingtalkState = readOpenClawDingTalkState();
+  const trajectoryRuns = readOpenClawTrajectoryRuns();
+  const workItemByMessageId = new Map();
+  const workItemIdByMessageId = new Map();
+  const workItemByTaskId = new Map();
+  const workItemByTrajectoryRunId = new Map();
+  const coveredRunIds = new Set();
 
   const healthAgents = toArray(health?.agents, ["agents"]);
   const statusAgents = toArray(status?.agents?.agents || status?.agents, ["agents"]);
@@ -758,12 +1199,66 @@ function collectOpenClawWorkState(deviceId, observedAt) {
     for (const session of recentSessions) addOpenClawSession(sessionMap, runtimeId, agentId, session, observedAt, session?.status || "unknown");
   }
 
+  for (const message of dingtalkState.messages) {
+    if (message.direction !== "inbound") continue;
+    const target = dingtalkState.targetsByConversationId.get(message.conversationId);
+    const channel = { kind: "dingtalk", label: target?.label || "DingTalk", externalId: message.conversationId };
+    const creator = message.senderName || message.senderId
+      ? { kind: "human", label: message.senderName || message.senderId || "未知发起人", ...(message.senderId ? { externalId: message.senderId } : {}) }
+      : undefined;
+    const agentId = makeAgentId(runtimeId, "main");
+    addOpenClawSession(
+      sessionMap,
+      runtimeId,
+      agentId,
+      {
+        sessionKey: message.sessionKey,
+        title: channel.label,
+        channel,
+        ...(creator ? { participants: [creator] } : {}),
+        lastActivityAt: message.updatedAt || message.createdAt || target?.lastSeenAt,
+        status: "active",
+      },
+      observedAt,
+      "active",
+    );
+    const workItemId = `${runtimeId}:work-item:${sanitizeId(message.msgId)}`;
+    const workItem = {
+      id: workItemId,
+      source: "openclaw",
+      externalId: message.msgId,
+      title: messageTitle(message.text),
+      ...(message.text ? { description: message.text } : {}),
+      status: "todo",
+      channel,
+      ...(creator ? { creator } : {}),
+      agentId,
+      runtimeId,
+      conversationId: `${runtimeId}:conversation:${sanitizeId(message.sessionKey)}`,
+      ...(message.createdAt ? { createdAt: message.createdAt } : {}),
+      ...(message.updatedAt ? { updatedAt: message.updatedAt } : {}),
+      lastSeenAt: observedAt,
+      sourceRefs: [{ source: "openclaw", externalId: message.msgId }],
+    };
+    workItemByMessageId.set(message.msgId, workItem);
+    workItemIdByMessageId.set(message.msgId, workItemId);
+  }
+
   const executions = tasks.map((task) => {
     const taskId = task.taskId || task.task_id || task.id || task.runId || "task";
     const runId = task.runId || task.run_id || taskId;
+    coveredRunIds.add(String(runId));
     const agentExternalId = task.agentId || task.agent_id || "main";
     const agentId = makeAgentId(runtimeId, agentExternalId);
     const sessionKey = task.requesterSessionKey || task.requester_session_key || task.childSessionKey || task.child_session_key || task.sessionKey || task.session_key;
+    const origin = extractOpenClawOrigin(task);
+    const messageId = extractOpenClawMessageId(task);
+    const executionStatus = normalizeOpenClawExecutionStatus(task.status);
+    let workItemId = messageId ? workItemIdByMessageId.get(String(messageId)) : undefined;
+    if (messageId && workItemId) {
+      const workItem = workItemByMessageId.get(String(messageId));
+      if (workItem) workItem.status = normalizeOpenClawMessageStatus(executionStatus);
+    }
     if (sessionKey) {
       addOpenClawSession(
         sessionMap,
@@ -772,11 +1267,25 @@ function collectOpenClawWorkState(deviceId, observedAt) {
         {
           sessionKey,
           lastEventAt: task.lastEventAt || task.last_event_at || task.startedAt || task.started_at,
-          status: normalizeOpenClawExecutionStatus(task.status) === "running" ? "active" : "idle",
+          status: executionStatus === "running" ? "active" : "idle",
         },
         observedAt,
-        normalizeOpenClawExecutionStatus(task.status) === "running" ? "active" : "idle",
+        executionStatus === "running" ? "active" : "idle",
       );
+    }
+    if (!workItemId && shouldCreateOpenClawTaskWorkItem(task, origin)) {
+      const workItem = createOpenClawTaskWorkItem({
+        task,
+        origin,
+        runtimeId,
+        agentId,
+        sessionKey,
+        executionStatus,
+        observedAt,
+        dingtalkState,
+      });
+      workItemByTaskId.set(String(taskId), workItem);
+      workItemId = workItem.id;
     }
     const error = task.error || task.lastError || task.last_error;
     const executionKey = taskId && String(taskId) !== String(runId)
@@ -788,8 +1297,9 @@ function collectOpenClawWorkState(deviceId, observedAt) {
       externalId: String(runId),
       runtimeId,
       agentId,
+      ...(workItemId ? { workItemId } : {}),
       ...(sessionKey ? { conversationId: `${runtimeId}:conversation:${sanitizeId(sessionKey)}` } : {}),
-      status: normalizeOpenClawExecutionStatus(task.status),
+      status: executionStatus,
       ...(toIsoTimestamp(task.createdAt || task.created_at) ? { queuedAt: toIsoTimestamp(task.createdAt || task.created_at) } : {}),
       ...(toIsoTimestamp(task.startedAt || task.started_at) ? { startedAt: toIsoTimestamp(task.startedAt || task.started_at) } : {}),
       ...(toIsoTimestamp(task.endedAt || task.ended_at || task.completedAt || task.completed_at) ? { endedAt: toIsoTimestamp(task.endedAt || task.ended_at || task.completedAt || task.completed_at) } : {}),
@@ -799,22 +1309,80 @@ function collectOpenClawWorkState(deviceId, observedAt) {
     };
   });
 
+  const trajectoryExecutions = [];
+  for (const run of trajectoryRuns) {
+    if (coveredRunIds.has(String(run.runId))) continue;
+    if (!shouldCreateOpenClawTrajectoryWorkItem(run)) continue;
+    const executionStatus = normalizeOpenClawTrajectoryExecutionStatus(run);
+    const agentId = makeAgentId(runtimeId, run.agentExternalId || "main");
+    const channel = openClawChannelFromDingTalkSession(run.sessionKey, dingtalkState.targetsByConversationId);
+    addOpenClawSession(
+      sessionMap,
+      runtimeId,
+      agentId,
+      {
+        sessionKey: run.sessionKey,
+        title: channel?.label,
+        ...(channel ? { channel } : {}),
+        lastEventAt: run.lastEventAt || run.endedAt || run.startedAt,
+        status: executionStatus === "running" ? "active" : "idle",
+      },
+      observedAt,
+      executionStatus === "running" ? "active" : "idle",
+    );
+    const workItem = createOpenClawTrajectoryWorkItem({
+      run,
+      runtimeId,
+      agentId,
+      executionStatus,
+      observedAt,
+      dingtalkState,
+    });
+    workItemByTrajectoryRunId.set(String(run.runId), workItem);
+    trajectoryExecutions.push({
+      id: `${runtimeId}:execution:${sanitizeId(run.runId)}`,
+      source: "openclaw",
+      externalId: String(run.runId),
+      runtimeId,
+      agentId,
+      workItemId: workItem.id,
+      conversationId: workItem.conversationId,
+      status: executionStatus,
+      ...(run.startedAt ? { startedAt: run.startedAt } : {}),
+      ...(run.endedAt ? { endedAt: run.endedAt } : {}),
+      lastSeenAt: run.lastEventAt || run.endedAt || observedAt,
+      ...(run.error ? { error: String(run.error).slice(0, 240) } : {}),
+      sourceRefs: [{ source: "openclaw", externalId: String(run.runId) }],
+    });
+  }
+
   const warnings = [];
   if (!taskReport) warnings.push("OpenClaw work-state probe unavailable: openclaw tasks list --json failed or returned non-JSON.");
   if (!health && !status) warnings.push("OpenClaw conversation probe unavailable: health/status failed or returned non-JSON.");
 
   return {
-    workItems: [],
+    workItems: [
+      ...Array.from(workItemByMessageId.values()),
+      ...Array.from(workItemByTaskId.values()),
+      ...Array.from(workItemByTrajectoryRunId.values()),
+    ],
     conversations: Array.from(sessionMap.values()),
-    executions,
+    executions: [...executions, ...trajectoryExecutions],
     capabilities: [
       openClawWorkStateCapability(observedAt, {
+        workItemsSupport: workItemByMessageId.size > 0 || workItemByTaskId.size > 0 || workItemByTrajectoryRunId.size > 0 ? "partial" : "unsupported",
+        workItemsEvidence: workItemByMessageId.size > 0 || workItemByTaskId.size > 0 || workItemByTrajectoryRunId.size > 0
+          ? ["OpenClaw DingTalk message context, task origin, or trajectory prompt.submitted exposed message-backed work items."]
+          : undefined,
+        workItemsLimitations: workItemByMessageId.size > 0 || workItemByTaskId.size > 0 || workItemByTrajectoryRunId.size > 0
+          ? ["OpenClaw has no review phase; creator identity depends on channel message context."]
+          : undefined,
         conversationsSupport: health || status || sessionMap.size > 0 ? "partial" : "unknown",
         conversationsEvidence: health || status || sessionMap.size > 0
-          ? ["openclaw health/status or task session keys exposed recent session evidence."]
+          ? ["openclaw health/status, task session keys, or trajectory session keys exposed recent session evidence."]
           : undefined,
-        executionsSupport: taskReport ? "supported" : "unknown",
-        executionsEvidence: taskReport ? ["openclaw tasks list --json exposed task and run status."] : undefined,
+        executionsSupport: taskReport || trajectoryExecutions.length > 0 ? "supported" : "unknown",
+        executionsEvidence: taskReport || trajectoryExecutions.length > 0 ? ["openclaw tasks list --json and trajectory trace.artifacts exposed execution status."] : undefined,
       }),
     ],
     warnings,
@@ -980,16 +1548,160 @@ function normalizeSlockTask(rawTask, runtimeId, agentId, channel, observedAt) {
   };
 }
 
-function collectSlockWorkState(deviceId, observedAt, config) {
-  const runtimeId = makeRuntimeId(deviceId, "slock", "slock-daemon");
-  const agentId = makeAgentId(runtimeId, config.slockAgentId || "unknown-agent");
-  const channels = Array.isArray(config.slockTaskChannels) ? config.slockTaskChannels : [];
-  const hasWorkspace = existsSync(path.join(homeDir(), ".slock", "agents"));
+function readSlockAgentContexts(config) {
+  const agentsRoot = path.join(homeDir(), ".slock", "agents");
+  if (!existsSync(agentsRoot)) return [];
+  const contexts = [];
+  for (const entry of readdirSync(agentsRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    if (config.slockAgentId && entry.name !== config.slockAgentId) continue;
+    const agentDir = path.join(agentsRoot, entry.name);
+    const tokenPath = path.join(agentDir, ".slock", "agent-token");
+    let token = "";
+    try {
+      token = readFileSync(tokenPath, "utf8").trim();
+    } catch {
+      // Agent workspaces can exist before the process has received an internal API token.
+    }
+    contexts.push({ agentExternalId: entry.name, token });
+  }
+  return contexts;
+}
 
-  if (!commandExists("slock") || channels.length === 0) {
+async function fetchSlockInternalJson(serverUrl, agentExternalId, token, pathSuffix) {
+  if (!serverUrl || !token) return null;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const url = new URL(`/internal/agent/${encodeURIComponent(agentExternalId)}${pathSuffix}`, serverUrl);
+    const response = await fetch(url, {
+      headers: { accept: "application/json", authorization: `Bearer ${token}`, "x-agent-id": agentExternalId },
+      signal: controller.signal,
+    });
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function normalizeSlockChannel(channelEntry) {
+  return typeof channelEntry === "string"
+    ? { label: channelEntry, externalId: channelEntry }
+    : {
+        label: channelEntry.label || (channelEntry.name ? `#${channelEntry.name}` : undefined) || channelEntry.externalId || channelEntry.id || "Slock channel",
+        externalId: channelEntry.externalId || (channelEntry.name ? `#${channelEntry.name}` : undefined) || channelEntry.id || channelEntry.label || "unknown",
+      };
+}
+
+function discoverSlockChannels(serverReport, configuredChannels) {
+  if (configuredChannels.length > 0) return configuredChannels.map(normalizeSlockChannel);
+  return toArray(serverReport, ["channels"])
+    .filter((channel) => channel?.type === "channel" && !channel.archivedAt && !channel.deletedAt && channel.joined !== false)
+    .map(normalizeSlockChannel);
+}
+
+function dedupeById(items) {
+  return Array.from(new Map(items.map((item) => [item.id, item])).values());
+}
+
+function appendSlockTasks({ rawTasks, workItems, conversations, runtimeId, agentId, channel, observedAt }) {
+  for (const rawTask of rawTasks) {
+    const workItem = normalizeSlockTask(rawTask, runtimeId, agentId, channel, observedAt);
+    workItems.push(workItem);
+    const threadId = rawTask.threadId || rawTask.thread_id;
+    if (threadId) {
+      conversations.push({
+        id: `${runtimeId}:conversation:${sanitizeId(threadId)}`,
+        source: "slock",
+        externalId: String(threadId),
+        status: workItem.status === "done" || workItem.status === "cancelled" ? "closed" : "open",
+        channel: workItem.channel,
+        title: workItem.title,
+        workItemId: workItem.id,
+        agentId,
+        runtimeId,
+        lastActivityAt: workItem.updatedAt,
+        lastSeenAt: observedAt,
+        sourceRefs: [{ source: "slock", externalId: String(rawTask.messageId || rawTask.id || threadId) }],
+      });
+    }
+  }
+}
+
+async function collectSlockWorkState(deviceId, observedAt, config) {
+  const runtimeId = makeRuntimeId(deviceId, "slock", "slock-daemon");
+  const configuredChannels = Array.isArray(config.slockTaskChannels) ? config.slockTaskChannels : [];
+  const hasWorkspace = existsSync(path.join(homeDir(), ".slock", "agents"));
+  const agentContexts = readSlockAgentContexts(config);
+  const serverUrl = config.slockServerUrl || process.env.SLOCK_SERVER_URL || "";
+  const workItems = [];
+  const conversations = [];
+  const warnings = [];
+
+  if (serverUrl && agentContexts.some((context) => context.token)) {
+    let apiProbeSucceeded = false;
+    for (const context of agentContexts) {
+      if (!context.token) continue;
+      const agentId = makeAgentId(runtimeId, context.agentExternalId);
+      const serverReport = await fetchSlockInternalJson(serverUrl, context.agentExternalId, context.token, "/server");
+      const channels = discoverSlockChannels(serverReport, configuredChannels);
+      for (const channel of channels) {
+        const taskReport = await fetchSlockInternalJson(
+          serverUrl,
+          context.agentExternalId,
+          context.token,
+          `/tasks?channel=${encodeURIComponent(channel.externalId)}`,
+        );
+        if (!taskReport) {
+          warnings.push(`Slock task-board API probe failed for channel ${channel.label}.`);
+          continue;
+        }
+        apiProbeSucceeded = true;
+        appendSlockTasks({
+          rawTasks: toArray(taskReport, ["tasks"]),
+          workItems,
+          conversations,
+          runtimeId,
+          agentId,
+          channel,
+          observedAt,
+        });
+      }
+    }
+    if (apiProbeSucceeded) {
+      return {
+        workItems: dedupeById(workItems),
+        conversations: dedupeById(conversations),
+        executions: [],
+        capabilities: [
+          slockWorkStateCapability(observedAt, {
+            workItemsSupport: "supported",
+            workItemsStrategies: ["native_api", "local_state"],
+            workItemsEvidence: ["Slock internal agent task API exposed task board fields using local agent token."],
+            conversationsSupport: conversations.length > 0 ? "partial" : "unknown",
+            conversationsStrategies: ["native_api", "local_state"],
+            conversationsEvidence: conversations.length > 0 ? ["Slock internal task API exposed threadId/messageId for conversation linkage."] : undefined,
+          }),
+        ],
+        warnings,
+      };
+    }
+  }
+
+  if (!commandExists("slock") || configuredChannels.length === 0) {
+    const apiReason = !serverUrl
+      ? "slockServerUrl is empty"
+      : agentContexts.length === 0
+          ? "Slock agent workspace not found"
+          : !agentContexts.some((context) => context.token)
+            ? "Slock agent token not found"
+            : "Slock internal API probe failed";
     const reason = !commandExists("slock")
-      ? "slock command not found"
-      : "config.slockTaskChannels is empty";
+      ? `${apiReason}; slock command not found`
+      : "config.slockTaskChannels is empty and internal channel discovery failed";
     return {
       workItems: [],
       conversations: [],
@@ -1006,13 +1718,9 @@ function collectSlockWorkState(deviceId, observedAt, config) {
     };
   }
 
-  const workItems = [];
-  const conversations = [];
-  const warnings = [];
-  for (const channelEntry of channels) {
-    const channel = typeof channelEntry === "string"
-      ? { label: channelEntry, externalId: channelEntry }
-      : { label: channelEntry.label || channelEntry.externalId || channelEntry.id || "Slock channel", externalId: channelEntry.externalId || channelEntry.id || channelEntry.label || "unknown" };
+  const agentId = makeAgentId(runtimeId, config.slockAgentId || "unknown-agent");
+  for (const channelEntry of configuredChannels) {
+    const channel = normalizeSlockChannel(channelEntry);
     const taskReport = runJson("slock", ["task", "list", "--channel", channel.externalId, "--output", "json"], 20_000) ||
       runJson("slock", ["task", "list", "--channel", channel.externalId], 20_000);
     if (!taskReport) {
@@ -1020,27 +1728,7 @@ function collectSlockWorkState(deviceId, observedAt, config) {
       continue;
     }
     const tasks = toArray(taskReport, ["tasks"]);
-    for (const rawTask of tasks) {
-      const workItem = normalizeSlockTask(rawTask, runtimeId, agentId, channel, observedAt);
-      workItems.push(workItem);
-      const threadId = rawTask.threadId || rawTask.thread_id;
-      if (threadId) {
-        conversations.push({
-          id: `${runtimeId}:conversation:${sanitizeId(threadId)}`,
-          source: "slock",
-          externalId: String(threadId),
-          status: workItem.status === "done" || workItem.status === "cancelled" ? "closed" : "open",
-          channel: workItem.channel,
-          title: workItem.title,
-          workItemId: workItem.id,
-          agentId,
-          runtimeId,
-          lastActivityAt: workItem.updatedAt,
-          lastSeenAt: observedAt,
-          sourceRefs: [{ source: "slock", externalId: String(rawTask.messageId || rawTask.id || threadId) }],
-        });
-      }
-    }
+    appendSlockTasks({ rawTasks: tasks, workItems, conversations, runtimeId, agentId, channel, observedAt });
   }
 
   return {
@@ -1071,7 +1759,7 @@ function mergeWorkStateParts(parts) {
   };
 }
 
-function collectWorkStateSnapshot(config, args) {
+async function collectWorkStateSnapshot(config, args) {
   const mergedConfig = {
     ...config,
     ...(args.deviceId ? { deviceId: args.deviceId } : {}),
@@ -1079,10 +1767,11 @@ function collectWorkStateSnapshot(config, args) {
   };
   const observedAt = isoNow();
   const device = createDevice(mergedConfig, observedAt);
+  const slock = await collectSlockWorkState(device.id, observedAt, mergedConfig);
   const collected = mergeWorkStateParts([
     collectOpenClawWorkState(device.id, observedAt),
     collectMulticaWorkState(device.id, observedAt),
-    collectSlockWorkState(device.id, observedAt, mergedConfig),
+    slock,
   ]);
 
   return {
@@ -1097,7 +1786,7 @@ function collectWorkStateSnapshot(config, args) {
 }
 
 async function runWorkStateOnce(config, args) {
-  const snapshot = collectWorkStateSnapshot(config, args);
+  const snapshot = await collectWorkStateSnapshot(config, args);
   const serverUrl = args.serverUrl || config.serverUrl || "";
   if (serverUrl && !args.printOnly) await postWorkStateSnapshot(serverUrl, snapshot);
   if (args.printOnly || !serverUrl) console.log(JSON.stringify(snapshot, null, 2));

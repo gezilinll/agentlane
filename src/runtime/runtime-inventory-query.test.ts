@@ -79,7 +79,7 @@ describe("runtime inventory query", () => {
 
     expect(sectionItems(sections, "身份信息")).toEqual([
       "Runtime ID: fixture-mac:openclaw:gateway-18789",
-      "Kind: OpenClaw",
+      "Runtime: OpenClaw",
       "Version: 2026.4.27",
       `最近同步: ${fixtureLastSeenAt}`,
     ]);
@@ -102,7 +102,7 @@ describe("runtime inventory query", () => {
 
     expect(sectionItems(sections, "身份信息")).toEqual([
       "Agent ID: fixture-mac:slock:slock-daemon:agent:tester",
-      "来源平台: Slock",
+      "Runtime: Slock",
       "状态: 未知",
       `最近同步: ${fixtureLastSeenAt}`,
     ]);

@@ -121,6 +121,10 @@ describe("runtime work state model", () => {
       stage: "attention",
       confidence: "direct",
     });
+    expect(deriveRuntimeWorkStage({ source: "openclaw", workItemStatus: "todo" })).toMatchObject({
+      stage: "pending",
+      confidence: "partial",
+    });
     expect(deriveRuntimeWorkStage({ source: "openclaw", workItemStatus: "in_review" })).toMatchObject({
       stage: "attention",
       confidence: "unsupported",

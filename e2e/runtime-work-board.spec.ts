@@ -36,23 +36,25 @@ test.describe("Runtime Work Board", () => {
     for (const lane of ["待处理", "处理中", "待验收", "已关闭", "需关注"]) {
       await expect(page.getByRole("heading", { name: lane })).toBeVisible();
     }
-    await expect(page.getByRole("button", { name: /OpenClaw 执行监听已接入/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /帮我检查今天的线上异常/ })).toBeVisible();
 
-    await page.getByLabel("来源平台").selectOption("slock");
-    await page.getByPlaceholder("搜索任务、消息、发起人、Agent 或群组").fill("@fixture-human");
+    await page.getByLabel("Runtime").selectOption("slock");
+    await page.getByPlaceholder("搜索任务、消息、发起人、Agent 或会话/群组").fill("@fixture-human");
 
     await expect(page.getByRole("button", { name: /Example in progress card/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /@example-agent/ }).first()).toBeVisible();
     await expect(page.getByText(/OpenClaw execution/)).not.toBeVisible();
     await expect(page.getByText("直接证据")).not.toBeVisible();
     await expect(page.getByText(/OpenClaw has no/)).not.toBeVisible();
+    await expect(page.getByText("能力缺口")).not.toBeVisible();
 
     await page.getByRole("button", { name: /Example in progress card/ }).click();
     const detail = page.getByRole("complementary", { name: "工作项详情" });
-    await expect(detail).toContainText("来源平台: Slock");
+    await expect(detail).toContainText("Runtime: Slock");
+    await expect(detail).toContainText("Channel: Slock");
     await expect(detail).toContainText("发起人: @fixture-human");
     await expect(detail).toContainText("承接 Agent: @example-agent");
-    await expect(detail).toContainText("群组/渠道: #example-board");
+    await expect(detail).toContainText("会话/群组: #example-board");
 
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.getByRole("heading", { name: "工作看板" })).toBeVisible();
@@ -78,7 +80,7 @@ test.describe("Runtime Work Board", () => {
     expect(pageOverflows).toBe(false);
   });
 
-  test("shows source listening gaps when a target platform has no task-board data", async ({ page, request }) => {
+  test("keeps source listening gaps out of task cards when a target platform has no task-board data", async ({ page, request }) => {
     const workspaceOnlySnapshot: RuntimeWorkStateSnapshot = {
       observedAt: "2026-05-09T08:00:00.000Z",
       deviceId: "fixture-device",
@@ -113,11 +115,12 @@ test.describe("Runtime Work Board", () => {
 
     await page.goto("/");
     await page.getByRole("button", { name: "Runs" }).click();
-    await page.getByLabel("来源平台").selectOption("slock");
+    await page.getByLabel("Runtime").selectOption("slock");
 
-    const slockStatusCard = page.getByRole("button", { name: /Slock 监听未就绪/ });
-    await expect(slockStatusCard).toBeVisible();
-    await expect(slockStatusCard).toContainText(/缺少 Slock task board 或 API adapter/);
+    await expect(page.getByRole("button", { name: /Slock 监听未就绪/ })).not.toBeVisible();
+    await expect(page.getByRole("button", { name: /缺少 Slock task board 或 API adapter/ })).not.toBeVisible();
+    await expect(page.getByText("无匹配项").first()).toBeVisible();
     await expect(page.getByText("直接证据")).not.toBeVisible();
+    await expect(page.getByText("能力缺口")).not.toBeVisible();
   });
 });

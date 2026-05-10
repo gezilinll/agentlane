@@ -6,9 +6,30 @@ export const openClawWorkStateFixture = {
   agentId: "fixture-device:openclaw:gateway:agent:main",
   sessions: [
     {
-      sessionKey: "fixture-session-1",
+      sessionKey: "agent:main:dingtalk:group:group-1",
       updatedAt: "2026-05-09T07:58:00.000Z",
       status: "active",
+    },
+  ],
+  dingtalkTargets: [
+    {
+      conversationId: "group-1",
+      kind: "group",
+      label: "研发值班群",
+      lastSeenAt: "2026-05-09T07:58:00.000Z",
+    },
+  ],
+  dingtalkMessages: [
+    {
+      msgId: "msg-1",
+      sessionKey: "agent:main:dingtalk:group:group-1",
+      conversationId: "group-1",
+      direction: "inbound",
+      text: "帮我检查今天的线上异常，给出结论和下一步建议",
+      senderId: "user-1",
+      senderName: "张三",
+      createdAt: "2026-05-09T07:50:30.000Z",
+      updatedAt: "2026-05-09T07:51:00.000Z",
     },
   ],
   tasks: [
@@ -16,6 +37,8 @@ export const openClawWorkStateFixture = {
       taskId: "fixture-task-1",
       runId: "fixture-run-1",
       status: "succeeded",
+      requesterSessionKey: "agent:main:dingtalk:group:group-1",
+      messageId: "msg-1",
       createdAt: "2026-05-09T07:50:00.000Z",
       startedAt: "2026-05-09T07:51:00.000Z",
       endedAt: "2026-05-09T07:55:00.000Z",
@@ -24,6 +47,7 @@ export const openClawWorkStateFixture = {
       taskId: "fixture-task-2",
       runId: "fixture-run-2",
       status: "lost",
+      requesterSessionKey: "agent:main:dingtalk:group:group-1",
       createdAt: "2026-05-09T07:56:00.000Z",
       startedAt: "2026-05-09T07:57:00.000Z",
       endedAt: "2026-05-09T07:59:00.000Z",
@@ -33,6 +57,7 @@ export const openClawWorkStateFixture = {
       taskId: "fixture-task-3",
       runId: "fixture-run-3",
       status: "timed_out",
+      requesterSessionKey: "agent:main:dingtalk:group:group-1",
       createdAt: "2026-05-09T07:56:30.000Z",
       startedAt: "2026-05-09T07:57:30.000Z",
       endedAt: "2026-05-09T07:59:30.000Z",
@@ -154,6 +179,15 @@ export const slockWorkStateFixture = {
       completedAt: "2026-05-09T07:59:00.000Z",
       messageId: "fixture-message-3",
       threadId: "fixture-thread-3",
+    },
+  ],
+  activities: [
+    {
+      id: "activity-1",
+      activity: "working",
+      taskId: "fixture-slock-task-1",
+      threadId: "fixture-thread-1",
+      updatedAt: "2026-05-09T07:56:00.000Z",
     },
   ],
 } as const;

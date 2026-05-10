@@ -117,6 +117,37 @@ describe("runtime HTTP API", () => {
     expect(latestBody).toEqual(snapshot);
   });
 
+  it("accepts real-sized runtime work state snapshots from remote collectors", async () => {
+    const { baseUrl } = await startRuntimeApi();
+    const snapshot = {
+      observedAt: "2026-05-10T02:44:20.000Z",
+      deviceId: "remote-device",
+      workItems: Array.from({ length: 2_200 }, (_, index) => ({
+        id: `remote-device:openclaw:work-item:${index}`,
+        title: `真实远端工作项 ${index}`,
+        description: "x".repeat(1_024),
+      })),
+      conversations: [],
+      executions: [],
+      capabilities: [],
+    };
+    const payload = JSON.stringify(snapshot);
+
+    expect(payload.length).toBeGreaterThan(2_000_000);
+
+    const postResponse = await fetch(`${baseUrl}/api/runtime-work-state-snapshots`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: payload,
+    });
+    const latestResponse = await fetch(`${baseUrl}/api/runtime-work-state/latest`);
+    const latestBody = await latestResponse.json();
+
+    expect(postResponse.status).toBe(201);
+    expect(latestResponse.status).toBe(200);
+    expect(latestBody.workItems).toHaveLength(2_200);
+  });
+
   it("returns not found when no runtime work state snapshot exists", async () => {
     const { baseUrl } = await startRuntimeApi();
 
