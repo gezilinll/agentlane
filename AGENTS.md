@@ -15,6 +15,7 @@ Current source of truth:
 - `docs/product/runtime-fleet-page-spec.md`: TinySpec for the first Runtime Fleet management page.
 - `docs/product/runtime-work-state-probe.md`: platform probe matrix for work items, conversations, and runtime executions.
 - `docs/product/runtime-listening-acceptance-spec.md`: TinySpec for whether OpenClaw, Multica, and Slock listening is sufficient for Runs and future task management.
+- `docs/product/backend-service-spec.md`: TinySpec for the local-first formal backend service, Postgres persistence, collector ingestion, and backend query APIs.
 - `src/catalog/catalog-object.ts`: initial TypeScript source of truth for Catalog Object shape.
 - `src/catalog/catalog-seed.ts`: first reviewable seed data for the Catalog page.
 - `src/runtime/runtime-normalize.ts`: TypeScript source of truth for v1 runtime inventory normalization.
@@ -79,6 +80,7 @@ Current spec and harness mapping:
 | Runs / Work Board page | `src/runtime/RuntimeWorkBoardPage.tsx`, `docs/product/runtime-work-state-probe.md` | `src/App.test.tsx`, `e2e/runtime-work-board.spec.ts`, `npm run check:quick`, `npm run check:e2e` |
 | Runtime Fleet page | `docs/product/runtime-fleet-page-spec.md`, `src/runtime/runtime-inventory-query.ts`, `src/runtime/RuntimeFleetPage.tsx` | `src/runtime/runtime-inventory-query.test.ts`, `src/App.test.tsx`, `e2e/runtime-fleet.spec.ts`, `npm run check:quick`, `npm run check:e2e` |
 | Runtime snapshot and control backend | `docs/product/runtime-device-registration-spec.md`, `src/server/runtime-inventory-store.ts`, `src/server/runtime-control-channel.ts`, `src/server/runtime-http-api.ts`, `vite.config.ts` | `src/server/runtime-inventory-store.test.ts`, `src/server/runtime-control-channel.test.ts`, `src/server/runtime-http-api.test.ts`, `src/runtime/device-collector-script.test.ts`, `npm run check:backend` |
+| Backend service formalization | `docs/product/backend-service-spec.md`, `docs/superpowers/plans/2026-05-11-backend-service.md` | `npm run check:repo`; expand `npm run check:backend` as standalone backend and Postgres harnesses land |
 | Repo context and docs | `AGENTS.md`, `README.md`, `docs/product/ui-design.md` | `npm run check:repo` |
 
 When a user points out a missed behavior or review gap, decide whether it should become:

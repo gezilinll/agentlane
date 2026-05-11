@@ -13,6 +13,7 @@ required_paths=(
   "docs/product/runtime-fleet-page-spec.md"
   "docs/product/runtime-work-state-probe.md"
   "docs/product/runtime-listening-acceptance-spec.md"
+  "docs/product/backend-service-spec.md"
   "playwright.config.ts"
   "e2e/catalog-layout.spec.ts"
   "e2e/catalog-workflow.spec.ts"
@@ -58,6 +59,7 @@ markdown_files = [
     Path("docs/product/runtime-fleet-page-spec.md"),
     Path("docs/product/runtime-work-state-probe.md"),
     Path("docs/product/runtime-listening-acceptance-spec.md"),
+    Path("docs/product/backend-service-spec.md"),
 ]
 
 problems = []
