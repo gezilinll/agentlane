@@ -1,20 +1,23 @@
-import type {
-  AgentlaneRuntime,
-  ChannelKind,
-  RuntimeActivityStats,
-  RuntimeSource,
-  ManagedAgentStatus,
-  ManagedRuntimeAgent,
-  RuntimeDevice,
-  RuntimeHealthStatus,
-  RuntimeInventorySnapshot,
-  RuntimeKind,
+import {
+  RUNTIME_KINDS,
+  type AgentlaneRuntime,
+  type ChannelKind,
+  type RuntimeActivityStats,
+  type RuntimeSource,
+  type ManagedAgentStatus,
+  type ManagedRuntimeAgent,
+  type RuntimeDevice,
+  type RuntimeHealthStatus,
+  type RuntimeInventorySnapshot,
+  type RuntimeKind,
 } from "./runtime-normalize";
+import type {
+  RuntimeObservationCapability,
+  RuntimeWorkParticipant,
+} from "./runtime-work-state";
 import {
   deriveRuntimeWorkStage,
   type RuntimeExecution,
-  type RuntimeObservationCapability,
-  type RuntimeWorkParticipant,
   type RuntimeWorkItem,
   type RuntimeWorkStateSnapshot,
 } from "./runtime-work-state";
@@ -32,6 +35,8 @@ export const runtimeKindLabels: Record<RuntimeKind, string> = {
 /** Channel labels used when an Agent is exposed through a chat or platform surface. */
 export const channelKindLabels: Record<ChannelKind, string> = {
   dingtalk: "DingTalk",
+  telegram: "Telegram",
+  slack: "Slack",
   slock: "Slock",
   multica: "Multica",
   openclaw: "OpenClaw",
@@ -67,6 +72,23 @@ export const managedAgentStatusLabels: Record<ManagedAgentStatus, string> = {
 };
 
 const unsupportedStatLabel = "不支持采集";
+const runtimeHealthOptionOrder: RuntimeHealthStatus[] = ["online", "degraded", "offline", "unknown"];
+
+/** Runtime kind option shown by Runtime Fleet. */
+export interface RuntimeFleetRuntimeKindOption {
+  /** Filter value. */
+  value: RuntimeKind;
+  /** Human-readable label. */
+  label: string;
+}
+
+/** Runtime availability option shown by Runtime Fleet. */
+export interface RuntimeFleetHealthOption {
+  /** Filter value. */
+  value: RuntimeHealthStatus;
+  /** Human-readable label. */
+  label: string;
+}
 
 /** Format runtime timestamps for Chinese-first UI without leaking raw UTC ISO strings. */
 export function formatRuntimeTimestamp(value?: string): string {
@@ -96,6 +118,22 @@ export function runtimeAgentLastSeenAt(
   snapshot?: RuntimeInventorySnapshot,
 ): string | undefined {
   return agent.lastSeenAt ?? runtime?.lastSeenAt ?? snapshot?.observedAt;
+}
+
+/** List runtime kinds actually present in the current Runtime Fleet snapshot. */
+export function listRuntimeFleetRuntimeKindOptions(snapshot: RuntimeInventorySnapshot): RuntimeFleetRuntimeKindOption[] {
+  const kinds = new Set(snapshot.runtimes.map((runtime) => runtime.kind));
+  return RUNTIME_KINDS
+    .filter((kind) => kinds.has(kind))
+    .map((kind) => ({ value: kind, label: runtimeKindLabels[kind] }));
+}
+
+/** List runtime availability states actually present in the current Runtime Fleet snapshot. */
+export function listRuntimeFleetHealthOptions(snapshot: RuntimeInventorySnapshot): RuntimeFleetHealthOption[] {
+  const statuses = new Set(snapshot.runtimes.map((runtime) => runtime.status));
+  return runtimeHealthOptionOrder
+    .filter((status) => statuses.has(status))
+    .map((status) => ({ value: status, label: runtimeHealthLabels[status] }));
 }
 
 /** Derive a runtime's coarse operating state without exposing source-platform raw states. */
@@ -167,8 +205,6 @@ export interface RuntimeFleetFilters {
   runtimeStatus?: RuntimeHealthStatus | "all";
   /** Agent activity state to keep. */
   agentStatus?: ManagedAgentStatus | "all";
-  /** Channel/platform exposure to keep. */
-  channelKind?: ChannelKind | "all";
 }
 
 /** Filtered device inventory shown by Runtime Fleet. */
@@ -281,14 +317,6 @@ export function filterRuntimeFleet(
 
   if (filters.agentStatus && filters.agentStatus !== "all") {
     agents = agents.filter((agent) => agent.status === filters.agentStatus);
-  }
-
-  if (filters.channelKind && filters.channelKind !== "all") {
-    agents = agents.filter((agent) =>
-      agent.channelBindings.some((binding) => binding.kind === filters.channelKind),
-    );
-    const runtimeIds = new Set(agents.map((agent) => agent.runtimeId));
-    runtimes = runtimes.filter((runtime) => runtimeIds.has(runtime.id));
   }
 
   if (query) {

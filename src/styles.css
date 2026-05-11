@@ -187,11 +187,13 @@ h1 {
 }
 
 .workBoardToolbar {
-  grid-template-columns: minmax(260px, 1fr) repeat(3, minmax(150px, 190px));
+  align-items: start;
+  grid-template-columns: minmax(240px, 380px) repeat(3, minmax(120px, 1fr)) minmax(240px, 320px);
+  justify-content: start;
 }
 
 .runtimeToolbar {
-  grid-template-columns: minmax(260px, 1fr) repeat(3, minmax(150px, 190px));
+  grid-template-columns: minmax(260px, 1fr) repeat(2, minmax(150px, 190px));
 }
 
 .toolbarField {
@@ -233,6 +235,174 @@ h1 {
   height: 42px;
   padding: 0 10px;
   width: 100%;
+}
+
+.timeRangeField {
+  position: relative;
+  z-index: 5;
+}
+
+.timeRangeTrigger {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #c9d8ea;
+  border-radius: 6px;
+  color: #102047;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  height: 42px;
+  min-width: 0;
+  padding: 0 10px;
+  text-align: left;
+  width: 100%;
+}
+
+.timeRangeTrigger:hover,
+.timeRangeTrigger[aria-expanded="true"] {
+  border-color: #8fc2ff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+}
+
+.timeRangeDuration {
+  background: #f1f5f9;
+  border-radius: 5px;
+  color: #64748b;
+  font-weight: 700;
+  min-width: 48px;
+  padding: 5px 8px;
+  text-align: center;
+}
+
+.timeRangeSummary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timeRangePopover {
+  background: #ffffff;
+  border: 1px solid #c9d8ea;
+  border-radius: 6px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.16);
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: min(560px, calc(100vw - 48px));
+}
+
+.timeRangePopoverHeader {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+}
+
+.timeRangePopoverHeader strong {
+  color: #102047;
+  font-size: 18px;
+}
+
+.timeRangeTextButton,
+.timeRangeBackButton {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: #0b63ce;
+  display: inline-flex;
+  font-weight: 700;
+  gap: 6px;
+  padding: 0;
+}
+
+.timeRangeBackButton {
+  color: #102047;
+  font-size: 16px;
+  justify-self: start;
+}
+
+.timeRangeHint {
+  color: #7b8799;
+  font-weight: 700;
+  margin: -8px 0 0;
+}
+
+.quickRangeGrid {
+  display: grid;
+  gap: 10px 16px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.timeRangeManualInputs {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.timeInputLabel {
+  color: #5f6e87;
+  display: grid;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 6px;
+  min-width: 0;
+}
+
+.timeInputLabel input {
+  background: #fff;
+  border: 1px solid #c9d8ea;
+  border-radius: 6px;
+  color: #102047;
+  height: 42px;
+  min-width: 0;
+  padding: 0 10px;
+  width: 100%;
+}
+
+.timeRangeActions {
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin: 0 -16px -16px;
+  padding: 12px 16px;
+}
+
+.secondaryButton,
+.quickRangeButton {
+  background: #ffffff;
+  border: 1px solid #c9d8ea;
+  border-radius: 6px;
+  color: #0b4fb3;
+  font-weight: 700;
+  height: 42px;
+  padding: 0 12px;
+}
+
+.primaryMiniButton {
+  background: #0b63ce;
+  border: 1px solid #0b63ce;
+  border-radius: 6px;
+  color: #ffffff;
+  font-weight: 700;
+  height: 42px;
+  padding: 0 18px;
+}
+
+.secondaryButton:hover,
+.quickRangeButton:hover {
+  background: #eef6ff;
+  border-color: #8fc2ff;
+}
+
+.quickRangeButton {
+  border: 0;
+  color: #2f3a4e;
+  font-size: 15px;
+  font-weight: 600;
+  height: 34px;
 }
 
 .segmentedControl {
@@ -835,8 +1005,14 @@ button.tableRow:hover,
   }
 
   .toolbarSearch,
-  .ownerFilter {
+  .ownerFilter,
+  .timeRangeField {
     grid-column: 1 / -1;
+  }
+
+  .timeRangePopover {
+    left: 0;
+    right: auto;
   }
 
   .metricGrid {
@@ -894,8 +1070,18 @@ button.tableRow:hover,
   }
 
   .toolbarSearch,
-  .ownerFilter {
+  .ownerFilter,
+  .timeRangeField {
     grid-column: auto;
+  }
+
+  .quickRangeGrid,
+  .timeRangeManualInputs {
+    grid-template-columns: 1fr;
+  }
+
+  .timeRangePopover {
+    width: 100%;
   }
 
   .segmentedControl button {

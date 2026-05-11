@@ -16,6 +16,10 @@ export interface RuntimeWorkBoardFilters {
   source?: RuntimeSource | "all";
   /** Unified stage filter. */
   stage?: RuntimeWorkStageId | "all";
+  /** User-facing channel filter; runtime/platform names are intentionally excluded. */
+  channelKind?: RuntimeWorkChannelKind | "all";
+  /** Inclusive last-seen time range filter for work cards. */
+  timeRange?: RuntimeWorkTimeRangeFilter;
   /** Stage confidence filter. */
   confidence?: RuntimeWorkStageConfidence | "all";
   /** Case-insensitive text search across title, source, runtime, agent, and channel labels. */
@@ -76,6 +80,8 @@ export interface RuntimeWorkBoardItem {
   agentId?: string;
   /** Channel label when the source exposes one. */
   channelLabel?: string;
+  /** User-facing channel kind when the source exposes one. */
+  channelKind?: RuntimeWorkChannelKind;
   /** Human-readable channel kind label when the source exposes one. */
   channelKindLabel?: string;
   /** Work item creator label when the source exposes one. */
@@ -118,6 +124,35 @@ export interface RuntimeWorkCapabilityNote {
   limitation: string;
 }
 
+/** Channel kinds that represent user-facing message surfaces on the Runs board. */
+export type RuntimeWorkChannelKind = Extract<ChannelKind, "dingtalk" | "telegram" | "slack" | "other">;
+
+/** Channel option shown by the Runs board filter. */
+export interface RuntimeWorkChannelOption {
+  /** Filter value. */
+  value: RuntimeWorkChannelKind;
+  /** Human-readable label. */
+  label: string;
+}
+
+/** Inclusive time range used by Runs to filter cards by latest observed time. */
+export interface RuntimeWorkTimeRangeFilter {
+  /** Inclusive start timestamp. */
+  start?: string;
+  /** Inclusive end timestamp. */
+  end?: string;
+}
+
+/** User-facing channel labels for Runs. Runtime/platform names are not channel labels here. */
+export const runtimeWorkChannelLabels: Record<RuntimeWorkChannelKind, string> = {
+  dingtalk: "DingTalk",
+  telegram: "Telegram",
+  slack: "Slack",
+  other: "其他渠道",
+};
+
+const runtimeWorkChannelOrder: RuntimeWorkChannelKind[] = ["dingtalk", "telegram", "slack", "other"];
+
 const STAGE_LABELS: Record<RuntimeWorkStageId, string> = {
   pending: "待处理",
   processing: "处理中",
@@ -149,6 +184,18 @@ export function createRuntimeWorkBoard(
   };
 }
 
+/** List user-facing channels actually present in a work-state snapshot. */
+export function listRuntimeWorkChannelOptions(snapshot: RuntimeWorkStateSnapshot): RuntimeWorkChannelOption[] {
+  const kinds = new Set<RuntimeWorkChannelKind>();
+  for (const workItem of snapshot.workItems) {
+    const kind = normalizeWorkChannelKind(workItem.channel?.kind);
+    if (kind) kinds.add(kind);
+  }
+  return runtimeWorkChannelOrder
+    .filter((kind) => kinds.has(kind))
+    .map((kind) => ({ value: kind, label: runtimeWorkChannelLabels[kind] }));
+}
+
 function createBoardItems(snapshot: RuntimeWorkStateSnapshot): RuntimeWorkBoardItem[] {
   const executionsByWorkItemId = new Map<string, RuntimeExecution>();
   for (const execution of snapshot.executions) {
@@ -171,6 +218,7 @@ function createWorkItemBoardItem(workItem: RuntimeWorkItem, execution?: RuntimeE
     workItemStatus: workItem.status,
     executionStatus: execution?.status,
   });
+  const channelKind = normalizeWorkChannelKind(workItem.channel?.kind);
 
   return {
     id: workItem.id,
@@ -186,7 +234,8 @@ function createWorkItemBoardItem(workItem: RuntimeWorkItem, execution?: RuntimeE
     runtimeId: workItem.runtimeId,
     agentId: workItem.agentId,
     channelLabel: displayChannelLabel(workItem.channel),
-    channelKindLabel: channelLabel(workItem.channel?.kind),
+    channelKind,
+    channelKindLabel: channelKind ? runtimeWorkChannelLabels[channelKind] : undefined,
     creatorLabel: participantLabel(workItem.creator, "不支持采集"),
     assigneeLabel: participantLabel(workItem.assignee, compactObjectId(workItem.agentId)),
     requestExcerpt: createRequestExcerpt(workItem.description ?? workItem.title),
@@ -230,6 +279,8 @@ function createCapabilityNotes(snapshot: RuntimeWorkStateSnapshot): RuntimeWorkC
 function matchesFilters(item: RuntimeWorkBoardItem, filters: RuntimeWorkBoardFilters): boolean {
   if (filters.source && filters.source !== "all" && item.source !== filters.source) return false;
   if (filters.stage && filters.stage !== "all" && item.stage !== filters.stage) return false;
+  if (filters.channelKind && filters.channelKind !== "all" && item.channelKind !== filters.channelKind) return false;
+  if (!matchesTimeRange(item.lastSeenAt, filters.timeRange)) return false;
   if (filters.confidence && filters.confidence !== "all" && item.confidence !== filters.confidence) return false;
   const search = filters.search?.trim().toLowerCase();
   if (!search) return true;
@@ -249,6 +300,24 @@ function matchesFilters(item: RuntimeWorkBoardItem, filters: RuntimeWorkBoardFil
   ]
     .filter(Boolean)
     .some((value) => String(value).toLowerCase().includes(search));
+}
+
+function matchesTimeRange(value: string | undefined, timeRange: RuntimeWorkTimeRangeFilter | undefined): boolean {
+  const start = parseTimeFilterValue(timeRange?.start);
+  const end = parseTimeFilterValue(timeRange?.end);
+  if (start === undefined && end === undefined) return true;
+
+  const timestamp = Date.parse(value ?? "");
+  if (!Number.isFinite(timestamp)) return false;
+  if (start !== undefined && timestamp < start) return false;
+  if (end !== undefined && timestamp > end) return false;
+  return true;
+}
+
+function parseTimeFilterValue(value: string | undefined): number | undefined {
+  if (!value?.trim()) return undefined;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : undefined;
 }
 
 function compareBoardItems(left: RuntimeWorkBoardItem, right: RuntimeWorkBoardItem): number {
@@ -284,13 +353,10 @@ function sourceLabel(source: RuntimeSource): string {
   return "Manual";
 }
 
-function channelLabel(kind: ChannelKind | undefined): string | undefined {
+function normalizeWorkChannelKind(kind: ChannelKind | undefined): RuntimeWorkChannelKind | undefined {
   if (!kind) return undefined;
-  if (kind === "dingtalk") return "DingTalk";
-  if (kind === "slock") return "Slock";
-  if (kind === "multica") return "Multica";
-  if (kind === "openclaw") return "OpenClaw";
-  return "默认渠道";
+  if (kind === "dingtalk" || kind === "telegram" || kind === "slack" || kind === "other") return kind;
+  return undefined;
 }
 
 function displayChannelLabel(channel: RuntimeWorkItem["channel"]): string | undefined {

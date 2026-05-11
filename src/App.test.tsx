@@ -97,10 +97,18 @@ describe("Catalog page", () => {
       expect(screen.getByRole("heading", { name: lane })).toBeInTheDocument();
     }
     expect(await screen.findByText(/当前数据源：Fixture/)).toBeInTheDocument();
+    const channelSelect = screen.getByLabelText("渠道") as HTMLSelectElement;
+    expect(channelSelect.value).toBe("all");
+    expect(within(channelSelect).getAllByRole("option").map((option) => option.textContent)).toEqual([
+      "全部渠道",
+      "DingTalk",
+    ]);
 
     await user.selectOptions(screen.getByLabelText("来源 Runtime"), "slock");
     await user.type(screen.getByPlaceholderText("搜索任务、消息、发起人、Agent 或会话/群组"), "@fixture-human");
 
+    const slockCard = screen.getByRole("button", { name: /Example in progress card/ });
+    expect(within(slockCard).queryByText("处理中")).not.toBeInTheDocument();
     expect(screen.getAllByText("Example in progress card").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/@fixture-human/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/@example-agent/).length).toBeGreaterThan(0);
@@ -115,7 +123,7 @@ describe("Catalog page", () => {
     const detail = screen.getByRole("complementary", { name: "工作项详情" });
     expect(within(detail).getByRole("heading", { name: "Example in progress card" })).toBeInTheDocument();
     expect(within(detail).getByText("来源 Runtime: Slock")).toBeInTheDocument();
-    expect(within(detail).getByText("Channel: Slock")).toBeInTheDocument();
+    expect(within(detail).getByText("Channel: 默认渠道")).toBeInTheDocument();
     expect(within(detail).getByText("发起人: @fixture-human")).toBeInTheDocument();
     expect(within(detail).getByText("承接 Agent: @example-agent")).toBeInTheDocument();
     expect(within(detail).getByText("会话/群组: #example-board")).toBeInTheDocument();
@@ -242,6 +250,81 @@ describe("Catalog page", () => {
     expect(screen.getByRole("columnheader", { name: "所属设备" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "归属 Runtime" })).toBeInTheDocument();
     expect(screen.getAllByRole("columnheader", { name: "最近同步" }).length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByLabelText("Channel")).not.toBeInTheDocument();
+    expect(within(screen.getByLabelText("Runtime")).getAllByRole("option").map((option) => option.textContent)).toEqual([
+      "全部 Runtime",
+      "OpenClaw",
+      "Slock",
+    ]);
+    expect(within(screen.getByLabelText("可用性")).getAllByRole("option").map((option) => option.textContent)).toEqual([
+      "全部可用性",
+      "在线",
+    ]);
+  });
+
+  it("filters Runs cards by manual time range and exposes quick ranges", async () => {
+    const user = userEvent.setup();
+    const backendSnapshot: RuntimeWorkStateSnapshot = {
+      observedAt: "2026-05-09T08:00:00.000Z",
+      deviceId: "fixture-device",
+      workItems: [
+        {
+          id: "fixture-old-card",
+          source: "openclaw",
+          externalId: "fixture-old-card",
+          title: "Old card",
+          status: "done",
+          lastSeenAt: "2026-05-08T10:00:00.000Z",
+        },
+        {
+          id: "fixture-new-card",
+          source: "openclaw",
+          externalId: "fixture-new-card",
+          title: "New card",
+          status: "done",
+          lastSeenAt: "2026-05-09T12:00:00.000Z",
+        },
+      ],
+      conversations: [],
+      executions: [],
+      capabilities: [],
+    };
+    globalThis.fetch = vi.fn(async (input) => {
+      const url = input.toString();
+      if (url.includes("/api/runtime-work-state/latest")) {
+        return new Response(JSON.stringify(backendSnapshot), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "unexpected request" }), { status: 500 });
+    }) as unknown as typeof fetch;
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Runs" }));
+    expect(await screen.findByText(/当前数据源：后端快照/)).toBeInTheDocument();
+    const lanes = screen.getByLabelText("工作态泳道");
+    expect(within(lanes).getAllByText("Old card").length).toBeGreaterThan(0);
+    expect(within(lanes).getAllByText("New card").length).toBeGreaterThan(0);
+    expect(screen.queryByLabelText("开始时间")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("结束时间")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "清除时间" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /选择时间范围/ }));
+    expect(screen.getByRole("button", { name: "今天" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "清除时间" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "日历中选择" }));
+    fireEvent.change(screen.getByLabelText("开始时间"), { target: { value: "2026-05-09T00:00:00" } });
+    fireEvent.change(screen.getByLabelText("结束时间"), { target: { value: "2026-05-09T23:59:59" } });
+    await user.click(screen.getByRole("button", { name: "立即查询" }));
+
+    expect(within(lanes).queryByText("Old card")).not.toBeInTheDocument();
+    expect(within(lanes).getAllByText("New card").length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole("button", { name: /选择时间范围/ }));
+    await user.click(screen.getByRole("button", { name: "清除时间" }));
+    expect(within(lanes).getAllByText("Old card").length).toBeGreaterThan(0);
+    expect(within(lanes).getAllByText("New card").length).toBeGreaterThan(0);
   });
 
   it("loads Runtime Fleet from the latest backend snapshot when available", async () => {
@@ -393,7 +476,7 @@ describe("Catalog page", () => {
     render(<App />);
 
     await user.click(screen.getByRole("button", { name: "Runtime Fleet" }));
-    await user.selectOptions(screen.getByLabelText("Channel"), "slock");
+    expect(screen.queryByLabelText("Channel")).not.toBeInTheDocument();
 
     const agentTable = screen.getByRole("table", { name: "Agent 列表" });
     const testerRow = within(agentTable).getByRole("row", { name: /tester/ });
@@ -410,12 +493,13 @@ describe("Catalog page", () => {
     expect(within(detail).getByText("历史会话: 2")).toBeInTheDocument();
   });
 
-  it("filters Runtime Fleet agents by channel and opens agent details", async () => {
+  it("filters Runtime Fleet agents by search and opens agent details", async () => {
     const user = userEvent.setup();
     render(<App />);
 
     await user.click(screen.getByRole("button", { name: "Runtime Fleet" }));
-    await user.selectOptions(screen.getByLabelText("Channel"), "slock");
+    expect(screen.queryByLabelText("Channel")).not.toBeInTheDocument();
+    await user.type(screen.getByPlaceholderText("搜索设备、Runtime、Agent 或渠道"), "tester");
 
     const agentTable = screen.getByRole("table", { name: "Agent 列表" });
     expect(within(agentTable).getByText("tester")).toBeInTheDocument();

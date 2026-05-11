@@ -20,8 +20,8 @@ export type RuntimeHealthStatus = "online" | "degraded" | "offline" | "unknown";
 /** Agent activity state after adapter-specific states are mapped into Agentlane. */
 export type ManagedAgentStatus = "active" | "idle" | "inactive" | "degraded" | "unknown";
 
-/** Channel or platform where an Agent is visible or usable. */
-export type ChannelKind = "dingtalk" | "slock" | "multica" | "openclaw" | "other";
+/** Channel or platform surface where an Agent is visible or usable. */
+export type ChannelKind = "dingtalk" | "telegram" | "slack" | "slock" | "multica" | "openclaw" | "other";
 
 /** Reference back to an external platform/runtime object. */
 export interface ExternalRuntimeRef {

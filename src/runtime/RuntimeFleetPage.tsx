@@ -8,6 +8,8 @@ import {
   filterRuntimeFleet,
   formatRuntimeTimestamp,
   getRuntimeFleetDetail,
+  listRuntimeFleetHealthOptions,
+  listRuntimeFleetRuntimeKindOptions,
   managedAgentStatusLabels,
   runtimeAgentLastSeenAt,
   runtimeHealthLabels,
@@ -18,9 +20,7 @@ import {
   type RuntimeFleetFilters,
 } from "./runtime-inventory-query";
 import {
-  RUNTIME_KINDS,
   type AgentlaneRuntime,
-  type ChannelKind,
   type ManagedRuntimeAgent,
   type RuntimeHealthStatus,
   type RuntimeInventorySnapshot,
@@ -30,9 +30,6 @@ import type { RuntimeWorkStateSnapshot } from "./runtime-work-state";
 
 const fixtureRuntimeSnapshot = fixtureSnapshot as RuntimeInventorySnapshot;
 const autoRefreshIntervalMs = 30_000;
-
-const channelOptions: ChannelKind[] = ["dingtalk", "slock", "multica", "openclaw", "other"];
-const runtimeStatusOptions: RuntimeHealthStatus[] = ["online", "degraded", "offline", "unknown"];
 
 type RuntimeFleetSelection = {
   kind: RuntimeFleetDetail["kind"];
@@ -52,7 +49,6 @@ export function RuntimeFleetPage() {
   const [query, setQuery] = useState("");
   const [runtimeKind, setRuntimeKind] = useState<RuntimeKind | "all">("all");
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeHealthStatus | "all">("all");
-  const [channelKind, setChannelKind] = useState<ChannelKind | "all">("all");
   const [selection, setSelection] = useState<RuntimeFleetSelection | null>(null);
 
   async function fetchLatestSnapshot(): Promise<RuntimeInventorySnapshot | null> {
@@ -126,9 +122,22 @@ export function RuntimeFleetPage() {
     };
   }, []);
 
+  const runtimeKindOptions = useMemo(() => listRuntimeFleetRuntimeKindOptions(snapshot), [snapshot]);
+  const runtimeStatusOptions = useMemo(() => listRuntimeFleetHealthOptions(snapshot), [snapshot]);
+  useEffect(() => {
+    if (runtimeKind !== "all" && !runtimeKindOptions.some((option) => option.value === runtimeKind)) {
+      setRuntimeKind("all");
+    }
+  }, [runtimeKind, runtimeKindOptions]);
+  useEffect(() => {
+    if (runtimeStatus !== "all" && !runtimeStatusOptions.some((option) => option.value === runtimeStatus)) {
+      setRuntimeStatus("all");
+    }
+  }, [runtimeStatus, runtimeStatusOptions]);
+
   const filters: RuntimeFleetFilters = useMemo(
-    () => ({ query, runtimeKind, runtimeStatus, channelKind }),
-    [channelKind, query, runtimeKind, runtimeStatus],
+    () => ({ query, runtimeKind, runtimeStatus }),
+    [query, runtimeKind, runtimeStatus],
   );
   const result = useMemo(() => filterRuntimeFleet(snapshot, filters), [filters, snapshot]);
   const summary = useMemo(() => summarizeRuntimeFleet(snapshot, workStateSnapshot), [snapshot, workStateSnapshot]);
@@ -239,9 +248,9 @@ export function RuntimeFleetPage() {
             onChange={(event) => setRuntimeKind(event.target.value as RuntimeKind | "all")}
           >
             <option value="all">全部 Runtime</option>
-            {RUNTIME_KINDS.map((kind) => (
-              <option key={kind} value={kind}>
-                {runtimeKindLabels[kind]}
+            {runtimeKindOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
               </option>
             ))}
           </select>
@@ -254,28 +263,14 @@ export function RuntimeFleetPage() {
             onChange={(event) => setRuntimeStatus(event.target.value as RuntimeHealthStatus | "all")}
           >
             <option value="all">全部可用性</option>
-            {runtimeStatusOptions.map((status) => (
-              <option key={status} value={status}>
-                {runtimeHealthLabels[status]}
+            {runtimeStatusOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
               </option>
             ))}
           </select>
         </label>
 
-        <label className="toolbarField">
-          <span className="controlLabel">Channel</span>
-          <select
-            value={channelKind}
-            onChange={(event) => setChannelKind(event.target.value as ChannelKind | "all")}
-          >
-            <option value="all">全部 Channel</option>
-            {channelOptions.map((channel) => (
-              <option key={channel} value={channel}>
-                {channelKindLabels[channel]}
-              </option>
-            ))}
-          </select>
-        </label>
       </section>
 
       <section className="metricGrid" aria-label="运行资产概览">

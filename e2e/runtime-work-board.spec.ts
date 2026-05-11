@@ -36,12 +36,38 @@ test.describe("Runs / Work Board", () => {
     for (const lane of ["待处理", "处理中", "待验收", "已关闭", "需关注"]) {
       await expect(page.getByRole("heading", { name: lane })).toBeVisible();
     }
+    await expect(page.getByLabel("渠道")).toHaveValue("all");
+    await expect(page.getByLabel("渠道").locator("option")).toHaveText(["全部渠道", "DingTalk"]);
+    const searchBox = await page.getByPlaceholder("搜索任务、消息、发起人、Agent 或会话/群组").boundingBox();
+    const stageBox = await page.getByLabel("阶段").boundingBox();
+    const timeTriggerBox = await page.getByRole("button", { name: /选择时间范围/ }).boundingBox();
+    expect(searchBox?.width ?? 0).toBeLessThan(620);
+    expect(timeTriggerBox?.x ?? 0).toBeGreaterThan(stageBox?.x ?? 0);
+    await expect(page.getByLabel("开始时间")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /帮我检查今天的线上异常/ })).toBeVisible();
+    await page.getByRole("button", { name: /选择时间范围/ }).click();
+    await expect(page.getByRole("button", { name: "清除时间" })).toBeVisible();
+    await page.getByRole("button", { name: "日历中选择" }).click();
+    await page.getByLabel("开始时间").fill("2026-05-09T15:45");
+    await page.getByLabel("结束时间").fill("2026-05-09T16:00");
+    await page.getByRole("button", { name: "立即查询" }).click();
+    await expect(page.getByRole("button", { name: /帮我检查今天的线上异常/ })).toBeVisible();
+    await page.getByRole("button", { name: /选择时间范围/ }).click();
+    await page.getByRole("button", { name: "日历中选择" }).click();
+    await page.getByLabel("开始时间").fill("2026-05-10T00:00");
+    await page.getByLabel("结束时间").fill("2026-05-10T23:59");
+    await page.getByRole("button", { name: "立即查询" }).click();
+    await expect(page.getByRole("button", { name: /帮我检查今天的线上异常/ })).not.toBeVisible();
+    await page.getByRole("button", { name: /选择时间范围/ }).click();
+    await page.getByRole("button", { name: "清除时间" }).click();
     await expect(page.getByRole("button", { name: /帮我检查今天的线上异常/ })).toBeVisible();
 
     await page.getByLabel("来源 Runtime").selectOption("slock");
     await page.getByPlaceholder("搜索任务、消息、发起人、Agent 或会话/群组").fill("@fixture-human");
 
-    await expect(page.getByRole("button", { name: /Example in progress card/ })).toBeVisible();
+    const slockCard = page.getByRole("button", { name: /Example in progress card/ });
+    await expect(slockCard).toBeVisible();
+    await expect(slockCard).not.toContainText("处理中");
     await expect(page.getByRole("button", { name: /@example-agent/ }).first()).toBeVisible();
     await expect(page.getByText(/OpenClaw execution/)).not.toBeVisible();
     await expect(page.getByText("直接证据")).not.toBeVisible();
@@ -51,7 +77,7 @@ test.describe("Runs / Work Board", () => {
     await page.getByRole("button", { name: /Example in progress card/ }).click();
     const detail = page.getByRole("complementary", { name: "工作项详情" });
     await expect(detail).toContainText("来源 Runtime: Slock");
-    await expect(detail).toContainText("Channel: Slock");
+    await expect(detail).toContainText("Channel: 默认渠道");
     await expect(detail).toContainText("发起人: @fixture-human");
     await expect(detail).toContainText("承接 Agent: @example-agent");
     await expect(detail).toContainText("会话/群组: #example-board");

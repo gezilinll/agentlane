@@ -10,7 +10,7 @@ import {
   slockWorkStateFixture,
 } from "./runtime-work-state-fixtures";
 import type { RuntimeWorkStateSnapshot } from "./runtime-work-state";
-import { createRuntimeWorkBoard } from "./runtime-work-state-query";
+import { createRuntimeWorkBoard, listRuntimeWorkChannelOptions } from "./runtime-work-state-query";
 
 const snapshot: RuntimeWorkStateSnapshot = {
   observedAt: "2026-05-09T08:00:00.000Z",
@@ -55,7 +55,6 @@ describe("runtime work state query", () => {
     const slockCard = board.visibleItems.find((item) => item.title === "Example in progress card");
     expect(slockCard).toMatchObject({
       runtimeLabel: "Slock",
-      channelKindLabel: "Slock",
       creatorLabel: "@fixture-human",
       assigneeLabel: "@example-agent",
       channelLabel: "#example-board",
@@ -63,7 +62,61 @@ describe("runtime work state query", () => {
       stage: "processing",
       confidence: "direct",
     });
+    expect(slockCard?.channelKindLabel).toBeUndefined();
     expect(slockCard?.executionStatus).toBeUndefined();
+  });
+
+  it("lists and filters only real user-facing channels for Runs", () => {
+    const board = createRuntimeWorkBoard(snapshot, {
+      channelKind: "dingtalk",
+    });
+
+    expect(listRuntimeWorkChannelOptions(snapshot)).toEqual([{ value: "dingtalk", label: "DingTalk" }]);
+    expect(board.visibleItems).not.toHaveLength(0);
+    expect(board.visibleItems.every((item) => item.channelKindLabel === "DingTalk")).toBe(true);
+    expect(board.visibleItems.some((item) => item.runtimeLabel === "Slock")).toBe(false);
+  });
+
+  it("filters Runs cards by last seen time range", () => {
+    const board = createRuntimeWorkBoard({
+      observedAt: "2026-05-09T08:00:00.000Z",
+      deviceId: "fixture-device",
+      workItems: [
+        {
+          id: "fixture-old-card",
+          source: "openclaw",
+          externalId: "fixture-old-card",
+          title: "Old card",
+          status: "done",
+          lastSeenAt: "2026-05-08T23:59:59.000Z",
+        },
+        {
+          id: "fixture-inside-card",
+          source: "openclaw",
+          externalId: "fixture-inside-card",
+          title: "Inside card",
+          status: "done",
+          lastSeenAt: "2026-05-09T12:00:00.000Z",
+        },
+        {
+          id: "fixture-unknown-card",
+          source: "openclaw",
+          externalId: "fixture-unknown-card",
+          title: "Unknown time card",
+          status: "done",
+        },
+      ],
+      conversations: [],
+      executions: [],
+      capabilities: [],
+    }, {
+      timeRange: {
+        start: "2026-05-09T00:00:00.000Z",
+        end: "2026-05-09T23:59:59.000Z",
+      },
+    });
+
+    expect(board.visibleItems.map((item) => item.title)).toEqual(["Inside card"]);
   });
 
   it("uses the linked OpenClaw agent id when an item has no explicit assignee", () => {

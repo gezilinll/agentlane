@@ -57,7 +57,7 @@ flowchart LR
 - DeviceConnection：设备侧 Agentlane collector 与后端之间的连接状态，记录在线、失联、最后心跳、collector version 和最近错误。
 - Runtime：设备上的可识别运行或平台入口。`kind` 用于表达 OpenClaw、Codex、Claude Code、Slock、Multica 等具象来源。
 - ManagedAgent：Agentlane 管理视角下的 Agent。它可以来源于 OpenClaw 本机 Agent、Slock 平台 Agent、Multica 平台 Agent 或手动注册对象。
-- ChannelBinding：Agent 被哪些渠道或外部平台暴露，例如 DingTalk、Slock、Multica。
+- ChannelBinding：Agent 被哪些用户触达渠道或外部入口暴露，例如 DingTalk、Telegram、Slack；Slock、Multica、OpenClaw、Codex 在 Runs 语义中属于 Runtime / 平台入口，不作为 Channel 筛选项。
 - RuntimeSnapshot：Collector 单次采集结果，是 UI 和后续 Registry 写入的输入。
 - Runtime endpoint 不作为 v1 的一等对象。Adapter 可以保留必要诊断字段，但 Runtime Fleet 页面不展示运行入口，除非后续出现明确管理动作。
 - RuntimeWorkItem：业务工作项，例如 Slock board card、Multica issue、外部任务或需求卡片。
@@ -149,7 +149,7 @@ WebSocket 是设备控制面，不是聊天入口。设备永远主动连接 Age
 - Device connection：Agentlane device agent 是否在线。
 - Runtime health：OpenClaw、Codex、Multica、Slock 等 runtime 是否可用。
 - Agent availability：某个 managed agent 是否可接收任务或可见。
-- Channel binding：钉钉、Slock、Multica 等渠道绑定是否存在且启用。
+- Channel binding：DingTalk、Telegram、Slack 等触达渠道或外部入口绑定是否存在且启用；Runs 页面只把用户触达渠道作为 Channel 筛选项。
 
 ## Runtime Adapter
 

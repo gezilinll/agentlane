@@ -1,4 +1,4 @@
-import { RefreshCw, Search } from "lucide-react";
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronUp, RefreshCw, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   mapMulticaWorkState,
@@ -12,8 +12,11 @@ import {
 } from "./runtime-work-state-fixtures";
 import {
   createRuntimeWorkBoard,
+  listRuntimeWorkChannelOptions,
   type RuntimeWorkBoardItem,
   type RuntimeWorkBoardFilters,
+  type RuntimeWorkChannelKind,
+  type RuntimeWorkTimeRangeFilter,
 } from "./runtime-work-state-query";
 import type { RuntimeSource } from "./runtime-normalize";
 import type { RuntimeWorkStageId, RuntimeWorkStateSnapshot } from "./runtime-work-state";
@@ -23,6 +26,19 @@ const autoRefreshIntervalMs = 30_000;
 
 const sourceOptions: Array<RuntimeSource | "all"> = ["all", "openclaw", "multica", "slock"];
 const stageOptions: Array<RuntimeWorkStageId | "all"> = ["all", "pending", "processing", "review", "closed", "attention"];
+const quickRangeOptions = [
+  "lastHour",
+  "lastDay",
+  "today",
+  "yesterday",
+  "last7Days",
+  "thisWeek",
+  "lastWeek",
+  "last30Days",
+  "thisMonth",
+] as const;
+type QuickRangeOption = (typeof quickRangeOptions)[number];
+type TimeRangePanelMode = "quick" | "custom";
 
 const sourceLabels: Record<RuntimeSource | "all", string> = {
   all: "全部 Runtime",
@@ -44,6 +60,18 @@ const stageLabels: Record<RuntimeWorkStageId | "all", string> = {
   attention: "需关注",
 };
 
+const quickRangeLabels: Record<QuickRangeOption, string> = {
+  lastHour: "1小时",
+  lastDay: "1天",
+  today: "今天",
+  yesterday: "昨天",
+  last7Days: "七天内",
+  thisWeek: "本星期",
+  lastWeek: "上星期",
+  last30Days: "30天",
+  thisMonth: "本月",
+};
+
 const fixtureWorkStateSnapshot = createFixtureWorkStateSnapshot();
 
 /** Read-only board for normalized Agent work state across runtimes and platforms. */
@@ -58,6 +86,11 @@ export function RuntimeWorkBoardPage() {
   const [search, setSearch] = useState("");
   const [source, setSource] = useState<RuntimeSource | "all">("all");
   const [stage, setStage] = useState<RuntimeWorkStageId | "all">("all");
+  const [channelKind, setChannelKind] = useState<RuntimeWorkChannelKind | "all">("all");
+  const [timeStart, setTimeStart] = useState("");
+  const [timeEnd, setTimeEnd] = useState("");
+  const [timeRangeOpen, setTimeRangeOpen] = useState(false);
+  const [timeRangeMode, setTimeRangeMode] = useState<TimeRangePanelMode>("quick");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   async function fetchLatestSnapshot(): Promise<RuntimeWorkStateSnapshot | null> {
@@ -114,12 +147,48 @@ export function RuntimeWorkBoardPage() {
     };
   }, []);
 
+  const channelOptions = useMemo(() => listRuntimeWorkChannelOptions(snapshot), [snapshot]);
+  useEffect(() => {
+    if (channelKind !== "all" && !channelOptions.some((option) => option.value === channelKind)) {
+      setChannelKind("all");
+    }
+  }, [channelKind, channelOptions]);
+
   const filters: RuntimeWorkBoardFilters = useMemo(
-    () => ({ search, source, stage }),
-    [search, source, stage],
+    () => ({
+      channelKind,
+      search,
+      source,
+      stage,
+      timeRange: createTimeRangeFilter(timeStart, timeEnd),
+    }),
+    [channelKind, search, source, stage, timeEnd, timeStart],
   );
   const board = useMemo(() => createRuntimeWorkBoard(snapshot, filters), [filters, snapshot]);
   const selectedItem = selectedId ? board.visibleItems.find((item) => item.id === selectedId) ?? null : board.visibleItems[0] ?? null;
+  const timeRangeSummary = formatTimeRangeSummary(timeStart, timeEnd);
+  const timeRangeDuration = formatTimeRangeDuration(timeStart, timeEnd);
+
+  function applyQuickRange(option: QuickRangeOption) {
+    const range = createQuickTimeRange(option, new Date());
+    setTimeStart(formatDateTimeLocal(range.start));
+    setTimeEnd(formatDateTimeLocal(range.end));
+  }
+
+  function clearTimeRange() {
+    setTimeStart("");
+    setTimeEnd("");
+    setTimeRangeMode("quick");
+  }
+
+  function toggleTimeRangeOpen() {
+    if (timeRangeOpen) {
+      setTimeRangeOpen(false);
+      return;
+    }
+    setTimeRangeMode("quick");
+    setTimeRangeOpen(true);
+  }
 
   return (
     <section className="workspace">
@@ -182,6 +251,21 @@ export function RuntimeWorkBoardPage() {
         </label>
 
         <label className="toolbarField">
+          <span className="controlLabel">渠道</span>
+          <select
+            value={channelKind}
+            onChange={(event) => setChannelKind(event.target.value as RuntimeWorkChannelKind | "all")}
+          >
+            <option value="all">全部渠道</option>
+            {channelOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="toolbarField">
           <span className="controlLabel">阶段</span>
           <select value={stage} onChange={(event) => setStage(event.target.value as RuntimeWorkStageId | "all")}>
             {stageOptions.map((option) => (
@@ -192,6 +276,97 @@ export function RuntimeWorkBoardPage() {
           </select>
         </label>
 
+        <div className="toolbarField timeRangeField">
+          <span className="controlLabel">时间范围</span>
+          <button
+            aria-controls="runs-time-range-panel"
+            aria-expanded={timeRangeOpen}
+            aria-label={`选择时间范围：${timeRangeSummary}`}
+            className="timeRangeTrigger"
+            type="button"
+            onClick={toggleTimeRangeOpen}
+          >
+            <span className="timeRangeDuration">{timeRangeDuration}</span>
+            <span className="timeRangeSummary">{timeRangeSummary}</span>
+            {timeRangeOpen ? <ChevronUp size={18} aria-hidden="true" /> : <ChevronDown size={18} aria-hidden="true" />}
+          </button>
+          {timeRangeOpen ? (
+            <div className="timeRangePopover" id="runs-time-range-panel" role="dialog" aria-label="时间范围选择">
+              {timeRangeMode === "quick" ? (
+                <>
+                  <div className="timeRangePopoverHeader">
+                    <strong>时间选择</strong>
+                    <button className="timeRangeTextButton" type="button" onClick={() => setTimeRangeMode("custom")}>
+                      <CalendarDays size={16} aria-hidden="true" />
+                      日历中选择
+                    </button>
+                  </div>
+                  <p className="timeRangeHint">请选择需要的时间</p>
+                  <div className="quickRangeGrid" aria-label="快捷时间范围">
+                    {quickRangeOptions.map((option) => (
+                      <button
+                        className="quickRangeButton"
+                        key={option}
+                        type="button"
+                        onClick={() => applyQuickRange(option)}
+                      >
+                        {quickRangeLabels[option]}
+                      </button>
+                    ))}
+                    <button className="quickRangeButton" type="button" onClick={() => setTimeRangeMode("custom")}>
+                      自定义
+                    </button>
+                  </div>
+                  <div className="timeRangeActions">
+                    <button className="secondaryButton" type="button" onClick={clearTimeRange}>
+                      清除时间
+                    </button>
+                    <button className="primaryMiniButton" type="button" onClick={() => setTimeRangeOpen(false)}>
+                      确认
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <button className="timeRangeBackButton" type="button" onClick={() => setTimeRangeMode("quick")}>
+                    <ChevronLeft size={16} aria-hidden="true" />
+                    日历中选择
+                  </button>
+                  <div className="timeRangeManualInputs">
+                    <label className="timeInputLabel">
+                      <span>开始时间</span>
+                      <input
+                        aria-label="开始时间"
+                        type="datetime-local"
+                        step={1}
+                        value={timeStart}
+                        onChange={(event) => setTimeStart(event.target.value)}
+                      />
+                    </label>
+                    <label className="timeInputLabel">
+                      <span>结束时间</span>
+                      <input
+                        aria-label="结束时间"
+                        type="datetime-local"
+                        step={1}
+                        value={timeEnd}
+                        onChange={(event) => setTimeEnd(event.target.value)}
+                      />
+                    </label>
+                  </div>
+                  <div className="timeRangeActions">
+                    <button className="secondaryButton" type="button" onClick={clearTimeRange}>
+                      清除时间
+                    </button>
+                    <button className="primaryMiniButton" type="button" onClick={() => setTimeRangeOpen(false)}>
+                      立即查询
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : null}
+        </div>
       </section>
 
       <section className="metricGrid" aria-label="工作态概览">
@@ -220,7 +395,6 @@ export function RuntimeWorkBoardPage() {
                     >
                       <span className="workCardTopline">
                         <Badge>{item.runtimeLabel}</Badge>
-                        <Badge>{stageLabels[item.stage]}</Badge>
                         {item.channelKindLabel ? <Badge>{item.channelKindLabel}</Badge> : null}
                       </span>
                       <strong>{item.title}</strong>
@@ -291,7 +465,7 @@ function WorkItemDetail({
         title="任务上下文"
         items={[
           `来源 Runtime: ${item.runtimeLabel}`,
-          `Channel: ${item.channelKindLabel ?? "不支持采集"}`,
+          `Channel: ${item.channelKindLabel ?? "默认渠道"}`,
           `发起人: ${item.creatorLabel}`,
           `承接 Agent: ${item.assigneeLabel}`,
           `会话/群组: ${item.channelLabel ?? "不支持采集"}`,
@@ -342,6 +516,113 @@ function Badge({ children }: { children: string }) {
 
 function StatusPill({ children }: { children: string }) {
   return <span className="statusBadge">{children}</span>;
+}
+
+function createTimeRangeFilter(start: string, end: string): RuntimeWorkTimeRangeFilter | undefined {
+  const normalizedStart = start.trim();
+  const normalizedEnd = end.trim();
+  if (!normalizedStart && !normalizedEnd) return undefined;
+  return {
+    start: normalizedStart || undefined,
+    end: normalizedEnd || undefined,
+  };
+}
+
+function createQuickTimeRange(option: QuickRangeOption, now: Date): { start: Date; end: Date } {
+  if (option === "lastHour") {
+    return { start: new Date(now.getTime() - 60 * 60 * 1000), end: now };
+  }
+  if (option === "lastDay") {
+    return { start: new Date(now.getTime() - 24 * 60 * 60 * 1000), end: now };
+  }
+  if (option === "today") {
+    return { start: startOfDay(now), end: now };
+  }
+  if (option === "yesterday") {
+    const yesterday = addDays(now, -1);
+    return { start: startOfDay(yesterday), end: endOfDay(yesterday) };
+  }
+  if (option === "last7Days") {
+    return { start: startOfDay(addDays(now, -6)), end: now };
+  }
+  if (option === "thisWeek") {
+    return { start: startOfWeek(now), end: now };
+  }
+  if (option === "last30Days") {
+    return { start: startOfDay(addDays(now, -29)), end: now };
+  }
+  if (option === "thisMonth") {
+    return { start: startOfMonth(now), end: now };
+  }
+  const thisWeekStart = startOfWeek(now);
+  const lastWeekStart = addDays(thisWeekStart, -7);
+  return { start: lastWeekStart, end: endOfDay(addDays(thisWeekStart, -1)) };
+}
+
+function formatTimeRangeSummary(start: string, end: string): string {
+  const displayStart = formatDateTimeDisplay(start);
+  const displayEnd = formatDateTimeDisplay(end);
+  if (displayStart && displayEnd) return `${displayStart} ~ ${displayEnd}`;
+  if (displayStart) return `${displayStart} 之后`;
+  if (displayEnd) return `${displayEnd} 之前`;
+  return "全部时间";
+}
+
+function formatTimeRangeDuration(start: string, end: string): string {
+  const startDate = parseDateTimeLocal(start);
+  const endDate = parseDateTimeLocal(end);
+  if (!startDate && !endDate) return "全部";
+  if (!startDate || !endDate) return "自定义";
+  const diffMs = endDate.getTime() - startDate.getTime();
+  if (!Number.isFinite(diffMs) || diffMs < 0) return "自定义";
+  const minutes = Math.max(1, Math.round(diffMs / 60_000));
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours}h`;
+  const days = Math.round(hours / 24);
+  return `${days}d`;
+}
+
+function formatDateTimeDisplay(value: string): string | undefined {
+  const date = parseDateTimeLocal(value);
+  if (!date) return undefined;
+  return `${date.getFullYear()}-${padTimePart(date.getMonth() + 1)}-${padTimePart(date.getDate())} ${padTimePart(date.getHours())}:${padTimePart(date.getMinutes())}:${padTimePart(date.getSeconds())}`;
+}
+
+function parseDateTimeLocal(value: string): Date | undefined {
+  if (!value.trim()) return undefined;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return date;
+}
+
+function formatDateTimeLocal(date: Date): string {
+  return `${date.getFullYear()}-${padTimePart(date.getMonth() + 1)}-${padTimePart(date.getDate())}T${padTimePart(date.getHours())}:${padTimePart(date.getMinutes())}:${padTimePart(date.getSeconds())}`;
+}
+
+function startOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+}
+
+function endOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
+}
+
+function startOfWeek(date: Date): Date {
+  const mondayOffset = (date.getDay() + 6) % 7;
+  return startOfDay(addDays(date, -mondayOffset));
+}
+
+function startOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0);
+}
+
+function addDays(date: Date, days: number): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days, date.getHours(), date.getMinutes(), date.getSeconds(), date.getMilliseconds());
+}
+
+function padTimePart(value: number): string {
+  return String(value).padStart(2, "0");
 }
 
 function createFixtureWorkStateSnapshot(): RuntimeWorkStateSnapshot {

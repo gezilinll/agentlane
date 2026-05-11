@@ -7,8 +7,9 @@ import {
   getRuntimeFleetDetail,
   runtimeOperatingStatusLabels,
   runtimeDisplayName,
+  listRuntimeFleetHealthOptions,
+  listRuntimeFleetRuntimeKindOptions,
   summarizeRuntimeFleet,
-  type RuntimeFleetFilters,
 } from "./runtime-inventory-query";
 import type { RuntimeInventorySnapshot } from "./runtime-normalize";
 import type { RuntimeWorkStateSnapshot } from "./runtime-work-state";
@@ -25,6 +26,14 @@ describe("runtime inventory query", () => {
       agents: 2,
       issues: 1,
     });
+  });
+
+  it("lists Runtime Fleet filter options from the current snapshot", () => {
+    expect(listRuntimeFleetRuntimeKindOptions(snapshot).map((option) => option.value)).toEqual([
+      "openclaw",
+      "slock",
+    ]);
+    expect(listRuntimeFleetHealthOptions(snapshot).map((option) => option.value)).toEqual(["online"]);
   });
 
   it("derives Runtime operating status from Agent work state without using platform raw states", () => {
@@ -166,9 +175,8 @@ describe("runtime inventory query", () => {
     expect(result.agents.map((agent) => agent.name)).toEqual(["tester"]);
   });
 
-  it("filters agents by channel without dropping device context", () => {
-    const filters: RuntimeFleetFilters = { channelKind: "slock" };
-    const result = filterRuntimeFleet(snapshot, filters);
+  it("filters agents by runtime kind without dropping device context", () => {
+    const result = filterRuntimeFleet(snapshot, { runtimeKind: "slock" });
 
     expect(result.device.id).toBe("fixture-mac");
     expect(result.agents.map((agent) => agent.name)).toEqual(["tester"]);

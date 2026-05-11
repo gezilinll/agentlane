@@ -1,6 +1,6 @@
 # Runtime Fleet Page Spec
 
-版本：TinySpec v0.6
+版本：TinySpec v0.8
 
 Runtime Fleet 是 Agentlane v1 用来查看设备、runtime、agent 和 channel binding 的第一版管理页面。页面优先读取本地后端最新 collector snapshot 和设备连接状态；没有后端数据时回退到 collector snapshot fixture，保证开发期仍可离线预览。
 
@@ -18,7 +18,8 @@ Runtime Fleet 必须区分“数据从哪里采集”和“产品上归属哪一
 - 展示已注册设备的基本状态、hostname、OS、最后同步时间和连接状态。
 - 展示设备上的 runtime，包括 OpenClaw、Codex、Claude Code、Slock、Multica 等 `kind`。
 - 展示 runtime 下的 managed agents、归属 runtime、可用性、运行状态、channel binding 和最近同步。
-- 支持按关键词、runtime kind、可用性、channel 过滤。
+- 支持按关键词、runtime kind、可用性过滤。Runtime kind 和可用性的候选项必须从当前 snapshot 中真实存在的 runtime 动态生成；不展示当前设备没有上报的 Runtime 类型或可用性状态。
+- Runtime Fleet 不提供 Channel 筛选，避免把 Slock、Multica、OpenClaw、Codex 等 Runtime / 平台入口误当成触达渠道。
 - 点击设备、runtime 或 agent 后，在右侧详情面板查看身份信息、连接状态、归属关系、已注册 Runtime 和关联渠道。
 - 当设备控制面在线时，支持从页面请求远端设备刷新 snapshot。
 - 页面自动轮询最新 snapshot，使运行资产管理视图持续更新。
@@ -106,8 +107,9 @@ Agent：
 
 - 主导航可以进入 Runtime Fleet 页面。
 - 页面顶部显示设备、在线 Runtime、Agent、异常数量。
+- Runtime 和可用性筛选项来自当前 snapshot；fixture 只有 OpenClaw、Slock 且二者在线时，筛选项只显示 `全部 Runtime / OpenClaw / Slock` 和 `全部可用性 / 在线`。
 - 用户可以搜索 `tester` 并只看到相关 Agent。
-- 用户可以按 `Slock` channel 过滤 Agent。
+- Runtime Fleet 工具栏不展示 Channel 筛选；用户需要收敛某个 Agent 时使用搜索、Runtime 或可用性筛选。
 - 用户可以点击 Agent 行并在详情面板看到归属 Runtime、归属设备、关联渠道和运行统计。
 - 用户在桌面宽度滚动到 Agent 表格后点击行，详情面板仍停留在可视区域内。
 - 当旧 snapshot 缺少 Agent 级最近同步时间时，Agent 列表和详情使用归属 Runtime 或 snapshot 时间回退，不展示未知。

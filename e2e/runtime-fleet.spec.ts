@@ -68,8 +68,11 @@ test.describe("Runtime Fleet", () => {
     await expect(page.getByRole("table", { name: "Runtime 列表" })).toContainText("所属设备");
     await expect(page.getByRole("table", { name: "Agent 列表" })).toContainText("归属 Runtime");
     await expect(page.getByRole("table", { name: "Agent 列表" })).toContainText("最近同步");
+    await expect(page.getByLabel("Channel")).toHaveCount(0);
+    await expect(page.getByLabel("Runtime").locator("option")).toHaveText(["全部 Runtime", "OpenClaw", "Slock"]);
+    await expect(page.getByLabel("可用性").locator("option")).toHaveText(["全部可用性", "在线"]);
 
-    await page.getByLabel("Channel").selectOption("slock");
+    await page.getByPlaceholder("搜索设备、Runtime、Agent 或渠道").fill("tester");
     await expect(page.getByRole("table", { name: "Agent 列表" })).toContainText("tester");
     await expect(page.getByRole("table", { name: "Agent 列表" })).not.toContainText("main");
 
