@@ -366,7 +366,7 @@ function displayChannelLabel(channel: RuntimeWorkItem["channel"]): string | unde
     const generatedDingTalkId = label.match(/^DingTalk\s+(群聊|私聊)\s+(.+)$/i);
     if (generatedDingTalkId && isOpaqueDingTalkTargetId(generatedDingTalkId[2])) {
       if (generatedDingTalkId[1] === "私聊") return "DingTalk 私聊";
-      return `DingTalk ${generatedDingTalkId[1]}（名称待补全）`;
+      return `DingTalk ${generatedDingTalkId[1]}`;
     }
   }
   return label;

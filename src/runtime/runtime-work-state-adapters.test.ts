@@ -104,6 +104,35 @@ describe("runtime work state adapters", () => {
     expect(result.workItems.map((item) => item.externalId)).not.toContain("system-recovery-1");
   });
 
+  it("uses unlinked OpenClaw DingTalk messages as context without creating pending work items", () => {
+    const result = mapOpenClawWorkState({
+      ...openClawWorkStateFixture,
+      dingtalkMessages: [
+        {
+          msgId: "msg-unlinked-1",
+          sessionKey: "agent:main:dingtalk:group:group-1",
+          conversationId: "group-1",
+          direction: "inbound",
+          text: "/new",
+          senderId: "user-1",
+          senderName: "张三",
+          createdAt: "2026-05-09T07:50:30.000Z",
+          updatedAt: "2026-05-09T07:51:00.000Z",
+        },
+      ],
+      tasks: [],
+      trajectoryRuns: [],
+    });
+
+    expect(result.workItems).toEqual([]);
+    expect(result.conversations).toContainEqual(expect.objectContaining({
+      source: "openclaw",
+      externalId: "agent:main:dingtalk:group:group-1",
+      title: "研发值班群",
+      participants: [{ kind: "human", label: "张三", externalId: "user-1" }],
+    }));
+  });
+
   it("maps OpenClaw DingTalk direct session ids to readable channel labels", () => {
     const result = mapOpenClawWorkState({
       ...openClawWorkStateFixture,

@@ -622,7 +622,7 @@ function openClawWorkStateCapability(collectedAt, options = {}) {
     workItems: supportCapability(
       options.workItemsSupport || "unsupported",
       options.workItemsStrategies || ["local_state", "cli", "native_api"],
-      options.workItemsEvidence || ["OpenClaw tasks, DingTalk local state, session runtime-context, and trajectory prompt.submitted can expose message-backed work items."],
+      options.workItemsEvidence || ["OpenClaw tasks, linked DingTalk local state, session runtime-context, and trajectory prompt.submitted can expose message-backed work items."],
       options.workItemsLimitations || ["OpenClaw has no pending or review phase without an upstream work item source."],
     ),
     conversations: supportCapability(
@@ -1402,6 +1402,7 @@ function collectOpenClawWorkState(deviceId, observedAt) {
   const trajectoryRuns = readOpenClawTrajectoryRuns();
   const workItemByMessageId = new Map();
   const workItemIdByMessageId = new Map();
+  const visibleWorkItemIds = new Set();
   const messageLinkCandidates = [];
   const workItemByTaskId = new Map();
   const workItemByTrajectoryRunId = new Map();
@@ -1490,6 +1491,7 @@ function collectOpenClawWorkState(deviceId, observedAt) {
     if (messageId && workItemId) {
       const workItem = workItemByMessageId.get(String(messageId));
       if (workItem) {
+        visibleWorkItemIds.add(workItem.id);
         workItem.status = normalizeOpenClawMessageStatus(executionStatus);
         applyOpenClawLinkedConversationEvidence(workItem, { runtimeId, sessionKey, channel: sessionChannel });
         executionConversationId = workItem.conversationId || executionConversationId;
@@ -1522,6 +1524,7 @@ function collectOpenClawWorkState(deviceId, observedAt) {
         dingtalkState,
       });
       workItemByTaskId.set(String(taskId), workItem);
+      visibleWorkItemIds.add(workItem.id);
       workItemId = workItem.id;
     }
     const error = task.error || task.lastError || task.last_error;
@@ -1582,6 +1585,7 @@ function collectOpenClawWorkState(deviceId, observedAt) {
     if (linkedMessageId && workItemId) {
       const linkedWorkItem = workItemByMessageId.get(linkedMessageId);
       if (linkedWorkItem) {
+        visibleWorkItemIds.add(linkedWorkItem.id);
         linkedWorkItem.status = normalizeOpenClawMessageStatus(executionStatus);
         linkedWorkItem.updatedAt = run.endedAt || run.lastEventAt || linkedWorkItem.updatedAt;
         linkedWorkItem.lastSeenAt = run.lastEventAt || run.endedAt || observedAt;
@@ -1598,6 +1602,7 @@ function collectOpenClawWorkState(deviceId, observedAt) {
         dingtalkState,
       });
       workItemByTrajectoryRunId.set(String(run.runId), workItem);
+      visibleWorkItemIds.add(workItem.id);
       workItemId = workItem.id;
       conversationId = workItem.conversationId;
     }
@@ -1621,22 +1626,23 @@ function collectOpenClawWorkState(deviceId, observedAt) {
   const warnings = [];
   if (!taskReport) warnings.push("OpenClaw work-state probe unavailable: openclaw tasks list --json failed or returned non-JSON.");
   if (!health && !status) warnings.push("OpenClaw conversation probe unavailable: health/status failed or returned non-JSON.");
+  const visibleWorkItemCount = visibleWorkItemIds.size;
 
   return {
     workItems: [
-      ...Array.from(workItemByMessageId.values()),
-      ...Array.from(workItemByTaskId.values()),
-      ...Array.from(workItemByTrajectoryRunId.values()),
+      ...Array.from(workItemByMessageId.values()).filter((item) => visibleWorkItemIds.has(item.id)),
+      ...Array.from(workItemByTaskId.values()).filter((item) => visibleWorkItemIds.has(item.id)),
+      ...Array.from(workItemByTrajectoryRunId.values()).filter((item) => visibleWorkItemIds.has(item.id)),
     ],
     conversations: Array.from(sessionMap.values()),
     executions: [...executions, ...trajectoryExecutions],
     capabilities: [
       openClawWorkStateCapability(observedAt, {
-        workItemsSupport: workItemByMessageId.size > 0 || workItemByTaskId.size > 0 || workItemByTrajectoryRunId.size > 0 ? "partial" : "unsupported",
-        workItemsEvidence: workItemByMessageId.size > 0 || workItemByTaskId.size > 0 || workItemByTrajectoryRunId.size > 0
-          ? ["OpenClaw DingTalk message context, task origin, or trajectory prompt.submitted exposed message-backed work items."]
+        workItemsSupport: visibleWorkItemCount > 0 ? "partial" : "unsupported",
+        workItemsEvidence: visibleWorkItemCount > 0
+          ? ["OpenClaw linked DingTalk message context, task origin, or trajectory prompt.submitted exposed user work items."]
           : undefined,
-        workItemsLimitations: workItemByMessageId.size > 0 || workItemByTaskId.size > 0 || workItemByTrajectoryRunId.size > 0
+        workItemsLimitations: visibleWorkItemCount > 0
           ? ["OpenClaw has no review phase; creator identity depends on channel message context."]
           : undefined,
         conversationsSupport: health || status || sessionMap.size > 0 ? "partial" : "unknown",

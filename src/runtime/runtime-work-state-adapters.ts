@@ -84,6 +84,7 @@ export function mapOpenClawWorkState(input: {
   }
   const workItemIdByMessageId = new Map<string, string>();
   const workItemByMessageId = new Map<string, RuntimeWorkItem>();
+  const visibleWorkItemIds = new Set<string>();
   const messageLinkCandidates: OpenClawMessageLinkCandidate[] = [];
   const conversationById = new Map<string, RuntimeConversation>();
   const coveredRunIds = new Set<string>();
@@ -163,6 +164,7 @@ export function mapOpenClawWorkState(input: {
     if (task.messageId && workItemId) {
       const workItem = workItemByMessageId.get(task.messageId);
       if (workItem) {
+        visibleWorkItemIds.add(workItem.id);
         workItem.status = openClawMessageStatusFromExecution(executionStatus);
         applyOpenClawLinkedConversationEvidence(workItem, conversation);
         executionConversationId = workItem.conversationId ?? executionConversationId;
@@ -171,6 +173,7 @@ export function mapOpenClawWorkState(input: {
     if (!workItemId && shouldCreateOpenClawTaskWorkItem(task, origin)) {
       const workItem = createOpenClawTaskWorkItem(input, task, origin, executionStatus, conversation?.id);
       workItemByMessageId.set(`task:${task.taskId}`, workItem);
+      visibleWorkItemIds.add(workItem.id);
       workItemId = workItem.id;
     }
     return {
@@ -219,6 +222,7 @@ export function mapOpenClawWorkState(input: {
     if (linkedMessageId && linkedWorkItemId) {
       const linkedWorkItem = workItemByMessageId.get(linkedMessageId);
       if (linkedWorkItem) {
+        visibleWorkItemIds.add(linkedWorkItem.id);
         linkedWorkItem.status = openClawMessageStatusFromExecution(executionStatus);
         linkedWorkItem.updatedAt = run.endedAt ?? run.lastEventAt ?? linkedWorkItem.updatedAt;
         linkedWorkItem.lastSeenAt = run.lastEventAt ?? run.endedAt ?? input.observedAt;
@@ -228,6 +232,7 @@ export function mapOpenClawWorkState(input: {
     } else {
       const workItem = createOpenClawTrajectoryWorkItem(input, run, prompt, executionStatus, conversation.id);
       workItemByMessageId.set(`trajectory:${run.runId}`, workItem);
+      visibleWorkItemIds.add(workItem.id);
       workItemId = workItem.id;
       conversationId = workItem.conversationId ?? conversationId;
     }
@@ -249,7 +254,7 @@ export function mapOpenClawWorkState(input: {
   }
 
   return {
-    workItems: Array.from(workItemByMessageId.values()),
+    workItems: Array.from(workItemByMessageId.values()).filter((item) => visibleWorkItemIds.has(item.id)),
     conversations: Array.from(conversationById.values()),
     executions: [...executions, ...trajectoryExecutions],
     capabilities: [openClawCapability(input.observedAt)],
@@ -908,7 +913,7 @@ function openClawCapability(collectedAt: string): RuntimeObservationCapability {
     workItems: {
       support: "partial",
       strategies: ["local_state", "cli", "native_api"],
-      evidence: ["OpenClaw DingTalk message context, task origin, session runtime-context, or trajectory prompt.submitted can produce message-backed work items."],
+      evidence: ["OpenClaw linked DingTalk message context, task origin, session runtime-context, or trajectory prompt.submitted can produce message-backed work items."],
       limitations: ["OpenClaw itself has no review phase; creator identity depends on channel message context or runtime-context metadata."],
     },
     conversations: {

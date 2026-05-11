@@ -275,7 +275,7 @@ describe("device collector scripts", () => {
     }));
   });
 
-  it("maps OpenClaw DingTalk message context records stored as an object map", () => {
+  it("uses unlinked OpenClaw DingTalk message context as conversation evidence only", () => {
     const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-map-home-"));
     const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-map-bin-"));
     writeOpenClawDingTalkTargetDirectory(fakeHome, {
@@ -320,11 +320,15 @@ describe("device collector scripts", () => {
 
     const snapshot = JSON.parse(output);
 
-    expect(snapshot.workItems).toContainEqual(expect.objectContaining({
+    expect(snapshot.workItems).not.toContainEqual(expect.objectContaining({
       source: "openclaw",
       title: "张良发起的真实消息应该能展示发起人",
-      creator: { kind: "human", label: "张良", externalId: "100854680226406967" },
+    }));
+    expect(snapshot.conversations).toContainEqual(expect.objectContaining({
+      source: "openclaw",
+      title: "Agentlane 研发群",
       channel: { kind: "dingtalk", label: "Agentlane 研发群", externalId: "group-map" },
+      participants: [{ kind: "human", label: "张良", externalId: "100854680226406967" }],
     }));
   });
 

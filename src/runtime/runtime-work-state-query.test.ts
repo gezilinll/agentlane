@@ -232,9 +232,9 @@ describe("runtime work state query", () => {
     const fullIdFallback = board.visibleItems.find((item) => item.title === "Message from an unmapped DingTalk group");
     const compactIdFallback = board.visibleItems.find((item) => item.title === "Message from a compacted DingTalk group id");
     const directFallback = board.visibleItems.find((item) => item.title === "Message from an unmapped DingTalk direct chat");
-    expect(fullIdFallback?.channelLabel).toBe("DingTalk 群聊（名称待补全）");
+    expect(fullIdFallback?.channelLabel).toBe("DingTalk 群聊");
     expect(fullIdFallback?.channelLabel).not.toContain("cid4G5");
-    expect(compactIdFallback?.channelLabel).toBe("DingTalk 群聊（名称待补全）");
+    expect(compactIdFallback?.channelLabel).toBe("DingTalk 群聊");
     expect(compactIdFallback?.channelLabel).not.toContain("cidX02");
     expect(directFallback?.channelLabel).toBe("DingTalk 私聊");
     expect(directFallback?.channelLabel).not.toContain("040308");
