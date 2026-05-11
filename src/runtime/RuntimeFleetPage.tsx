@@ -27,6 +27,7 @@ import {
   type RuntimeKind,
 } from "./runtime-normalize";
 import type { RuntimeWorkStateSnapshot } from "./runtime-work-state";
+import { isFixtureFallbackAllowed } from "./runtime-data-source";
 import {
   createWorkItemsQueryUrl,
   runtimeWorkStateSnapshotFromQueryResponse,
@@ -49,9 +50,14 @@ type RuntimeFleetSelection = {
 
 /** First Runtime Fleet surface: inspect registered device, runtimes, agents, and channel exposure. */
 export function RuntimeFleetPage() {
-  const [snapshot, setSnapshot] = useState<RuntimeInventorySnapshot>(fixtureRuntimeSnapshot);
+  const allowFixtureFallback = isFixtureFallbackAllowed();
+  const [snapshot, setSnapshot] = useState<RuntimeInventorySnapshot>(
+    allowFixtureFallback ? fixtureRuntimeSnapshot : createEmptyRuntimeInventorySnapshot(),
+  );
   const [workStateSnapshot, setWorkStateSnapshot] = useState<RuntimeWorkStateSnapshot | null>(null);
-  const [dataSource, setDataSource] = useState<"fixture" | "backend">("fixture");
+  const [dataSource, setDataSource] = useState<"fixture" | "backend">(
+    allowFixtureFallback ? "fixture" : "backend",
+  );
   const [refreshState, setRefreshState] = useState<{
     status: "idle" | "running" | "success" | "error";
     message: string;
@@ -115,7 +121,9 @@ export function RuntimeFleetPage() {
         ]);
         if (!cancelled && latestSnapshot) applySnapshot(latestSnapshot, latestWorkState);
       } catch {
-        // The page remains useful with the bundled fixture when no local backend is running.
+        if (!allowFixtureFallback && !cancelled) {
+          setRefreshState({ status: "error", message: "后端查询失败，无法读取正式运行资产" });
+        }
       }
     }
 
@@ -127,7 +135,7 @@ export function RuntimeFleetPage() {
       cancelled = true;
       window.clearInterval(refreshTimer);
     };
-  }, []);
+  }, [allowFixtureFallback]);
 
   const runtimeKindOptions = useMemo(() => listRuntimeFleetRuntimeKindOptions(snapshot), [snapshot]);
   const runtimeStatusOptions = useMemo(() => listRuntimeFleetHealthOptions(snapshot), [snapshot]);
@@ -321,6 +329,24 @@ function runtimeFleetSnapshotFromQueryResponse(value: unknown): RuntimeInventory
     device: value.devices[0],
     runtimes: value.runtimes,
     agents: value.agents,
+    reports: [],
+  };
+}
+
+function createEmptyRuntimeInventorySnapshot(): RuntimeInventorySnapshot {
+  return {
+    observedAt: new Date(0).toISOString(),
+    collector: { version: "unknown", status: "unknown" },
+    device: {
+      id: "backend",
+      name: "暂无设备数据",
+      hostname: "backend",
+      os: "unknown",
+      status: "unknown",
+      connectionMode: "collector",
+    },
+    runtimes: [],
+    agents: [],
     reports: [],
   };
 }

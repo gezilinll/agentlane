@@ -14,6 +14,18 @@ export interface RuntimeWorkItemsQueryResponse {
   items: RuntimeWorkItemQueryRow[];
   /** Total matching rows before pagination. */
   total: number;
+  /** Cursor for the next page when more rows are available. */
+  nextCursor?: string;
+}
+
+/** Parsed backend query page plus converted shared work-state snapshot. */
+export interface RuntimeWorkItemsQueryPage {
+  /** Converted snapshot for the current backend page. */
+  snapshot: RuntimeWorkStateSnapshot;
+  /** Total matching rows before pagination. */
+  total: number;
+  /** Cursor for the next page when more rows are available. */
+  nextCursor?: string;
 }
 
 /** One normalized work item row returned by the backend query API. */
@@ -54,9 +66,11 @@ export interface RuntimeWorkItemQueryRow {
 export function createWorkItemsQueryUrl(
   origin: string,
   filters: RuntimeWorkBoardFilters | undefined,
+  options: { cursor?: string } = {},
 ): URL {
   const requestUrl = new URL("/api/runtime-work-items", origin);
   requestUrl.searchParams.set("limit", "500");
+  if (options.cursor) requestUrl.searchParams.set("cursor", options.cursor);
   if (filters?.source && filters.source !== "all") requestUrl.searchParams.set("source", filters.source);
   if (filters?.stage && filters.stage !== "all") requestUrl.searchParams.set("stage", filters.stage);
   if (filters?.channelKind && filters.channelKind !== "all") {
@@ -72,15 +86,24 @@ export function createWorkItemsQueryUrl(
 
 /** Convert a backend work-item query response into the shared work-state shape. */
 export function runtimeWorkStateSnapshotFromQueryResponse(value: unknown): RuntimeWorkStateSnapshot | null {
+  return runtimeWorkItemsQueryPageFromResponse(value)?.snapshot ?? null;
+}
+
+/** Convert a backend work-item query response into a snapshot and pagination metadata. */
+export function runtimeWorkItemsQueryPageFromResponse(value: unknown): RuntimeWorkItemsQueryPage | null {
   if (!isRuntimeWorkItemsQueryResponse(value)) return null;
   const workItems = value.items.map(runtimeWorkItemFromQueryRow);
   return {
-    observedAt: latestWorkItemTimestamp(workItems) ?? new Date().toISOString(),
-    deviceId: inferDeviceId(workItems),
-    workItems,
-    conversations: conversationsFromWorkItems(workItems),
-    executions: [],
-    capabilities: [],
+    nextCursor: typeof value.nextCursor === "string" ? value.nextCursor : undefined,
+    snapshot: {
+      observedAt: latestWorkItemTimestamp(workItems) ?? new Date().toISOString(),
+      deviceId: inferDeviceId(workItems),
+      workItems,
+      conversations: conversationsFromWorkItems(workItems),
+      executions: [],
+      capabilities: [],
+    },
+    total: typeof value.total === "number" ? value.total : value.items.length,
   };
 }
 

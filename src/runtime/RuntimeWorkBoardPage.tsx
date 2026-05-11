@@ -21,9 +21,10 @@ import {
 import type { RuntimeSource } from "./runtime-normalize";
 import type { RuntimeWorkStageId, RuntimeWorkStateSnapshot } from "./runtime-work-state";
 import { formatRuntimeTimestamp } from "./runtime-inventory-query";
+import { isFixtureFallbackAllowed } from "./runtime-data-source";
 import {
   createWorkItemsQueryUrl,
-  runtimeWorkStateSnapshotFromQueryResponse,
+  runtimeWorkItemsQueryPageFromResponse,
 } from "./runtime-work-query-api";
 
 const autoRefreshIntervalMs = 30_000;
@@ -83,12 +84,24 @@ type RuntimeWorkDataSource = "fixture" | "backend-query";
 interface RuntimeWorkSnapshotLoadResult {
   snapshot: RuntimeWorkStateSnapshot;
   source: Extract<RuntimeWorkDataSource, "backend-query">;
+  total: number;
+  nextCursor?: string;
 }
 
 /** Read-only board for normalized Agent work state across runtimes and platforms. */
 export function RuntimeWorkBoardPage() {
-  const [snapshot, setSnapshot] = useState<RuntimeWorkStateSnapshot>(fixtureWorkStateSnapshot);
-  const [dataSource, setDataSource] = useState<RuntimeWorkDataSource>("fixture");
+  const allowFixtureFallback = isFixtureFallbackAllowed();
+  const [snapshot, setSnapshot] = useState<RuntimeWorkStateSnapshot>(
+    allowFixtureFallback ? fixtureWorkStateSnapshot : createEmptyWorkStateSnapshot(),
+  );
+  const [dataSource, setDataSource] = useState<RuntimeWorkDataSource>(
+    allowFixtureFallback ? "fixture" : "backend-query",
+  );
+  const [totalMatchingItems, setTotalMatchingItems] = useState(
+    allowFixtureFallback ? fixtureWorkStateSnapshot.workItems.length : 0,
+  );
+  const [nextCursor, setNextCursor] = useState<string | undefined>(undefined);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshState, setRefreshState] = useState<{
     status: "idle" | "running" | "success" | "error";
     message: string;
@@ -105,26 +118,38 @@ export function RuntimeWorkBoardPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const timeRangeRef = useRef<HTMLDivElement | null>(null);
 
-  async function fetchLatestSnapshot(filterOptions?: RuntimeWorkBoardFilters): Promise<RuntimeWorkSnapshotLoadResult> {
-    const queryResponse = await fetch(createWorkItemsQueryUrl(window.location.origin, filterOptions));
+  async function fetchLatestSnapshot(
+    filterOptions?: RuntimeWorkBoardFilters,
+    cursor?: string,
+  ): Promise<RuntimeWorkSnapshotLoadResult> {
+    const queryResponse = await fetch(createWorkItemsQueryUrl(window.location.origin, filterOptions, { cursor }));
     if (!queryResponse.ok) {
       throw new Error(`runtime work item query failed: ${queryResponse.status}`);
     }
-    const querySnapshot = runtimeWorkStateSnapshotFromQueryResponse(await queryResponse.json());
-    if (!querySnapshot) throw new Error("runtime work item query returned an invalid payload");
-    return { snapshot: querySnapshot, source: "backend-query" };
+    const queryPage = runtimeWorkItemsQueryPageFromResponse(await queryResponse.json());
+    if (!queryPage) throw new Error("runtime work item query returned an invalid payload");
+    return { ...queryPage, source: "backend-query" };
   }
 
-  function applySnapshot(latestSnapshot: RuntimeWorkStateSnapshot, latestDataSource: RuntimeWorkDataSource) {
-    setSnapshot(latestSnapshot);
+  function applySnapshot(
+    latestSnapshot: RuntimeWorkStateSnapshot,
+    latestDataSource: RuntimeWorkDataSource,
+    options: { append?: boolean; nextCursor?: string; total?: number } = {},
+  ) {
+    setSnapshot((current) => options.append ? mergeWorkStateSnapshots(current, latestSnapshot) : latestSnapshot);
     setDataSource(latestDataSource);
+    setNextCursor(options.nextCursor);
+    setTotalMatchingItems(options.total ?? latestSnapshot.workItems.length);
     setLastLoadedAt(new Date().toISOString());
   }
 
   async function loadLatestSnapshot(options: { silent?: boolean } = {}) {
     try {
       const latestSnapshot = await fetchLatestSnapshot(filters);
-      applySnapshot(latestSnapshot.snapshot, latestSnapshot.source);
+      applySnapshot(latestSnapshot.snapshot, latestSnapshot.source, {
+        nextCursor: latestSnapshot.nextCursor,
+        total: latestSnapshot.total,
+      });
       if (!options.silent) setRefreshState({ status: "success", message: "已读取最新工作态" });
     } catch (error) {
       if (!options.silent) {
@@ -142,9 +167,16 @@ export function RuntimeWorkBoardPage() {
     async function loadInitialSnapshot() {
       try {
         const latestSnapshot = await fetchLatestSnapshot();
-        if (!cancelled) applySnapshot(latestSnapshot.snapshot, latestSnapshot.source);
+        if (!cancelled) {
+          applySnapshot(latestSnapshot.snapshot, latestSnapshot.source, {
+            nextCursor: latestSnapshot.nextCursor,
+            total: latestSnapshot.total,
+          });
+        }
       } catch {
-        // Keep the read-only board usable with fixture data while local backend is unavailable.
+        if (!allowFixtureFallback && !cancelled) {
+          setRefreshState({ status: "error", message: "后端查询失败，无法读取正式工作态" });
+        }
       }
     }
 
@@ -156,7 +188,7 @@ export function RuntimeWorkBoardPage() {
       cancelled = true;
       window.clearInterval(refreshTimer);
     };
-  }, []);
+  }, [allowFixtureFallback]);
 
   const channelOptions = useMemo(() => listRuntimeWorkChannelOptions(snapshot), [snapshot]);
   useEffect(() => {
@@ -183,7 +215,12 @@ export function RuntimeWorkBoardPage() {
       void (async () => {
         try {
           const latestSnapshot = await fetchLatestSnapshot(filters);
-          if (!cancelled) applySnapshot(latestSnapshot.snapshot, latestSnapshot.source);
+          if (!cancelled) {
+            applySnapshot(latestSnapshot.snapshot, latestSnapshot.source, {
+              nextCursor: latestSnapshot.nextCursor,
+              total: latestSnapshot.total,
+            });
+          }
         } catch {
           // Keep the current visible snapshot when a filtered backend refresh fails.
         }
@@ -200,6 +237,7 @@ export function RuntimeWorkBoardPage() {
   const timeRangeFullSummary = formatTimeRangeSummary(timeStart, timeEnd);
   const timeRangeSummary = formatCompactTimeRangeSummary(timeStart, timeEnd);
   const timeRangeDuration = formatTimeRangeDuration(timeStart, timeEnd);
+  const displayedItems = board.visibleItems.length;
 
   useEffect(() => {
     if (!timeRangeOpen) return undefined;
@@ -236,6 +274,27 @@ export function RuntimeWorkBoardPage() {
     }
     setTimeRangeMode("quick");
     setTimeRangeOpen(true);
+  }
+
+  async function loadMoreWorkItems() {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const page = await fetchLatestSnapshot(filters, nextCursor);
+      applySnapshot(page.snapshot, page.source, {
+        append: true,
+        nextCursor: page.nextCursor,
+        total: page.total,
+      });
+      setRefreshState({ status: "success", message: "已加载更多工作项" });
+    } catch (error) {
+      setRefreshState({
+        status: "error",
+        message: error instanceof Error ? error.message : "加载更多失败",
+      });
+    } finally {
+      setLoadingMore(false);
+    }
   }
 
   return (
@@ -426,48 +485,58 @@ export function RuntimeWorkBoardPage() {
       </section>
 
       <section className="workBoardGrid">
-        <div className="workBoardLanes" aria-label="工作态泳道">
-          {board.lanes.map((lane) => (
-            <section className="workLane" key={lane.stage} aria-label={`${lane.label}泳道`}>
-              <div className="workLaneHeader">
-                <h2>{lane.label}</h2>
-                <span>{lane.items.length}</span>
-              </div>
-              <div className="workLaneItems">
-                {lane.items.length ? (
-                  lane.items.map((item) => (
-                    <button
-                      className={item.id === selectedItem?.id ? "workCard workCardActive" : "workCard"}
-                      key={item.id}
-                      type="button"
-                      onClick={() => setSelectedId(item.id)}
-                    >
-                      <span className="workCardTopline">
-                        <Badge>{item.runtimeLabel}</Badge>
-                        {item.channelKindLabel ? <Badge>{item.channelKindLabel}</Badge> : null}
-                      </span>
-                      <strong>{item.title}</strong>
-                      <small>{item.requestExcerpt}</small>
-                      <>
-                        <span className="workCardMeta">
-                          发起人 {item.creatorLabel}
+        <div className="workBoardMain">
+          <div className="boardResultMeta">
+            <span>已显示 {displayedItems} / {totalMatchingItems}</span>
+          </div>
+          <div className="workBoardLanes" aria-label="工作态泳道">
+            {board.lanes.map((lane) => (
+              <section className="workLane" key={lane.stage} aria-label={`${lane.label}泳道`}>
+                <div className="workLaneHeader">
+                  <h2>{lane.label}</h2>
+                  <span>{lane.items.length}</span>
+                </div>
+                <div className="workLaneItems">
+                  {lane.items.length ? (
+                    lane.items.map((item) => (
+                      <button
+                        className={item.id === selectedItem?.id ? "workCard workCardActive" : "workCard"}
+                        key={item.id}
+                        type="button"
+                        onClick={() => setSelectedId(item.id)}
+                      >
+                        <span className="workCardTopline">
+                          <Badge>{item.runtimeLabel}</Badge>
+                          {item.channelKindLabel ? <Badge>{item.channelKindLabel}</Badge> : null}
                         </span>
-                        <span className="workCardMeta">
-                          承接 Agent {item.assigneeLabel}
-                        </span>
-                        <span className="workCardMeta">
-                          会话/群组 {item.channelLabel ?? "不支持采集"}
-                          {item.lastSeenAt ? ` · ${formatRuntimeTimestamp(item.lastSeenAt)}` : ""}
-                        </span>
-                      </>
-                    </button>
-                  ))
-                ) : (
-                  <p className="emptyLane">无匹配项</p>
-                )}
-              </div>
-            </section>
-          ))}
+                        <strong>{item.title}</strong>
+                        <small>{item.requestExcerpt}</small>
+                        <>
+                          <span className="workCardMeta">
+                            发起人 {item.creatorLabel}
+                          </span>
+                          <span className="workCardMeta">
+                            承接 Agent {item.assigneeLabel}
+                          </span>
+                          <span className="workCardMeta">
+                            会话/群组 {item.channelLabel ?? "不支持采集"}
+                            {item.lastSeenAt ? ` · ${formatRuntimeTimestamp(item.lastSeenAt)}` : ""}
+                          </span>
+                        </>
+                      </button>
+                    ))
+                  ) : (
+                    <p className="emptyLane">无匹配项</p>
+                  )}
+                </div>
+              </section>
+            ))}
+          </div>
+          {nextCursor ? (
+            <button className="loadMoreButton" type="button" disabled={loadingMore} onClick={() => void loadMoreWorkItems()}>
+              {loadingMore ? "加载中" : "加载更多"}
+            </button>
+          ) : null}
         </div>
         <WorkItemDetail item={selectedItem} />
       </section>
@@ -702,6 +771,44 @@ function createFixtureWorkStateSnapshot(): RuntimeWorkStateSnapshot {
     capabilities: [...openclaw.capabilities, ...multica.capabilities, ...slock.capabilities],
     warnings: [...(openclaw.warnings ?? []), ...(multica.warnings ?? []), ...(slock.warnings ?? [])],
   };
+}
+
+function createEmptyWorkStateSnapshot(): RuntimeWorkStateSnapshot {
+  return {
+    observedAt: new Date(0).toISOString(),
+    deviceId: "backend",
+    workItems: [],
+    conversations: [],
+    executions: [],
+    capabilities: [],
+  };
+}
+
+function mergeWorkStateSnapshots(
+  current: RuntimeWorkStateSnapshot,
+  next: RuntimeWorkStateSnapshot,
+): RuntimeWorkStateSnapshot {
+  return {
+    observedAt: next.observedAt > current.observedAt ? next.observedAt : current.observedAt,
+    deviceId: next.deviceId || current.deviceId,
+    workItems: mergeById(current.workItems, next.workItems),
+    conversations: mergeById(current.conversations, next.conversations),
+    executions: mergeById(current.executions, next.executions),
+    capabilities: mergeBySource(current.capabilities, next.capabilities),
+    warnings: [...(current.warnings ?? []), ...(next.warnings ?? [])],
+  };
+}
+
+function mergeById<T extends { id: string }>(current: T[], next: T[]): T[] {
+  const byId = new Map(current.map((item) => [item.id, item]));
+  for (const item of next) byId.set(item.id, item);
+  return Array.from(byId.values());
+}
+
+function mergeBySource<T extends { source: string }>(current: T[], next: T[]): T[] {
+  const bySource = new Map(current.map((item) => [item.source, item]));
+  for (const item of next) bySource.set(item.source, item);
+  return Array.from(bySource.values());
 }
 
 function workItemStatusLabel(status: RuntimeWorkBoardItem["workItemStatus"]): string {

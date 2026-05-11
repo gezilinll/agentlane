@@ -1,0 +1,44 @@
+#!/usr/bin/env node
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+const requiredFiles = [
+  "dist/backend/backend-server.mjs",
+  ".dockerignore",
+  "Dockerfile.backend",
+  "Dockerfile.frontend",
+  "docker-compose.prod-like.yml",
+  "nginx.agentlane.conf",
+];
+
+for (const file of requiredFiles) {
+  assert(existsSync(path.join(repoRoot, file)), `missing ${file}`);
+}
+
+const nginxConfig = read("nginx.agentlane.conf");
+assert(nginxConfig.includes("proxy_pass http://backend:4173"), "nginx must proxy backend API traffic");
+assert(nginxConfig.includes("proxy_set_header Upgrade $http_upgrade"), "nginx must proxy WebSocket upgrades");
+
+const backendDockerfile = read("Dockerfile.backend");
+assert(backendDockerfile.includes("node scripts/db-migrate.mjs"), "backend container must run migrations before start");
+assert(backendDockerfile.includes("node dist/backend/backend-server.mjs"), "backend container must start bundled backend");
+
+const composeFile = read("docker-compose.prod-like.yml");
+assert(composeFile.includes("condition: service_healthy"), "backend must wait for healthy Postgres in prod-like compose");
+assert(composeFile.includes("Dockerfile.frontend"), "prod-like compose must build the frontend image");
+
+process.stdout.write("check:deploy: ok\n");
+
+function read(file) {
+  return readFileSync(path.join(repoRoot, file), "utf8");
+}
+
+function assert(condition, message) {
+  if (!condition) {
+    process.stderr.write(`check:deploy: failed: ${message}\n`);
+    process.exit(1);
+  }
+}

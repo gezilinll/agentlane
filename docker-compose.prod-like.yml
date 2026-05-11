@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: agentlane
+      POSTGRES_USER: agentlane
+      POSTGRES_PASSWORD: agentlane
+    volumes:
+      - agentlane-prod-like-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentlane -d agentlane"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    environment:
+      DATABASE_URL: postgres://agentlane:agentlane@postgres:5432/agentlane
+      AGENTLANE_BACKEND_HOST: 0.0.0.0
+      AGENTLANE_BACKEND_PORT: 4173
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "4173:4173"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  agentlane-prod-like-postgres-data:

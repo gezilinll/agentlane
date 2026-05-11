@@ -286,6 +286,66 @@ describe("Catalog page", () => {
     expect(screen.queryByText("能力缺口")).not.toBeInTheDocument();
   });
 
+  it("loads additional Runs pages from the backend cursor", async () => {
+    const user = userEvent.setup();
+    const firstPage: RuntimeWorkStateSnapshot = {
+      observedAt: "2026-05-09T08:00:00.000Z",
+      deviceId: "fixture-device",
+      workItems: [{
+        id: "work-page-1",
+        source: "slock",
+        externalId: "work-page-1",
+        title: "First backend card",
+        status: "in_progress",
+        creator: { kind: "human", label: "PMO" },
+        assignee: { kind: "agent", label: "tester" },
+        lastSeenAt: "2026-05-09T08:00:00.000Z",
+      }],
+      conversations: [],
+      executions: [],
+      capabilities: [],
+    };
+    const secondPage: RuntimeWorkStateSnapshot = {
+      ...firstPage,
+      workItems: [{
+        ...firstPage.workItems[0],
+        id: "work-page-2",
+        externalId: "work-page-2",
+        title: "Second backend card",
+        lastSeenAt: "2026-05-09T07:59:00.000Z",
+      }],
+    };
+    const requests: string[] = [];
+    globalThis.fetch = vi.fn(async (input) => {
+      const url = input.toString();
+      requests.push(url);
+      if (url.includes("/api/runtime-work-items") && !url.includes("cursor=cursor-1")) {
+        return new Response(JSON.stringify({ ...workStateQueryResponse(firstPage), nextCursor: "cursor-1", total: 2 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/api/runtime-work-items") && url.includes("cursor=cursor-1")) {
+        return new Response(JSON.stringify({ ...workStateQueryResponse(secondPage), total: 2 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "unexpected request" }), { status: 500 });
+    }) as unknown as typeof fetch;
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Runs" }));
+
+    expect(await screen.findByRole("button", { name: /First backend card/ })).toBeInTheDocument();
+    expect(screen.getByText("已显示 1 / 2")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "加载更多" }));
+
+    expect(await screen.findByRole("button", { name: /Second backend card/ })).toBeInTheDocument();
+    expect(screen.getByText("已显示 2 / 2")).toBeInTheDocument();
+    expect(requests.some((url) => url.includes("cursor=cursor-1"))).toBe(true);
+  });
+
   it("opens Runtime Fleet and renders the fixture runtime inventory", async () => {
     const user = userEvent.setup();
     render(<App />);

@@ -493,6 +493,18 @@ h1 {
   min-width: 0;
 }
 
+.workBoardMain {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.boardResultMeta {
+  color: #61718a;
+  font-size: 13px;
+  min-width: 0;
+}
+
 .workBoardLanes {
   display: grid;
   gap: 12px;
@@ -593,6 +605,28 @@ h1 {
   font-size: 13px;
   margin: 0;
   padding: 8px 2px;
+}
+
+.loadMoreButton {
+  justify-self: center;
+  background: #ffffff;
+  border: 1px solid #c9d8ea;
+  border-radius: 6px;
+  color: #0b4fb3;
+  font-weight: 700;
+  height: 40px;
+  min-width: 112px;
+  padding: 0 16px;
+}
+
+.loadMoreButton:hover {
+  background: #eef6ff;
+  border-color: #8fc2ff;
+}
+
+.loadMoreButton:disabled {
+  color: #8b98aa;
+  cursor: not-allowed;
 }
 
 .runtimeStack {

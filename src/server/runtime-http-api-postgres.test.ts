@@ -21,6 +21,26 @@ afterEach(async () => {
 });
 
 describeDb("runtime HTTP API with Postgres store", () => {
+  it("serves readiness when Postgres is available", async () => {
+    const database = await createTemporaryPostgresDatabase();
+    try {
+      runMigrationsScript(database.url);
+      const postgresStore = createPostgresStore({ connectionString: database.url });
+      try {
+        const { baseUrl } = await startRuntimeApi(postgresStore);
+
+        const response = await fetch(`${baseUrl}/readyz`);
+
+        expect(response.status).toBe(200);
+        await expect(response.json()).resolves.toMatchObject({ ok: true });
+      } finally {
+        await postgresStore.close();
+      }
+    } finally {
+      await database.drop();
+    }
+  });
+
   it("persists collector posts and serves backend query endpoints", async () => {
     const database = await createTemporaryPostgresDatabase();
     try {
@@ -56,6 +76,50 @@ describeDb("runtime HTTP API with Postgres store", () => {
           ingestions: [
             expect.objectContaining({ snapshotType: "inventory" }),
             expect.objectContaining({ snapshotType: "work_state" }),
+          ],
+        });
+      } finally {
+        await postgresStore.close();
+      }
+    } finally {
+      await database.drop();
+    }
+  });
+
+  it("records failed collector ingestions for invalid snapshots", async () => {
+    const database = await createTemporaryPostgresDatabase();
+    try {
+      runMigrationsScript(database.url);
+      const postgresStore = createPostgresStore({ connectionString: database.url });
+      try {
+        const { baseUrl } = await startRuntimeApi(postgresStore);
+
+        const inventoryResponse = await postJson(`${baseUrl}/api/device-snapshots`, {
+          observedAt: "2026-05-10T10:00:00.000Z",
+          device: { id: "broken-device" },
+        });
+        const workStateResponse = await postJson(`${baseUrl}/api/runtime-work-state-snapshots`, {
+          observedAt: "2026-05-10T10:01:00.000Z",
+          deviceId: "broken-device",
+        });
+        const ingestionsResponse = await fetch(`${baseUrl}/api/devices/broken-device/ingestions`);
+
+        expect(inventoryResponse.status).toBe(400);
+        expect(workStateResponse.status).toBe(400);
+        await expect(ingestionsResponse.json()).resolves.toMatchObject({
+          ingestions: [
+            expect.objectContaining({
+              deviceId: "broken-device",
+              snapshotType: "inventory",
+              status: "failed",
+              error: "invalid runtime inventory snapshot",
+            }),
+            expect.objectContaining({
+              deviceId: "broken-device",
+              snapshotType: "work_state",
+              status: "failed",
+              error: "invalid runtime work state snapshot",
+            }),
           ],
         });
       } finally {

@@ -26,6 +26,18 @@ afterEach(async () => {
 });
 
 describe("runtime HTTP API", () => {
+  it("serves liveness and reports readiness as unavailable without Postgres", async () => {
+    const { baseUrl } = await startRuntimeApi();
+
+    const healthResponse = await fetch(`${baseUrl}/healthz`);
+    const readyResponse = await fetch(`${baseUrl}/readyz`);
+
+    expect(healthResponse.status).toBe(200);
+    await expect(healthResponse.json()).resolves.toMatchObject({ ok: true });
+    expect(readyResponse.status).toBe(503);
+    await expect(readyResponse.json()).resolves.toMatchObject({ ok: false, error: "postgres_store_unavailable" });
+  });
+
   it("does not expose legacy latest snapshot APIs", async () => {
     const { baseUrl, store } = await startRuntimeApi();
     const snapshot = {

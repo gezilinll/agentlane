@@ -139,6 +139,69 @@ describeDb("Postgres runtime store", () => {
       await database.drop();
     }
   });
+
+  it("searches work items by task, creator, assignee, runtime, agent, and conversation context", async () => {
+    const database = await createTemporaryPostgresDatabase();
+    try {
+      runMigrationsScript(database.url);
+      const store = createPostgresStore({ connectionString: database.url });
+      try {
+        const inventorySnapshot = fixtureSnapshot as RuntimeInventorySnapshot;
+        const workStateSnapshot = createWorkStateSnapshot(inventorySnapshot);
+
+        await store.upsertInventorySnapshot(inventorySnapshot);
+        await store.upsertWorkStateSnapshot(workStateSnapshot);
+
+        for (const search of ["queue handoff", "PMO", "tester", "Slock daemon", "#AjisGTD"]) {
+          const result = await store.listRuntimeWorkItems({ search });
+          expect(result.items.map((item) => item.id)).toEqual([workStateSnapshot.workItems[0].id]);
+        }
+      } finally {
+        await store.close();
+      }
+    } finally {
+      await database.drop();
+    }
+  });
+
+  it("paginates work items with a stable cursor", async () => {
+    const database = await createTemporaryPostgresDatabase();
+    try {
+      runMigrationsScript(database.url);
+      const store = createPostgresStore({ connectionString: database.url });
+      try {
+        const inventorySnapshot = fixtureSnapshot as RuntimeInventorySnapshot;
+        const workStateSnapshot = createWorkStateSnapshot(inventorySnapshot);
+        const workItems = [0, 1, 2].map((index) => ({
+          ...workStateSnapshot.workItems[0],
+          id: `${workStateSnapshot.workItems[0].id}-${index}`,
+          externalId: `task-${index}`,
+          title: `Cursor task ${index}`,
+          lastSeenAt: `2026-05-10T10:0${index}:00.000Z`,
+        }));
+
+        await store.upsertInventorySnapshot(inventorySnapshot);
+        await store.upsertWorkStateSnapshot({
+          ...workStateSnapshot,
+          workItems,
+          executions: [],
+        });
+
+        const firstPage = await store.listRuntimeWorkItems({ limit: 2 });
+        const secondPage = await store.listRuntimeWorkItems({ cursor: firstPage.nextCursor, limit: 2 });
+
+        expect(firstPage.items.map((item) => item.title)).toEqual(["Cursor task 2", "Cursor task 1"]);
+        expect(firstPage.total).toBe(3);
+        expect(firstPage.nextCursor).toEqual(expect.any(String));
+        expect(secondPage.items.map((item) => item.title)).toEqual(["Cursor task 0"]);
+        expect(secondPage.nextCursor).toBeUndefined();
+      } finally {
+        await store.close();
+      }
+    } finally {
+      await database.drop();
+    }
+  });
 });
 
 function createWorkStateSnapshot(snapshot: RuntimeInventorySnapshot): RuntimeWorkStateSnapshot {

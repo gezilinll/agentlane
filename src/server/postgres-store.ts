@@ -49,6 +49,7 @@ export interface PostgresCollectorIngestion {
   status: "succeeded" | "failed";
   counts: Record<string, number>;
   warnings: string[];
+  error?: string | null;
 }
 
 /** Minimal work item row used by repository tests and future query API composition. */
@@ -69,6 +70,12 @@ export interface PostgresWorkItemRow {
   assignee: unknown;
   lastSeenAt: string | null;
 }
+
+interface PostgresWorkItemQueryRow extends PostgresWorkItemRow {
+  orderTimestamp: Date | null;
+}
+
+const workItemOrderExpression = "coalesce(w.last_seen_at, w.updated_source_at, w.created_source_at, w.updated_at, w.created_at)";
 
 /** Backend query result for Runtime Fleet. */
 export interface PostgresRuntimeFleetResult {
@@ -92,12 +99,14 @@ export interface PostgresRuntimeWorkItemFilters {
   endAt?: string | null;
   search?: string | null;
   limit?: number;
+  cursor?: string | null;
 }
 
 /** Backend query result for work items. */
 export interface PostgresRuntimeWorkItemResult {
   items: PostgresWorkItemRow[];
   total: number;
+  nextCursor?: string;
 }
 
 /** Postgres-backed repository for normalized runtime inventory and work-state snapshots. */
@@ -106,6 +115,10 @@ export interface PostgresStore {
   upsertInventorySnapshot: (snapshot: RuntimeInventorySnapshot) => Promise<PostgresIngestionResult>;
   /** Upsert a normalized work-state snapshot and record collector ingestion metadata. */
   upsertWorkStateSnapshot: (snapshot: RuntimeWorkStateSnapshot) => Promise<PostgresIngestionResult>;
+  /** Record a failed collector ingestion when a report cannot be persisted as a valid snapshot. */
+  recordFailedCollectorIngestion: (input: PostgresFailedCollectorIngestionInput) => Promise<void>;
+  /** Verify the repository can serve backend traffic. */
+  checkReady: () => Promise<void>;
   /** Read coarse entity counts for harnesses and smoke diagnostics. */
   readEntityCounts: () => Promise<PostgresEntityCounts>;
   /** Count work items by normalized source. */
@@ -120,6 +133,20 @@ export interface PostgresStore {
   listCollectorIngestions: (deviceId: string) => Promise<PostgresCollectorIngestion[]>;
   /** Close owned Postgres connections. */
   close: () => Promise<void>;
+}
+
+/** Failed ingestion metadata captured outside a successful snapshot transaction. */
+export interface PostgresFailedCollectorIngestionInput {
+  /** Best-known device id from the invalid payload, or `unknown`. */
+  deviceId: string;
+  /** Snapshot endpoint that received the invalid report. */
+  snapshotType: "inventory" | "work_state";
+  /** Observed timestamp from the invalid payload when available. */
+  observedAt?: string;
+  /** Warning strings extracted before failure. */
+  warnings?: string[];
+  /** Short error summary safe for diagnostics. */
+  error: string;
 }
 
 /** Create a Postgres repository using Agentlane's normalized snapshot semantics. */
@@ -151,8 +178,10 @@ export function createPostgresStore(options: PostgresStoreOptions = {}): Postgre
         await insertCollectorIngestion(client, {
           counts,
           deviceId: snapshot.device.id,
+          error: null,
           observedAt: snapshot.observedAt,
           snapshotType: "inventory",
+          status: "succeeded",
           warnings: snapshot.reports.flatMap((report) => report.warnings ?? []),
         });
         return { deviceId: snapshot.device.id, snapshotType: "inventory", counts };
@@ -188,12 +217,28 @@ export function createPostgresStore(options: PostgresStoreOptions = {}): Postgre
         await insertCollectorIngestion(client, {
           counts,
           deviceId: snapshot.deviceId,
+          error: null,
           observedAt: snapshot.observedAt,
           snapshotType: "work_state",
+          status: "succeeded",
           warnings: snapshot.warnings ?? [],
         });
         return { deviceId: snapshot.deviceId, snapshotType: "work_state", counts };
       });
+    },
+    async recordFailedCollectorIngestion(input) {
+      await insertCollectorIngestion(pool, {
+        counts: {},
+        deviceId: input.deviceId || "unknown",
+        error: input.error,
+        observedAt: input.observedAt ?? new Date().toISOString(),
+        snapshotType: input.snapshotType,
+        status: "failed",
+        warnings: input.warnings ?? [],
+      });
+    },
+    async checkReady() {
+      await pool.query("SELECT 1");
     },
     async readEntityCounts() {
       const client = await pool.connect();
@@ -251,34 +296,48 @@ export function createPostgresStore(options: PostgresStoreOptions = {}): Postgre
     async listRuntimeWorkItems(filters = {}) {
       const { clause, values } = createWorkItemWhereClause(filters);
       const countResult = await pool.query<{ count: string }>(
-        `SELECT count(*) AS count FROM work_items ${clause}`,
+        `SELECT count(*) AS count
+        FROM work_items w
+        LEFT JOIN runtimes r ON r.id = w.runtime_id
+        LEFT JOIN agents a ON a.id = w.agent_id
+        LEFT JOIN work_conversations c ON c.id = w.conversation_id
+        ${clause}`,
         values,
       );
       const limit = Math.min(Math.max(filters.limit ?? 200, 1), 500);
-      const result = await pool.query<PostgresWorkItemRow>(`
+      const result = await pool.query<PostgresWorkItemQueryRow>(`
         SELECT
-          id,
-          external_id AS "externalId",
-          source,
-          status,
-          stage,
-          title,
-          description,
-          runtime_id AS "runtimeId",
-          agent_id AS "agentId",
-          conversation_id AS "conversationId",
-          channel_kind AS "channelKind",
-          channel_label AS "channelLabel",
-          creator,
-          assignee,
-          last_seen_at AS "lastSeenAt"
-        FROM work_items
+          w.id,
+          w.external_id AS "externalId",
+          w.source,
+          w.status,
+          w.stage,
+          w.title,
+          w.description,
+          w.runtime_id AS "runtimeId",
+          w.agent_id AS "agentId",
+          w.conversation_id AS "conversationId",
+          w.channel_kind AS "channelKind",
+          w.channel_label AS "channelLabel",
+          w.creator,
+          w.assignee,
+          w.last_seen_at AS "lastSeenAt",
+          ${workItemOrderExpression} AS "orderTimestamp"
+        FROM work_items w
+        LEFT JOIN runtimes r ON r.id = w.runtime_id
+        LEFT JOIN agents a ON a.id = w.agent_id
+        LEFT JOIN work_conversations c ON c.id = w.conversation_id
         ${clause}
-        ORDER BY coalesce(last_seen_at, updated_source_at, created_source_at, updated_at, created_at) DESC
+        ORDER BY ${workItemOrderExpression} DESC, w.id DESC
         LIMIT $${values.length + 1}
-      `, [...values, limit]);
+      `, [...values, limit + 1]);
+      const visibleRows = result.rows.slice(0, limit);
+      const nextCursor = result.rows.length > limit
+        ? encodeWorkItemCursor(visibleRows[visibleRows.length - 1])
+        : undefined;
       return {
-        items: result.rows,
+        items: visibleRows.map(stripWorkItemOrderTimestamp),
+        nextCursor,
         total: Number(countResult.rows[0]?.count ?? 0),
       };
     },
@@ -312,7 +371,8 @@ export function createPostgresStore(options: PostgresStoreOptions = {}): Postgre
           snapshot_type AS "snapshotType",
           status,
           counts,
-          warnings
+          warnings,
+          error
         FROM collector_ingestions
         WHERE device_id = $1
         ORDER BY id
@@ -651,24 +711,28 @@ function knownOptionalRef(value: string | undefined, knownIds: Set<string>): str
 }
 
 async function insertCollectorIngestion(
-  client: pg.PoolClient,
+  client: Pick<pg.Pool | pg.PoolClient, "query">,
   input: {
     deviceId: string;
     snapshotType: "inventory" | "work_state";
+    status: "succeeded" | "failed";
     observedAt: string;
     counts: Record<string, number>;
     warnings: string[];
+    error: string | null;
   },
 ): Promise<void> {
   await client.query(`
-    INSERT INTO collector_ingestions (device_id, snapshot_type, status, observed_at, counts, warnings)
-    VALUES ($1, $2, 'succeeded', $3, $4::jsonb, $5::jsonb)
+    INSERT INTO collector_ingestions (device_id, snapshot_type, status, observed_at, counts, warnings, error)
+    VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7)
   `, [
     input.deviceId,
     input.snapshotType,
+    input.status,
     toDate(input.observedAt),
     toJson(input.counts),
     toJson(input.warnings),
+    input.error,
   ]);
 }
 
@@ -714,25 +778,45 @@ function createWorkItemWhereClause(filters: PostgresRuntimeWorkItemFilters): {
   const conditions: string[] = [];
   const values: unknown[] = [];
 
-  addTextFilter(conditions, values, "source", filters.source);
-  addTextFilter(conditions, values, "stage", filters.stage);
-  addTextFilter(conditions, values, "channel_kind", filters.channelKind);
+  addTextFilter(conditions, values, "w.source", filters.source);
+  addTextFilter(conditions, values, "w.stage", filters.stage);
+  addTextFilter(conditions, values, "w.channel_kind", filters.channelKind);
+
+  const cursor = decodeWorkItemCursor(filters.cursor);
+  if (cursor) {
+    values.push(toDate(cursor.orderTimestamp), cursor.id);
+    conditions.push(`(
+      ${workItemOrderExpression} < $${values.length - 1}
+      OR (${workItemOrderExpression} = $${values.length - 1} AND w.id < $${values.length})
+    )`);
+  }
 
   if (filters.startAt) {
     values.push(toDate(filters.startAt));
-    conditions.push(`coalesce(last_seen_at, updated_source_at, created_source_at, updated_at, created_at) >= $${values.length}`);
+    conditions.push(`${workItemOrderExpression} >= $${values.length}`);
   }
   if (filters.endAt) {
     values.push(toDate(filters.endAt));
-    conditions.push(`coalesce(last_seen_at, updated_source_at, created_source_at, updated_at, created_at) <= $${values.length}`);
+    conditions.push(`${workItemOrderExpression} <= $${values.length}`);
   }
   if (filters.search?.trim()) {
     values.push(`%${filters.search.trim()}%`);
     conditions.push(`(
-      title ILIKE $${values.length}
-      OR coalesce(description, '') ILIKE $${values.length}
-      OR source ILIKE $${values.length}
-      OR coalesce(channel_label, '') ILIKE $${values.length}
+      w.title ILIKE $${values.length}
+      OR coalesce(w.description, '') ILIKE $${values.length}
+      OR w.source ILIKE $${values.length}
+      OR coalesce(w.channel_label, '') ILIKE $${values.length}
+      OR coalesce(w.creator->>'label', '') ILIKE $${values.length}
+      OR coalesce(w.creator->>'externalId', '') ILIKE $${values.length}
+      OR coalesce(w.assignee->>'label', '') ILIKE $${values.length}
+      OR coalesce(w.assignee->>'externalId', '') ILIKE $${values.length}
+      OR coalesce(w.assignee->>'objectId', '') ILIKE $${values.length}
+      OR coalesce(w.agent_id, '') ILIKE $${values.length}
+      OR coalesce(w.runtime_id, '') ILIKE $${values.length}
+      OR coalesce(r.name, '') ILIKE $${values.length}
+      OR coalesce(a.name, '') ILIKE $${values.length}
+      OR coalesce(c.title, '') ILIKE $${values.length}
+      OR coalesce(c.channel_label, '') ILIKE $${values.length}
     )`);
   }
 
@@ -740,6 +824,31 @@ function createWorkItemWhereClause(filters: PostgresRuntimeWorkItemFilters): {
     clause: conditions.length ? `WHERE ${conditions.join(" AND ")}` : "",
     values,
   };
+}
+
+function encodeWorkItemCursor(row: PostgresWorkItemQueryRow | undefined): string | undefined {
+  if (!row?.orderTimestamp) return undefined;
+  return Buffer.from(JSON.stringify({
+    id: row.id,
+    orderTimestamp: row.orderTimestamp.toISOString(),
+  })).toString("base64url");
+}
+
+function decodeWorkItemCursor(value: string | null | undefined): { id: string; orderTimestamp: string } | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as Record<string, unknown>;
+    if (typeof parsed.id !== "string" || typeof parsed.orderTimestamp !== "string") return null;
+    if (!toDate(parsed.orderTimestamp)) return null;
+    return { id: parsed.id, orderTimestamp: parsed.orderTimestamp };
+  } catch {
+    return null;
+  }
+}
+
+function stripWorkItemOrderTimestamp(row: PostgresWorkItemQueryRow): PostgresWorkItemRow {
+  const { orderTimestamp: _orderTimestamp, ...workItem } = row;
+  return workItem;
 }
 
 function addTextFilter(

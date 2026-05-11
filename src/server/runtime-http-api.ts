@@ -33,6 +33,29 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
   return async function runtimeHttpApiHandler(request, response, next) {
     const requestUrl = new URL(request.url || "/", "http://agentlane.local");
 
+    if (request.method === "GET" && requestUrl.pathname === "/healthz") {
+      sendJson(response, 200, { ok: true });
+      return;
+    }
+
+    if (request.method === "GET" && requestUrl.pathname === "/readyz") {
+      if (!options.postgresStore) {
+        sendJson(response, 503, { ok: false, error: "postgres_store_unavailable" });
+        return;
+      }
+      try {
+        await options.postgresStore.checkReady();
+        sendJson(response, 200, { ok: true });
+      } catch (error) {
+        sendJson(response, 503, {
+          ok: false,
+          error: "postgres_unavailable",
+          message: error instanceof Error ? error.message : "Postgres is unavailable",
+        });
+      }
+      return;
+    }
+
     if (request.method === "GET" && requestUrl.pathname === "/api/runtime-fleet") {
       if (!options.postgresStore) {
         sendJson(response, 503, { error: "postgres_store_unavailable" });
@@ -51,6 +74,7 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
         channelKind: requestUrl.searchParams.get("channelKind"),
         endAt: requestUrl.searchParams.get("endAt"),
         limit: parseLimit(requestUrl.searchParams.get("limit")),
+        cursor: requestUrl.searchParams.get("cursor"),
         search: requestUrl.searchParams.get("search"),
         source: requestUrl.searchParams.get("source"),
         stage: requestUrl.searchParams.get("stage"),
@@ -60,8 +84,10 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
     }
 
     if (request.method === "POST" && requestUrl.pathname === "/api/device-snapshots") {
+      let body: unknown = undefined;
       try {
-        const snapshot = options.store.writeLatestSnapshot(await readJsonBody(request));
+        body = await readJsonBody(request);
+        const snapshot = options.store.writeLatestSnapshot(body);
         await options.postgresStore?.upsertInventorySnapshot(snapshot);
         sendJson(response, 201, {
           ok: true,
@@ -69,6 +95,7 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
           observedAt: snapshot.observedAt,
         });
       } catch (error) {
+        await recordFailedCollectorIngestion(options, "inventory", body, error);
         sendJson(response, statusCodeForWriteError(error), {
           error: error instanceof Error ? error.message : "invalid snapshot",
         });
@@ -81,8 +108,10 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
         sendJson(response, 503, { error: "work_state_store_unavailable" });
         return;
       }
+      let body: unknown = undefined;
       try {
-        const snapshot = options.workStateStore.writeLatestSnapshot(await readJsonBody(request));
+        body = await readJsonBody(request);
+        const snapshot = options.workStateStore.writeLatestSnapshot(body);
         await options.postgresStore?.upsertWorkStateSnapshot(snapshot);
         sendJson(response, 201, {
           ok: true,
@@ -90,6 +119,7 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
           observedAt: snapshot.observedAt,
         });
       } catch (error) {
+        await recordFailedCollectorIngestion(options, "work_state", body, error);
         sendJson(response, statusCodeForWriteError(error), {
           error: error instanceof Error ? error.message : "invalid runtime work state snapshot",
         });
@@ -147,6 +177,40 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
 
     next();
   };
+}
+
+async function recordFailedCollectorIngestion(
+  options: RuntimeHttpApiHandlerOptions,
+  snapshotType: "inventory" | "work_state",
+  body: unknown,
+  error: unknown,
+): Promise<void> {
+  if (!options.postgresStore) return;
+  await options.postgresStore.recordFailedCollectorIngestion({
+    deviceId: extractDeviceId(snapshotType, body),
+    error: error instanceof Error ? error.message : "invalid collector snapshot",
+    observedAt: extractObservedAt(body),
+    snapshotType,
+  }).catch(() => undefined);
+}
+
+function extractDeviceId(snapshotType: "inventory" | "work_state", body: unknown): string {
+  if (!body || typeof body !== "object") return "unknown";
+  const candidate = body as Record<string, unknown>;
+  if (snapshotType === "work_state" && typeof candidate.deviceId === "string") return candidate.deviceId;
+  if (snapshotType === "inventory") {
+    const device = candidate.device;
+    if (device && typeof device === "object" && typeof (device as Record<string, unknown>).id === "string") {
+      return (device as Record<string, string>).id;
+    }
+  }
+  return "unknown";
+}
+
+function extractObservedAt(body: unknown): string | undefined {
+  if (!body || typeof body !== "object") return undefined;
+  const observedAt = (body as Record<string, unknown>).observedAt;
+  return typeof observedAt === "string" ? observedAt : undefined;
 }
 
 function parseLimit(value: string | null): number | undefined {

@@ -1,0 +1,9 @@
+node_modules
+dist
+.agentlane
+.git
+.playwright-mcp
+playwright-report
+test-results
+*.log
+*.tsbuildinfo
