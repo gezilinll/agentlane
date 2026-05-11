@@ -1,8 +1,8 @@
 # Backend Service Spec
 
-版本：TinySpec v0.2
+版本：TinySpec v0.3
 
-Agentlane backend 是独立于 Vite 的正式服务入口，用于承接 collector 上报、Postgres 持久化、Runtime Fleet / Runs 查询和设备控制面。当前阶段已经具备本地长期运行与 production-like Docker / Nginx 验收形态；ECS 暴露、域名、HTTPS、生产鉴权和运维告警后续单独落地。
+Agentlane backend 是独立于 Vite 的正式服务入口，用于承接 collector 上报、Postgres 持久化、Runtime Fleet / Runs 查询和设备控制面。当前阶段已经具备本地长期运行、production-like Docker / Nginx 验收形态，以及 `agentlane.gezilinll.com` ECS 部署；生产鉴权和运维告警后续单独落地。
 
 ## 目标
 
@@ -16,7 +16,7 @@ Agentlane backend 是独立于 Vite 的正式服务入口，用于承接 collect
 
 ## 非目标
 
-- 本阶段不部署 ECS，不配置域名、HTTPS、云数据库、生产鉴权或生产运维告警。
+- 本阶段不引入云数据库、生产鉴权或生产运维告警。
 - 本阶段不引入用户、组织、多租户、RBAC、完整审计系统或复杂 secret manager。
 - 本阶段不做中控 Agent、聊天入口、任务调度、消息代理或外部平台写操作。
 - 本阶段不保留 file-backed latest JSON 作为正式后端路径；fixture 只允许作为开发期离线预览和测试辅助。
@@ -132,7 +132,15 @@ Production-like 本地验收形态：
 - `nginx.agentlane.conf` 反代 `/api`、`/healthz`、`/readyz` 和 WebSocket upgrade 到 backend。
 - `docker-compose.prod-like.yml` 编排 Postgres、backend、frontend，用于 ECS 前的本地生产形态 smoke。
 
-ECS 部署后续以 production-like 形态为基线补齐域名、HTTPS、鉴权、备份、监控和告警。
+ECS 部署形态：
+
+- 域名：`agentlane.gezilinll.com`。
+- 系统 Nginx 负责公网 `80/443`、HTTP 到 HTTPS 跳转、TLS 证书、静态前端反代、`/api`、`/healthz`、`/readyz` 和 WebSocket upgrade。
+- Docker Compose 运行 Postgres、backend 和 frontend 容器；frontend 绑定 `127.0.0.1:8080`，backend 绑定 `127.0.0.1:4173`，Postgres 不暴露宿主端口。
+- Nginx 必须配置足够的 `client_max_body_size`，当前为 `50m`，否则 collector 的 work-state 快照可能被 413 拒绝。
+- 证书由 certbot 管理，`agentlane.gezilinll.com` 当前使用独立证书；`/.well-known/acme-challenge/` 保留给续签。
+
+后续以当前 ECS 形态为基线补齐生产鉴权、备份、监控和告警。
 
 ## Harness
 

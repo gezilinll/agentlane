@@ -4,7 +4,7 @@ Root guide for coding agents working in this repository. This file is operationa
 
 ## Project State
 
-Agentlane is currently in product definition and early engineering setup. The repository is becoming the control plane for operating an Agent Network. It now has a Chinese-first Catalog page, a Runtime Fleet page, a read-only Runs / Work Board page, collector-backed runtime inventory and work-state models, and a standalone backend with Postgres-backed query APIs, production-like Docker / Nginx local deployment files, plus an outbound WebSocket device control channel. It does not yet have an ECS deployment, production auth system, multi-device orchestration, or runtime execution control system.
+Agentlane is currently in product definition and early engineering setup. The repository is becoming the control plane for operating an Agent Network. It now has a Chinese-first Catalog page, a Runtime Fleet page, a read-only Runs / Work Board page, collector-backed runtime inventory and work-state models, and a standalone backend with Postgres-backed query APIs, production-like Docker / Nginx deployment files, an initial ECS deployment at `agentlane.gezilinll.com`, plus an outbound WebSocket device control channel. It does not yet have a production auth system, multi-device orchestration, or runtime execution control system.
 
 Current source of truth:
 
