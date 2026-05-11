@@ -58,6 +58,8 @@ test.describe("Runs / Work Board", () => {
     const stageBox = await page.getByLabel("阶段").boundingBox();
     const timeTriggerBox = await page.getByRole("button", { name: /选择时间范围/ }).boundingBox();
     expect(searchBox?.width ?? 0).toBeLessThan(620);
+    expect(searchBox?.width ?? 0).toBeGreaterThan(300);
+    expect(timeTriggerBox?.width ?? 0).toBeLessThan(480);
     expect(timeTriggerBox?.x ?? 0).toBeGreaterThan(stageBox?.x ?? 0);
     await expect(page.getByLabel("开始时间")).toHaveCount(0);
     await expect(page.getByRole("button", { name: /帮我检查今天的线上异常/ })).toBeVisible();

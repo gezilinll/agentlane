@@ -188,7 +188,7 @@ h1 {
 
 .workBoardToolbar {
   align-items: start;
-  grid-template-columns: minmax(220px, 250px) repeat(3, minmax(96px, 100px)) minmax(520px, 1fr);
+  grid-template-columns: minmax(320px, 1fr) repeat(3, minmax(108px, 118px)) minmax(340px, 400px);
   justify-content: start;
 }
 

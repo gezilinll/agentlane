@@ -166,7 +166,8 @@ export function RuntimeWorkBoardPage() {
   );
   const board = useMemo(() => createRuntimeWorkBoard(snapshot, filters), [filters, snapshot]);
   const selectedItem = selectedId ? board.visibleItems.find((item) => item.id === selectedId) ?? null : board.visibleItems[0] ?? null;
-  const timeRangeSummary = formatTimeRangeSummary(timeStart, timeEnd);
+  const timeRangeFullSummary = formatTimeRangeSummary(timeStart, timeEnd);
+  const timeRangeSummary = formatCompactTimeRangeSummary(timeStart, timeEnd);
   const timeRangeDuration = formatTimeRangeDuration(timeStart, timeEnd);
 
   function applyQuickRange(option: QuickRangeOption) {
@@ -281,9 +282,9 @@ export function RuntimeWorkBoardPage() {
           <button
             aria-controls="runs-time-range-panel"
             aria-expanded={timeRangeOpen}
-            aria-label={`选择时间范围：${timeRangeSummary}`}
+            aria-label={`选择时间范围：${timeRangeFullSummary}`}
             className="timeRangeTrigger"
-            title={timeRangeSummary}
+            title={timeRangeFullSummary}
             type="button"
             onClick={toggleTimeRangeOpen}
           >
@@ -569,6 +570,15 @@ function formatTimeRangeSummary(start: string, end: string): string {
   return "全部时间";
 }
 
+function formatCompactTimeRangeSummary(start: string, end: string): string {
+  const displayStart = formatCompactDateTimeDisplay(start);
+  const displayEnd = formatCompactDateTimeDisplay(end);
+  if (displayStart && displayEnd) return `${displayStart} - ${displayEnd}`;
+  if (displayStart) return `${displayStart} 之后`;
+  if (displayEnd) return `${displayEnd} 之前`;
+  return "全部时间";
+}
+
 function formatTimeRangeDuration(start: string, end: string): string {
   const startDate = parseDateTimeLocal(start);
   const endDate = parseDateTimeLocal(end);
@@ -588,6 +598,12 @@ function formatDateTimeDisplay(value: string): string | undefined {
   const date = parseDateTimeLocal(value);
   if (!date) return undefined;
   return `${date.getFullYear()}-${padTimePart(date.getMonth() + 1)}-${padTimePart(date.getDate())} ${padTimePart(date.getHours())}:${padTimePart(date.getMinutes())}:${padTimePart(date.getSeconds())}`;
+}
+
+function formatCompactDateTimeDisplay(value: string): string | undefined {
+  const date = parseDateTimeLocal(value);
+  if (!date) return undefined;
+  return `${padTimePart(date.getMonth() + 1)}/${padTimePart(date.getDate())} ${padTimePart(date.getHours())}:${padTimePart(date.getMinutes())}`;
 }
 
 function parseDateTimeLocal(value: string): Date | undefined {
