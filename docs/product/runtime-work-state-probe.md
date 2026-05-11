@@ -195,6 +195,7 @@ Multica 特别规则：
 - `/server` 可返回 joined channel 列表，collector 应排除 archived/deleted/unjoined channel，再用 `#频道名` 拉 task board，避免要求用户手工维护 channel 配置。
 - channel/thread history 能返回消息结构；DM history 是否可读依赖当前 agent context。
 - `server info` 中的 agent `active` 表示 Slock 侧可用或在线，不等于 Agentlane 的 `RuntimeExecution.status=running`。
+- 2026-05-11 在 `gezilinll-claw` 上复核：7 个本地 Slock agent token 能正常读取 `/server` 与 `#all`、`#zy-GD`、`#AjisGTD`、`#AjisFarm` task board；1 个本地 token 返回 `401 Invalid machine API key`，应视为 stale/invalid agent context，不能影响其他 agent/channel 的采集结论。部分 channel warning 来自 internal API 瞬时失败或过期 token 场景，collector 需要重试后再记录 warning；同一个 channel 被多个本地 agent context 探测时，只要任一 context 成功采到该 channel，就不保留该 channel 的失败 warning。
 
 映射建议：
 
@@ -228,9 +229,9 @@ Collector 常驻模式和控制面 `inventory.refresh` 命令也必须刷新 wor
 
 Collector 实现：
 
-- OpenClaw：读取 `openclaw health --json --timeout 5000`、`openclaw status --json --timeout 5000`、`openclaw tasks list --json`，并读取 `~/.openclaw/agents/*/sessions/dingtalk-state/messages.context*.json`、`targets.directory*.json` 与 `*.trajectory.jsonl`。有 message id、DingTalk requester session、task origin 或 trajectory prompt 关联时生成 `RuntimeWorkItem`、`RuntimeConversation` 和 `RuntimeExecution`；无关联的裸 execution 只保留为执行记录。
+- OpenClaw：读取 `openclaw health --json --timeout 5000`、`openclaw status --json --timeout 5000`、`openclaw tasks list --json`，并读取 `~/.openclaw/agents/*/sessions/dingtalk-state/messages.context*.json`、`targets.directory*.json` 与 `*.trajectory.jsonl`。有 message id、DingTalk requester session、task origin 或 trajectory prompt 关联时生成 `RuntimeWorkItem`、`RuntimeConversation` 和 `RuntimeExecution`；无关联的裸 execution 只保留为执行记录。OpenClaw `health/status/tasks` 输出可能较大，collector 必须用受控的大 buffer 读取 JSON，避免 stdout 截断后误报 `failed or returned non-JSON`。OpenClaw CLI 可能是 `#!/usr/bin/env node` shim，collector 的 probe 环境必须把 shim 所在目录、当前 Node 安装目录和常见用户 bin 目录加入 `PATH`，否则 launchd / ssh 的最小环境会导致 `env: node: No such file or directory`。
 - Multica：读取 `multica runtime list --output json`、`multica agent list --output json`、`multica issue list --output json`、`multica agent tasks <agent-id> --output json`。issue 生成 `RuntimeWorkItem`，agent task 生成 `RuntimeExecution`，`chat_session_id` 生成 `RuntimeConversation`。
-- Slock：优先使用 `slockServerUrl` / `SLOCK_SERVER_URL`，未配置时默认使用 `https://api.slock.ai`，并结合本地 `~/.slock/agents/<agent>/.slock/agent-token` 调 internal agent API；先从 `/server` 自动发现 joined channel，再用 `tasks?channel=#频道名` 拉 task board。如用户显式配置 `slockTaskChannels`，则只采集配置范围。失败后再尝试本机 `slock task list` CLI。仅有 `~/.slock/agents` 目录只能证明本机存在 Slock agent workspace，不能证明 task board、会话或执行态。
+- Slock：优先使用 `slockServerUrl` / `SLOCK_SERVER_URL`，未配置时默认使用 `https://api.slock.ai`，并结合本地 `~/.slock/agents/<agent>/.slock/agent-token` 调 internal agent API；先从 `/server` 自动发现 joined channel，再用 `tasks?channel=#频道名` 拉 task board。如用户显式配置 `slockTaskChannels`，则只采集配置范围。task-board internal API 遇到临时 5xx、网络抖动或超时时做小次数重试；重试成功不记录 channel probe warning；同 channel 被其他 agent context 成功采集时不保留失败 warning。失败后再尝试本机 `slock task list` CLI。仅有 `~/.slock/agents` 目录只能证明本机存在 Slock agent workspace，不能证明 task board、会话或执行态。
 
 失败规则：
 
@@ -242,7 +243,7 @@ Collector 实现：
 
 Harness：
 
-- `src/runtime/device-collector-script.test.ts` 覆盖 live probe contract：无探测来源时不伪造数据、OpenClaw fake CLI + DingTalk local state 映射 message-backed WorkItem/execution、OpenClaw DingTalk requester session 在 message context 为空时映射 WorkItem、OpenClaw trajectory 在 session JSONL 缺失时仍能用 prompt 生成 WorkItem、Multica fake CLI 映射 issue/task、Slock internal API 自动发现 channel 并映射 task board、Slock workspace-only 不生成 board state。
+- `src/runtime/device-collector-script.test.ts` 覆盖 live probe contract：无探测来源时不伪造数据、OpenClaw fake CLI + DingTalk local state 映射 message-backed WorkItem/execution、OpenClaw DingTalk requester session 在 message context 为空时映射 WorkItem、OpenClaw trajectory 在 session JSONL 缺失时仍能用 prompt 生成 WorkItem、OpenClaw shim 在最小 `PATH` 下仍可运行、OpenClaw 大 JSON 输出不会被截断成不可用、Multica fake CLI 映射 issue/task、Slock internal API 自动发现 channel 并映射 task board、Slock transient task-board failure 会重试、Slock workspace-only 不生成 board state。
 - `src/runtime/runtime-work-state-adapters.test.ts` 覆盖 TypeScript adapter 语义：OpenClaw DingTalk message / requester session / trajectory 与 execution 分层、Multica issue/task 分层、Slock task board 与 activity evidence 分层。
 
 ## 前端闭环范围

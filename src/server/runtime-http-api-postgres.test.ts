@@ -74,8 +74,8 @@ describeDb("runtime HTTP API with Postgres store", () => {
         });
         await expect(ingestionsResponse.json()).resolves.toMatchObject({
           ingestions: [
-            expect.objectContaining({ snapshotType: "inventory" }),
             expect.objectContaining({ snapshotType: "work_state" }),
+            expect.objectContaining({ snapshotType: "inventory" }),
           ],
         });
       } finally {
@@ -110,15 +110,15 @@ describeDb("runtime HTTP API with Postgres store", () => {
           ingestions: [
             expect.objectContaining({
               deviceId: "broken-device",
-              snapshotType: "inventory",
-              status: "failed",
-              error: "invalid runtime inventory snapshot",
-            }),
-            expect.objectContaining({
-              deviceId: "broken-device",
               snapshotType: "work_state",
               status: "failed",
               error: "invalid runtime work state snapshot",
+            }),
+            expect.objectContaining({
+              deviceId: "broken-device",
+              snapshotType: "inventory",
+              status: "failed",
+              error: "invalid runtime inventory snapshot",
             }),
           ],
         });

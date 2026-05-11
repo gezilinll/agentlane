@@ -39,17 +39,17 @@ describeDb("Postgres runtime store", () => {
         });
         expect(await store.listCollectorIngestions("fixture-mac")).toEqual([
           expect.objectContaining({
-            counts: { agents: 2, channelBindings: 2, devices: 1, runtimes: 2 },
-            deviceId: "fixture-mac",
-            snapshotType: "inventory",
-            status: "succeeded",
-          }),
-          expect.objectContaining({
             counts: { conversations: 1, executions: 1, workItems: 1 },
             deviceId: "fixture-mac",
             snapshotType: "work_state",
             status: "succeeded",
             warnings: ["fixture warning"],
+          }),
+          expect.objectContaining({
+            counts: { agents: 2, channelBindings: 2, devices: 1, runtimes: 2 },
+            deviceId: "fixture-mac",
+            snapshotType: "inventory",
+            status: "succeeded",
           }),
         ]);
       } finally {

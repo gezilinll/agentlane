@@ -375,7 +375,7 @@ export function createPostgresStore(options: PostgresStoreOptions = {}): Postgre
           error
         FROM collector_ingestions
         WHERE device_id = $1
-        ORDER BY id
+        ORDER BY id DESC
       `, [deviceId]);
       return result.rows;
     },

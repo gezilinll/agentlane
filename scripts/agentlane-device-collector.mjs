@@ -7,6 +7,7 @@ import path from "node:path";
 const COLLECTOR_VERSION = "0.1.0";
 const DEFAULT_INTERVAL_MS = 60_000;
 const DEFAULT_SLOCK_SERVER_URL = process.env.SLOCK_DEFAULT_SERVER_URL || "https://api.slock.ai";
+const DEFAULT_PROBE_MAX_BUFFER_BYTES = 20 * 1024 * 1024;
 
 function parseArgs(argv) {
   const args = {
@@ -106,26 +107,39 @@ function commandExists(command) {
   return findExecutable(command) !== null;
 }
 
-function candidateExecutables(command) {
-  const candidates = [];
+function commandSearchDirs() {
+  const dirs = [];
   const pathDirs = (process.env.PATH || "").split(path.delimiter).filter(Boolean);
-  for (const dir of pathDirs) candidates.push(path.join(dir, command));
-  candidates.push(path.join(homeDir(), ".local", "bin", command));
-  candidates.push(path.join(homeDir(), ".npm-global", "bin", command));
-  candidates.push(path.join(homeDir(), ".volta", "bin", command));
-  candidates.push(path.join("/opt/homebrew/bin", command));
-  candidates.push(path.join("/usr/local/bin", command));
+  dirs.push(...pathDirs);
+  dirs.push(path.join(homeDir(), ".local", "bin"));
+  dirs.push(path.join(homeDir(), ".npm-global", "bin"));
+  dirs.push(path.join(homeDir(), ".volta", "bin"));
 
   const fnmRoot = path.join(homeDir(), ".local", "share", "fnm", "node-versions");
   try {
     for (const version of readdirSync(fnmRoot)) {
-      candidates.push(path.join(fnmRoot, version, "installation", "bin", command));
+      dirs.push(path.join(fnmRoot, version, "installation", "bin"));
     }
   } catch {
     // Ignore missing fnm installs.
   }
 
-  return candidates;
+  dirs.push("/opt/homebrew/bin");
+  dirs.push("/usr/local/bin");
+
+  return [...new Set(dirs)];
+}
+
+function candidateExecutables(command) {
+  return commandSearchDirs().map((dir) => path.join(dir, command));
+}
+
+function probeEnv(executable) {
+  const executableDir = path.dirname(executable);
+  return {
+    ...process.env,
+    PATH: [...new Set([executableDir, path.dirname(process.execPath), ...commandSearchDirs()])].join(path.delimiter),
+  };
 }
 
 function findExecutable(command) {
@@ -141,6 +155,7 @@ function findExecutable(command) {
     const resolved = execFileSync("command", ["-v", command], {
       encoding: "utf8",
       shell: true,
+      env: { ...process.env, PATH: commandSearchDirs().join(path.delimiter) },
       stdio: ["ignore", "pipe", "ignore"],
     }).trim();
     return resolved || null;
@@ -154,6 +169,8 @@ function runJson(command, args, timeoutMs = 10_000) {
   if (!executable) return null;
   const result = spawnSync(executable, args, {
     encoding: "utf8",
+    env: probeEnv(executable),
+    maxBuffer: DEFAULT_PROBE_MAX_BUFFER_BYTES,
     timeout: timeoutMs,
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -170,6 +187,8 @@ function runText(command, args, timeoutMs = 5_000) {
   if (!executable) return null;
   const result = spawnSync(executable, args, {
     encoding: "utf8",
+    env: probeEnv(executable),
+    maxBuffer: DEFAULT_PROBE_MAX_BUFFER_BYTES,
     timeout: timeoutMs,
     stdio: ["ignore", "pipe", "ignore"],
   });
@@ -1853,23 +1872,26 @@ function readSlockAgentContexts(config) {
   return contexts;
 }
 
-async function fetchSlockInternalJson(serverUrl, agentExternalId, token, pathSuffix) {
+async function fetchSlockInternalJson(serverUrl, agentExternalId, token, pathSuffix, attempts = 2) {
   if (!serverUrl || !token) return null;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 5000);
-  try {
-    const url = new URL(`/internal/agent/${encodeURIComponent(agentExternalId)}${pathSuffix}`, serverUrl);
-    const response = await fetch(url, {
-      headers: { accept: "application/json", authorization: `Bearer ${token}`, "x-agent-id": agentExternalId },
-      signal: controller.signal,
-    });
-    if (!response.ok) return null;
-    return await response.json();
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeout);
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    try {
+      const url = new URL(`/internal/agent/${encodeURIComponent(agentExternalId)}${pathSuffix}`, serverUrl);
+      const response = await fetch(url, {
+        headers: { accept: "application/json", authorization: `Bearer ${token}`, "x-agent-id": agentExternalId },
+        signal: controller.signal,
+      });
+      if (response.ok) return await response.json();
+      if (response.status === 401 || response.status === 403 || response.status === 404) return null;
+    } catch {
+      // Retry transient network and timeout failures below.
+    } finally {
+      clearTimeout(timeout);
+    }
   }
+  return null;
 }
 
 function normalizeSlockChannel(channelEntry) {
@@ -1928,6 +1950,8 @@ async function collectSlockWorkState(deviceId, observedAt, config) {
 
   if (serverUrl && agentContexts.some((context) => context.token)) {
     let apiProbeSucceeded = false;
+    const failedChannelLabels = new Set();
+    const succeededChannelLabels = new Set();
     for (const context of agentContexts) {
       if (!context.token) continue;
       const agentId = makeAgentId(runtimeId, context.agentExternalId);
@@ -1941,10 +1965,11 @@ async function collectSlockWorkState(deviceId, observedAt, config) {
           `/tasks?channel=${encodeURIComponent(channel.externalId)}`,
         );
         if (!taskReport) {
-          warnings.push(`Slock task-board API probe failed for channel ${channel.label}.`);
+          failedChannelLabels.add(channel.label);
           continue;
         }
         apiProbeSucceeded = true;
+        succeededChannelLabels.add(channel.label);
         appendSlockTasks({
           rawTasks: toArray(taskReport, ["tasks"]),
           workItems,
@@ -1957,6 +1982,11 @@ async function collectSlockWorkState(deviceId, observedAt, config) {
       }
     }
     if (apiProbeSucceeded) {
+      for (const channelLabel of failedChannelLabels) {
+        if (!succeededChannelLabels.has(channelLabel)) {
+          warnings.push(`Slock task-board API probe failed for channel ${channelLabel}.`);
+        }
+      }
       return {
         workItems: dedupeById(workItems),
         conversations: dedupeById(conversations),

@@ -35,6 +35,8 @@ import {
 
 const fixtureRuntimeSnapshot = fixtureSnapshot as RuntimeInventorySnapshot;
 const autoRefreshIntervalMs = 30_000;
+const remoteRefreshPollIntervalMs = 1_000;
+const remoteRefreshMaxPolls = 300;
 
 interface RuntimeFleetQueryResponse {
   observedAt: string | null;
@@ -196,19 +198,9 @@ export function RuntimeFleetPage() {
       }
 
       setRefreshState({ status: "running", message: "刷新命令已下发" });
-      const commandResponse = await fetch(
-        `/api/devices/${encodeURIComponent(snapshot.device.id)}/commands/${encodeURIComponent(refreshBody.commandId)}`,
-      );
-      const commandBody = (await commandResponse.json()) as { status?: string; error?: string };
-      if (commandResponse.ok && commandBody.status === "succeeded") {
-        await loadLatestSnapshot({ silent: true });
-        setRefreshState({ status: "success", message: "刷新完成" });
-        return;
-      }
-      if (commandResponse.ok && commandBody.status === "failed") {
-        throw new Error(commandBody.error || "设备刷新失败");
-      }
-      setRefreshState({ status: "success", message: "刷新命令已下发" });
+      await waitForRemoteRefreshCommand(snapshot.device.id, refreshBody.commandId);
+      await loadLatestSnapshot({ silent: true });
+      setRefreshState({ status: "success", message: "刷新完成" });
     } catch (error) {
       setRefreshState({
         status: "error",
@@ -328,6 +320,30 @@ export function RuntimeFleetPage() {
       </section>
     </section>
   );
+}
+
+async function waitForRemoteRefreshCommand(deviceId: string, commandId: string): Promise<void> {
+  for (let attempt = 0; attempt < remoteRefreshMaxPolls; attempt += 1) {
+    const commandResponse = await fetch(
+      `/api/devices/${encodeURIComponent(deviceId)}/commands/${encodeURIComponent(commandId)}`,
+    );
+    const commandBody = (await commandResponse.json()) as { status?: string; error?: string };
+    if (!commandResponse.ok) {
+      throw new Error(commandBody.error || `刷新命令查询失败: HTTP ${commandResponse.status}`);
+    }
+    if (commandBody.status === "succeeded") return;
+    if (commandBody.status === "failed" || commandBody.status === "timed_out") {
+      throw new Error(commandBody.error || "设备刷新失败");
+    }
+    await sleep(remoteRefreshPollIntervalMs);
+  }
+  throw new Error("设备刷新超时");
+}
+
+function sleep(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, milliseconds);
+  });
 }
 
 function runtimeFleetSnapshotFromQueryResponse(value: unknown): RuntimeInventorySnapshot | null {

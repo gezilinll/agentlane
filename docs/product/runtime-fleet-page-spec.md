@@ -38,7 +38,7 @@ Runtime Fleet 必须区分“数据从哪里采集”和“产品上归属哪一
 
 页面挂载后每 30 秒读取一次后端查询结果，并显示页面自己的上次刷新时间。自动刷新只读取后端已有数据，不自动下发远端 `inventory.refresh` 命令；远端采集仍由 collector 定时上报或用户手动点击刷新触发。
 
-远程刷新使用 `POST /api/devices/:deviceId/refresh`。后端能通过 WebSocket 找到在线设备时，返回命令状态；设备不在线时，页面展示可解释失败，不伪装成实时刷新。设备侧执行刷新时必须同时上报 inventory 与 work-state，这样 Runtime Fleet 的 Agent 状态和 Runs 看板不会使用不同步的数据源。
+远程刷新使用 `POST /api/devices/:deviceId/refresh`。后端能通过 WebSocket 找到在线设备时，返回命令状态；设备不在线时，页面展示可解释失败，不伪装成实时刷新。页面收到 `commandId` 后必须轮询 `GET /api/devices/:deviceId/commands/:commandId` 直到 `succeeded`、`failed`、`timed_out` 或前端超时；不能只查询一次就把 `accepted` 当作最终状态。远端采集可能包含 OpenClaw / Slock / Multica 的慢 probe，前端等待上限按 5 分钟处理，避免真实刷新仍在执行时误报超时。设备侧执行刷新时必须同时上报 inventory 与 work-state，这样 Runtime Fleet 的 Agent 状态和 Runs 看板不会使用不同步的数据源。
 
 ## 统一语义
 
@@ -121,7 +121,7 @@ Agent：
 - 当后端已有最新 snapshot 时，页面展示后端设备名称而不是 fixture 设备名称。
 - Production 构建下，后端查询失败时页面展示后端错误状态，不展示 fixture 设备、Runtime 或 Agent。
 - 页面自动读取后端查询结果，并展示上次刷新时间。
-- 当设备在线时，点击刷新按钮会请求后端下发远程刷新命令；设备离线时展示失败原因。
+- 当设备在线时，点击刷新按钮会请求后端下发远程刷新命令，并轮询到命令终态后再展示刷新完成；设备离线时展示失败原因。
 - OpenClaw 历史 session 数展示为历史会话，不展示为活跃会话。
 - Slock 仅能识别 workspace 时，Agent 状态为未知，不伪装成活跃。
 - 页面在桌面和移动宽度下不横向溢出。

@@ -156,8 +156,8 @@ WebSocket 是设备控制面，不是聊天入口。设备永远主动连接 Age
 
 每个 adapter 只做只读采集，并返回统一的 adapter report。
 
-- OpenClaw Adapter：读取 `openclaw health --json`、`openclaw status --json`、`openclaw tasks list --json`、`openclaw tasks audit --json` 的摘要。
-- Slock Adapter：识别 `~/.slock/agents` 下的 agent workspace，以及本机 daemon/agent 进程摘要。v1 不调用私有 Web API 创建 Agent。
+- OpenClaw Adapter：读取 `openclaw health --json`、`openclaw status --json`、`openclaw tasks list --json`、`openclaw tasks audit --json` 的摘要。OpenClaw 命令常见为 Node shim，collector 必须用增强后的 probe `PATH` 启动子进程，让 shim 能找到同目录或 Node 安装目录中的解释器。OpenClaw 命令输出可能超过 Node 默认同步子进程 buffer，collector 必须使用受控的大 buffer 读取 JSON，不能把大输出截断误判为不可用。
+- Slock Adapter：识别 `~/.slock/agents` 下的 agent workspace，以及本机 daemon/agent 进程摘要。v1 不调用私有 Web API 创建 Agent。task-board internal API 出现临时 5xx、网络抖动或超时时，collector 应做小次数重试；重试成功不记录 channel probe warning。同一个 channel 被多个本地 Slock agent context 探测时，只要任一 context 成功采到该 channel，就不记录该 channel 的失败 warning。
 - Multica Adapter：读取 `multica daemon status --output json`、`multica runtime list --output json`、`multica agent list --output json`。
 - Codex / Claude Adapter：识别 CLI 可用性、版本与基础 session 目录摘要。
 
@@ -232,8 +232,10 @@ curl -fsSL https://agentlane.example/install.sh | bash -s -- \
 - 能通过安装脚本 harness 验证本地路径安装、配置写入、一次性采集运行。
 - 能通过 Runtime harness 验证 adapter 把平台字段转换成 Agentlane 状态、`lastSeenAt` 和 Agent 工作负载统计语义。
 - 能通过前端 harness 验证刷新按钮向后端请求远程刷新，并展示成功或失败状态。
+- 能通过前端 harness 验证刷新按钮不会把 `accepted` 当作终态，而是轮询到远程刷新命令 `succeeded` 后再展示完成。
 - 能通过前端 harness 验证页面自动读取后端查询 API，且不展示原始 UTC ISO 时间。
 - 能通过 Runs / Work Board harness 验证页面只消费统一 WorkStage / confidence，不直接解释平台原始状态。
 - 能通过 Runs / Work Board harness 验证 Slock `in_progress` 显示为 `processing + partial`，OpenClaw 成功 execution 直接进入 closed，失败 execution 进入 attention。
+- 能通过 collector harness 验证 OpenClaw Node shim 在 launchd / ssh 的最小 `PATH` 下仍可运行、OpenClaw 大 JSON 输出不会被截断成不可用，Slock task-board transient failure 会重试并在成功后不产生误报 warning，同 channel 被其他 context 成功采集时不产生误报 warning。
 - 能通过真实远端设备执行一次安装脚本，完成只读 snapshot 输出。
 - `./scripts/verify.sh` 通过。

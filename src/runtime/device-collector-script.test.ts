@@ -891,6 +891,59 @@ describe("device collector scripts", () => {
     expect(executionIds.every((id: string) => id.includes("task-duplicate"))).toBe(true);
   });
 
+  it("parses large OpenClaw JSON probe output without treating it as unavailable", () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-large-home-"));
+    const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-large-bin-"));
+    writeLargeOutputOpenClaw(fakeBin);
+
+    const output = execFileSync(process.execPath, [
+      collectorScript,
+      "--work-state-once",
+      "--device-id",
+      "openclaw-large-device",
+      "--print-only",
+    ], {
+      encoding: "utf8",
+      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
+    });
+
+    const snapshot = JSON.parse(output);
+
+    expect(snapshot.executions).toContainEqual(expect.objectContaining({
+      source: "openclaw",
+      externalId: "large-run-1",
+      status: "succeeded",
+    }));
+    expect(snapshot.warnings || []).not.toContainEqual(expect.stringContaining("openclaw tasks list --json failed"));
+  });
+
+  it("runs OpenClaw shims with an augmented probe PATH", () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-shim-home-"));
+    const fakeBin = path.join(fakeHome, ".local", "share", "fnm", "node-versions", "v-test", "installation", "bin");
+    mkdirSync(fakeBin, { recursive: true });
+    writeShimmedOpenClaw(fakeBin);
+
+    const output = execFileSync(process.execPath, [
+      collectorScript,
+      "--work-state-once",
+      "--device-id",
+      "openclaw-shim-device",
+      "--print-only",
+    ], {
+      encoding: "utf8",
+      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
+    });
+
+    const snapshot = JSON.parse(output);
+
+    expect(snapshot.executions).toContainEqual(expect.objectContaining({
+      source: "openclaw",
+      externalId: "shim-run-1",
+      status: "succeeded",
+    }));
+    expect(snapshot.warnings || []).not.toContainEqual(expect.stringContaining("OpenClaw"));
+  });
+
   it("maps live Multica issue and agent task probes into work items and executions", () => {
     const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-multica-work-home-"));
     const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-multica-work-bin-"));
@@ -1079,6 +1132,156 @@ describe("device collector scripts", () => {
         title: "修复登录回调异常",
         status: "in_progress",
       }));
+    } finally {
+      server.close();
+    }
+  });
+
+  it("retries transient Slock task-board API failures before recording warnings", async () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-slock-retry-home-"));
+    const agentDir = path.join(fakeHome, ".slock", "agents", "tester", ".slock");
+    mkdirSync(agentDir, { recursive: true });
+    writeFileSync(path.join(agentDir, "agent-token"), "test-agent-token");
+    let taskAttempts = 0;
+    const server = createServer((request, response) => {
+      expect(request.headers.authorization).toBe("Bearer test-agent-token");
+      expect(request.headers["x-agent-id"]).toBe("tester");
+      const url = new URL(request.url ?? "/", "http://127.0.0.1");
+      if (url.pathname === "/internal/agent/tester/server") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({
+          channels: [{ id: "channel-retry", name: "重试群", type: "channel", joined: true }],
+        }));
+        return;
+      }
+      if (url.pathname === "/internal/agent/tester/tasks" && url.searchParams.get("channel") === "#重试群") {
+        taskAttempts += 1;
+        if (taskAttempts === 1) {
+          response.writeHead(503, { "content-type": "application/json" });
+          response.end(JSON.stringify({ error: "temporary unavailable" }));
+          return;
+        }
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({
+          tasks: [{
+            id: "retry-task-1",
+            title: "Slock transient failure recovered",
+            status: "IN PROGRESS",
+            creator: { name: "@zhangsan" },
+            assignee: { name: "@tester" },
+            threadId: "retry-thread-1",
+          }],
+        }));
+        return;
+      }
+      response.writeHead(404);
+      response.end();
+    });
+    await new Promise<void>((resolve) => {
+      server.listen(0, "127.0.0.1", resolve);
+    });
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("missing test server address");
+    const configDir = mkdtempSync(path.join(tmpdir(), "agentlane-slock-retry-config-"));
+    const configPath = path.join(configDir, "config.json");
+    writeFileSync(configPath, JSON.stringify({
+      deviceId: "slock-retry-device",
+      slockServerUrl: `http://127.0.0.1:${address.port}`,
+    }));
+
+    try {
+      const output = await runNodeScript([
+        collectorScript,
+        "--work-state-once",
+        "--config",
+        configPath,
+        "--print-only",
+      ], {
+        env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
+      });
+
+      const snapshot = JSON.parse(output);
+
+      expect(taskAttempts).toBe(2);
+      expect(snapshot.workItems).toContainEqual(expect.objectContaining({
+        source: "slock",
+        title: "Slock transient failure recovered",
+        status: "in_progress",
+      }));
+      expect(snapshot.warnings || []).not.toContainEqual(expect.stringContaining("Slock task-board API probe failed"));
+    } finally {
+      server.close();
+    }
+  });
+
+  it("does not warn when another Slock agent context collects the same channel", async () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-slock-cross-context-home-"));
+    for (const agentName of ["agent-fails", "agent-succeeds"]) {
+      const agentDir = path.join(fakeHome, ".slock", "agents", agentName, ".slock");
+      mkdirSync(agentDir, { recursive: true });
+      writeFileSync(path.join(agentDir, "agent-token"), `${agentName}-token`);
+    }
+    const server = createServer((request, response) => {
+      const url = new URL(request.url ?? "/", "http://127.0.0.1");
+      if (url.pathname.endsWith("/server")) {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({
+          channels: [{ id: "channel-shared", name: "共享群", type: "channel", joined: true }],
+        }));
+        return;
+      }
+      if (url.pathname === "/internal/agent/agent-fails/tasks") {
+        response.writeHead(503, { "content-type": "application/json" });
+        response.end(JSON.stringify({ error: "temporary unavailable" }));
+        return;
+      }
+      if (url.pathname === "/internal/agent/agent-succeeds/tasks" && url.searchParams.get("channel") === "#共享群") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({
+          tasks: [{
+            id: "shared-task-1",
+            title: "Shared channel was collected by another context",
+            status: "TODO",
+            creator: { name: "@lisi" },
+            assignee: { name: "@agent-succeeds" },
+            threadId: "shared-thread-1",
+          }],
+        }));
+        return;
+      }
+      response.writeHead(404);
+      response.end();
+    });
+    await new Promise<void>((resolve) => {
+      server.listen(0, "127.0.0.1", resolve);
+    });
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("missing test server address");
+    const configDir = mkdtempSync(path.join(tmpdir(), "agentlane-slock-cross-context-config-"));
+    const configPath = path.join(configDir, "config.json");
+    writeFileSync(configPath, JSON.stringify({
+      deviceId: "slock-cross-context-device",
+      slockServerUrl: `http://127.0.0.1:${address.port}`,
+    }));
+
+    try {
+      const output = await runNodeScript([
+        collectorScript,
+        "--work-state-once",
+        "--config",
+        configPath,
+        "--print-only",
+      ], {
+        env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
+      });
+
+      const snapshot = JSON.parse(output);
+
+      expect(snapshot.workItems).toContainEqual(expect.objectContaining({
+        source: "slock",
+        title: "Shared channel was collected by another context",
+      }));
+      expect(snapshot.warnings || []).not.toContainEqual(expect.stringContaining("Slock task-board API probe failed"));
     } finally {
       server.close();
     }
@@ -1273,6 +1476,82 @@ process.exit(1);
 `);
   writeFileSync(executable, `#!/bin/sh
 exec "${process.execPath}" "${script}" "$@"
+`);
+  chmodSync(executable, 0o755);
+}
+
+function writeLargeOutputOpenClaw(fakeBin: string): void {
+  const executable = path.join(fakeBin, "openclaw");
+  const script = path.join(fakeBin, "openclaw.js");
+  writeFileSync(script, `
+const command = process.argv[2];
+if (command === "health") {
+  console.log(JSON.stringify({ ok: true, agents: [{ id: "main" }] }));
+  process.exit(0);
+}
+if (command === "status") {
+  console.log(JSON.stringify({ gateway: { url: "ws://127.0.0.1:18789", reachable: true } }));
+  process.exit(0);
+}
+if (command === "tasks" && process.argv[3] === "list") {
+  process.stdout.write(JSON.stringify({
+    padding: "x".repeat(1_200_000),
+    tasks: [{
+      taskId: "large-task-1",
+      runId: "large-run-1",
+      status: "succeeded",
+      agentId: "main",
+      requesterSessionKey: "agent:main:dingtalk:group:group-large",
+      task: "大输出也应该保留 OpenClaw execution",
+      createdAt: 1778308800000,
+      startedAt: 1778308860000,
+      endedAt: 1778309100000,
+    }],
+  }) + "\\n", () => process.exit(0));
+  return;
+}
+process.exit(1);
+`);
+  writeFileSync(executable, `#!/bin/sh
+exec "${process.execPath}" "${script}" "$@"
+`);
+  chmodSync(executable, 0o755);
+}
+
+function writeShimmedOpenClaw(fakeBin: string): void {
+  const interpreter = path.join(fakeBin, "agentlane-node-shim");
+  const executable = path.join(fakeBin, "openclaw");
+  writeFileSync(interpreter, `#!/bin/sh
+exec "${process.execPath}" "$@"
+`);
+  chmodSync(interpreter, 0o755);
+  writeFileSync(executable, `#!/usr/bin/env agentlane-node-shim
+const command = process.argv[2];
+if (command === "health") {
+  console.log(JSON.stringify({ ok: true, agents: [{ id: "main" }] }));
+  process.exit(0);
+}
+if (command === "status") {
+  console.log(JSON.stringify({ gateway: { url: "ws://127.0.0.1:18789", reachable: true } }));
+  process.exit(0);
+}
+if (command === "tasks" && process.argv[3] === "list") {
+  console.log(JSON.stringify({
+    tasks: [{
+      taskId: "shim-task-1",
+      runId: "shim-run-1",
+      status: "succeeded",
+      agentId: "main",
+      requesterSessionKey: "agent:main:dingtalk:group:group-shim",
+      task: "OpenClaw shim should inherit a usable PATH",
+      createdAt: 1778308800000,
+      startedAt: 1778308860000,
+      endedAt: 1778309100000,
+    }],
+  }));
+  process.exit(0);
+}
+process.exit(1);
 `);
   chmodSync(executable, 0o755);
 }
