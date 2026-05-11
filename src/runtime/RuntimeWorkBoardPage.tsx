@@ -41,7 +41,7 @@ type QuickRangeOption = (typeof quickRangeOptions)[number];
 type TimeRangePanelMode = "quick" | "custom";
 
 const sourceLabels: Record<RuntimeSource | "all", string> = {
-  all: "全部 Runtime",
+  all: "全部",
   openclaw: "OpenClaw",
   multica: "Multica",
   slock: "Slock",
@@ -52,7 +52,7 @@ const sourceLabels: Record<RuntimeSource | "all", string> = {
 };
 
 const stageLabels: Record<RuntimeWorkStageId | "all", string> = {
-  all: "全部阶段",
+  all: "全部",
   pending: "待处理",
   processing: "处理中",
   review: "待验收",
@@ -257,7 +257,7 @@ export function RuntimeWorkBoardPage() {
             value={channelKind}
             onChange={(event) => setChannelKind(event.target.value as RuntimeWorkChannelKind | "all")}
           >
-            <option value="all">全部渠道</option>
+            <option value="all">全部</option>
             {channelOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}

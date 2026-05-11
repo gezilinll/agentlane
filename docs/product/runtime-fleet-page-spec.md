@@ -107,7 +107,7 @@ Agent：
 
 - 主导航可以进入 Runtime Fleet 页面。
 - 页面顶部显示设备、在线 Runtime、Agent、异常数量。
-- Runtime 和可用性筛选项来自当前 snapshot；fixture 只有 OpenClaw、Slock 且二者在线时，筛选项只显示 `全部 Runtime / OpenClaw / Slock` 和 `全部可用性 / 在线`。
+- Runtime 和可用性筛选项来自当前 snapshot；fixture 只有 OpenClaw、Slock 且二者在线时，筛选项只显示 `全部 / OpenClaw / Slock` 和 `全部 / 在线`。
 - 用户可以搜索 `tester` 并只看到相关 Agent。
 - Runtime Fleet 工具栏不展示 Channel 筛选；用户需要收敛某个 Agent 时使用搜索、Runtime 或可用性筛选。
 - 用户可以点击 Agent 行并在详情面板看到归属 Runtime、归属设备、关联渠道和运行统计。

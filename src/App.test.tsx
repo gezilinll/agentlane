@@ -100,7 +100,7 @@ describe("Catalog page", () => {
     const channelSelect = screen.getByLabelText("渠道") as HTMLSelectElement;
     expect(channelSelect.value).toBe("all");
     expect(within(channelSelect).getAllByRole("option").map((option) => option.textContent)).toEqual([
-      "全部渠道",
+      "全部",
       "DingTalk",
     ]);
 
@@ -252,12 +252,12 @@ describe("Catalog page", () => {
     expect(screen.getAllByRole("columnheader", { name: "最近同步" }).length).toBeGreaterThanOrEqual(2);
     expect(screen.queryByLabelText("Channel")).not.toBeInTheDocument();
     expect(within(screen.getByLabelText("Runtime")).getAllByRole("option").map((option) => option.textContent)).toEqual([
-      "全部 Runtime",
+      "全部",
       "OpenClaw",
       "Slock",
     ]);
     expect(within(screen.getByLabelText("可用性")).getAllByRole("option").map((option) => option.textContent)).toEqual([
-      "全部可用性",
+      "全部",
       "在线",
     ]);
   });

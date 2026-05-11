@@ -247,7 +247,7 @@ export function RuntimeFleetPage() {
             value={runtimeKind}
             onChange={(event) => setRuntimeKind(event.target.value as RuntimeKind | "all")}
           >
-            <option value="all">全部 Runtime</option>
+            <option value="all">全部</option>
             {runtimeKindOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -262,7 +262,7 @@ export function RuntimeFleetPage() {
             value={runtimeStatus}
             onChange={(event) => setRuntimeStatus(event.target.value as RuntimeHealthStatus | "all")}
           >
-            <option value="all">全部可用性</option>
+            <option value="all">全部</option>
             {runtimeStatusOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}

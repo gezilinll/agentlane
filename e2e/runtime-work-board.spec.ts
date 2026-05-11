@@ -53,7 +53,7 @@ test.describe("Runs / Work Board", () => {
       await expect(page.getByRole("heading", { name: lane })).toBeVisible();
     }
     await expect(page.getByLabel("渠道")).toHaveValue("all");
-    await expect(page.getByLabel("渠道").locator("option")).toHaveText(["全部渠道", "DingTalk"]);
+    await expect(page.getByLabel("渠道").locator("option")).toHaveText(["全部", "DingTalk"]);
     const searchBox = await page.getByPlaceholder("搜索任务、消息、发起人、Agent 或会话/群组").boundingBox();
     const stageBox = await page.getByLabel("阶段").boundingBox();
     const timeTriggerBox = await page.getByRole("button", { name: /选择时间范围/ }).boundingBox();
