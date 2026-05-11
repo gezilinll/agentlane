@@ -29,6 +29,9 @@ assert(backendDockerfile.includes("node dist/backend/backend-server.mjs"), "back
 const composeFile = read("docker-compose.prod-like.yml");
 assert(composeFile.includes("condition: service_healthy"), "backend must wait for healthy Postgres in prod-like compose");
 assert(composeFile.includes("Dockerfile.frontend"), "prod-like compose must build the frontend image");
+assert(composeFile.includes("AGENTLANE_POSTGRES_PASSWORD"), "prod-like compose must allow overriding the Postgres password");
+assert(composeFile.includes("AGENTLANE_BACKEND_PUBLISH"), "prod-like compose must allow backend host port binding override");
+assert(composeFile.includes("AGENTLANE_FRONTEND_PUBLISH"), "prod-like compose must allow frontend host port binding override");
 
 process.stdout.write("check:deploy: ok\n");
 

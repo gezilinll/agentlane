@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_DB: agentlane
       POSTGRES_USER: agentlane
-      POSTGRES_PASSWORD: agentlane
+      POSTGRES_PASSWORD: ${AGENTLANE_POSTGRES_PASSWORD:-agentlane}
     volumes:
       - agentlane-prod-like-postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -18,14 +18,14 @@ services:
       context: .
       dockerfile: Dockerfile.backend
     environment:
-      DATABASE_URL: postgres://agentlane:agentlane@postgres:5432/agentlane
+      DATABASE_URL: postgres://agentlane:${AGENTLANE_POSTGRES_PASSWORD:-agentlane}@postgres:5432/agentlane
       AGENTLANE_BACKEND_HOST: 0.0.0.0
       AGENTLANE_BACKEND_PORT: 4173
     depends_on:
       postgres:
         condition: service_healthy
     ports:
-      - "4173:4173"
+      - "${AGENTLANE_BACKEND_PUBLISH:-4173}:4173"
 
   frontend:
     build:
@@ -34,7 +34,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "8080:80"
+      - "${AGENTLANE_FRONTEND_PUBLISH:-8080}:80"
 
 volumes:
   agentlane-prod-like-postgres-data:
