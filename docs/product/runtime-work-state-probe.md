@@ -249,13 +249,13 @@ Harness：
 
 Runs / Work Board 第一版是只读 Agent 工作视图，用于验证统一工作态模型是否能被用户理解和验收。
 
-- 页面只读取 `GET /api/runtime-work-state/latest`，没有后端快照时使用明确标识的 fixture。
+- 页面优先读取 `GET /api/runtime-work-items`，由后端执行搜索、来源 Runtime、Channel、阶段和时间范围筛选；正式查询不可用时回退到兼容期 `GET /api/runtime-work-state/latest`，没有后端快照时使用明确标识的 fixture。
 - 页面只消费 `runtime-work-state-query.ts` 生成的 lane、summary 和 detail。
 - 页面不直接判断 OpenClaw、Multica、Slock 原始状态含义。
 - 页面不提供拖拽、写回、指派、接管聊天或代理流量入口。
 - 页面必须展示发起人、承接 Agent、Runtime、Channel、会话/群组、消息摘要、工作项状态和最近同步时间。Runtime 表示 OpenClaw / Multica / Slock / Codex 等承载侧，Channel 表示 DingTalk / Telegram / Slack 等用户触达侧；Slock、Multica、OpenClaw、Codex 不能作为 Runs 的 Channel 选项。会话/群组表示用户实际发起任务的可读上下文。
 - Runs 的 Channel 筛选默认展示为 `全部`，候选项必须从当前快照中实际出现的用户触达渠道动态生成；当前只出现 DingTalk 时，只展示 `全部` 和 `DingTalk`，后续检测到 Telegram、Slack 等再自动追加。
-- Runs 支持按时间范围过滤卡片。时间范围使用工作项的 `lastSeenAt` 做包含式过滤；启用时间范围后，没有 `lastSeenAt` 的卡片不进入结果。页面使用阶段筛选后的单个时间范围控件，不把开始/结束时间输入框直接铺在工具栏里。展开控件后必须支持手动选择开始时间、结束时间、清除时间，并提供 `今天`、`昨天`、`七天内`、`本星期`、`上星期` 等快捷项；除进入日历选择/自定义面板外，点击快捷时间、清除、确认或弹窗外区域都必须关闭弹窗。
+- Runs 支持按时间范围过滤卡片。时间范围使用工作项的 `lastSeenAt` 做包含式过滤；启用时间范围后，没有 `lastSeenAt` 的卡片不进入结果。筛选条件变化后应请求后端查询 API，前端仅保留当前结果作为页面状态和兼容期 fallback。页面使用阶段筛选后的单个时间范围控件，不把开始/结束时间输入框直接铺在工具栏里。展开控件后必须支持手动选择开始时间、结束时间、清除时间，并提供 `今天`、`昨天`、`七天内`、`本星期`、`上星期` 等快捷项；除进入日历选择/自定义面板外，点击快捷时间、清除、确认或弹窗外区域都必须关闭弹窗。
 - Runs 的时间范围摘要在常规桌面宽度下使用紧凑格式保持可读，完整时间保留在控件 title 和展开面板里；搜索框是主要输入入口，来源 Runtime、渠道、阶段筛选不应挤占搜索与时间范围的主要展示空间。
 - 任务卡顶部只展示 Runtime 和真实 Channel，不重复展示所在泳道阶段；阶段已经由泳道标题和详情概览承载。
 - 任务卡和详情面板必须处理长 URL、长 MR 标题、长消息摘要等内容，使用截断或换行约束在当前容器内展示，不允许产生卡片内或详情面板内的横向滚动。

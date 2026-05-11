@@ -31,6 +31,7 @@ describeDb("Postgres runtime store", () => {
         });
         expect(await store.countWorkItemsBySource()).toEqual({ slock: 1 });
         expect(await store.readWorkItem(workStateSnapshot.workItems[0].id)).toMatchObject({
+          externalId: "task-1",
           id: workStateSnapshot.workItems[0].id,
           source: "slock",
           stage: "processing",

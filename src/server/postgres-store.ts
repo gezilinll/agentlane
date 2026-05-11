@@ -54,6 +54,7 @@ export interface PostgresCollectorIngestion {
 /** Minimal work item row used by repository tests and future query API composition. */
 export interface PostgresWorkItemRow {
   id: string;
+  externalId: string;
   source: string;
   status: string;
   stage: string;
@@ -247,6 +248,7 @@ export function createPostgresStore(options: PostgresStoreOptions = {}): Postgre
       const result = await pool.query<PostgresWorkItemRow>(`
         SELECT
           id,
+          external_id AS "externalId",
           source,
           status,
           stage,
@@ -274,6 +276,7 @@ export function createPostgresStore(options: PostgresStoreOptions = {}): Postgre
       const result = await pool.query<PostgresWorkItemRow>(`
         SELECT
           id,
+          external_id AS "externalId",
           source,
           status,
           stage,

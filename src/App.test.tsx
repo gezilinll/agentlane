@@ -262,6 +262,75 @@ describe("Catalog page", () => {
     ]);
   });
 
+  it("loads Runtime Fleet from the backend query API when available", async () => {
+    const user = userEvent.setup();
+    const backendSnapshot = fixtureSnapshot as RuntimeInventorySnapshot;
+    globalThis.fetch = vi.fn(async (input) => {
+      const url = input.toString();
+      if (url.includes("/api/runtime-fleet")) {
+        return new Response(JSON.stringify({
+          observedAt: "2026-05-10T10:00:00.000Z",
+          devices: [{ ...backendSnapshot.device, name: "Backend DB Mac" }],
+          runtimes: backendSnapshot.runtimes,
+          agents: backendSnapshot.agents,
+          summary: { agentCount: 2, deviceCount: 1, runtimeCount: 2 },
+        }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/api/runtime-work-state/latest")) {
+        return new Response(JSON.stringify({ error: "not_found" }), { status: 404 });
+      }
+      return new Response(JSON.stringify({ error: "unexpected request" }), { status: 500 });
+    }) as unknown as typeof fetch;
+
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Runtime Fleet" }));
+
+    expect((await screen.findAllByText("Backend DB Mac")).length).toBeGreaterThan(0);
+    expect(screen.getByText(/当前数据源：后端快照/)).toBeInTheDocument();
+  });
+
+  it("loads Runs from the backend work-item query API when available", async () => {
+    const user = userEvent.setup();
+    globalThis.fetch = vi.fn(async (input) => {
+      const url = input.toString();
+      if (url.includes("/api/runtime-work-items")) {
+        return new Response(JSON.stringify({
+          items: [{
+            agentId: "fixture-mac:slock:slock-daemon:agent:tester",
+            assignee: { kind: "agent", label: "tester" },
+            channelKind: "other",
+            channelLabel: "#AjisGTD",
+            conversationId: "fixture-mac:slock:slock-daemon:conversation:thread-1",
+            creator: { kind: "human", label: "PMO" },
+            description: "PMO asked the Slock agent to inspect queue handoff.",
+            externalId: "task-1",
+            id: "fixture-mac:slock:slock-daemon:work-item:task-1",
+            lastSeenAt: "2026-05-10T10:00:00.000Z",
+            runtimeId: "fixture-mac:slock:slock-daemon",
+            source: "slock",
+            stage: "processing",
+            status: "in_progress",
+            title: "AGTD-001 Fix queue handoff",
+          }],
+          total: 1,
+        }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "unexpected request" }), { status: 500 });
+    }) as unknown as typeof fetch;
+
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Runs" }));
+
+    expect(await screen.findByRole("button", { name: /AGTD-001 Fix queue handoff/ })).toBeInTheDocument();
+    expect(screen.getByText(/当前数据源：后端查询/)).toBeInTheDocument();
+  });
+
   it("filters Runs cards by manual time range and exposes quick ranges", async () => {
     const user = userEvent.setup();
     const backendSnapshot: RuntimeWorkStateSnapshot = {
@@ -336,20 +405,24 @@ describe("Catalog page", () => {
         name: "Backend Fixture Mac",
       },
     };
-    globalThis.fetch = vi.fn(async () =>
-      new Response(JSON.stringify(backendSnapshot), {
+    globalThis.fetch = vi.fn(async (input) => {
+      const url = input.toString();
+      if (url.includes("/api/runtime-fleet")) {
+        return new Response(JSON.stringify({ error: "postgres_store_unavailable" }), { status: 503 });
+      }
+      return new Response(JSON.stringify(backendSnapshot), {
         status: 200,
         headers: { "content-type": "application/json" },
-      }),
-    ) as unknown as typeof fetch;
+      });
+    }) as unknown as typeof fetch;
     render(<App />);
 
     await user.click(screen.getByRole("button", { name: "Runtime Fleet" }));
 
     expect((await screen.findAllByText("Backend Fixture Mac")).length).toBeGreaterThan(0);
-    expect(vi.mocked(globalThis.fetch).mock.calls[0]?.[0]?.toString()).toContain(
-      "/api/runtime-inventory/latest",
-    );
+    expect(vi.mocked(globalThis.fetch).mock.calls.some((call) =>
+      call[0]?.toString().includes("/api/runtime-inventory/latest"),
+    )).toBe(true);
   });
 
   it("shows Runtime operating status from the latest Agent work state", async () => {

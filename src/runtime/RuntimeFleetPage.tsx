@@ -31,6 +31,13 @@ import type { RuntimeWorkStateSnapshot } from "./runtime-work-state";
 const fixtureRuntimeSnapshot = fixtureSnapshot as RuntimeInventorySnapshot;
 const autoRefreshIntervalMs = 30_000;
 
+interface RuntimeFleetQueryResponse {
+  observedAt: string | null;
+  devices: RuntimeInventorySnapshot["device"][];
+  runtimes: AgentlaneRuntime[];
+  agents: ManagedRuntimeAgent[];
+}
+
 type RuntimeFleetSelection = {
   kind: RuntimeFleetDetail["kind"];
   id: string;
@@ -52,8 +59,17 @@ export function RuntimeFleetPage() {
   const [selection, setSelection] = useState<RuntimeFleetSelection | null>(null);
 
   async function fetchLatestSnapshot(): Promise<RuntimeInventorySnapshot | null> {
-    const requestUrl = new URL("/api/runtime-inventory/latest", window.location.origin);
-    const response = await fetch(requestUrl);
+    try {
+      const queryResponse = await fetch(new URL("/api/runtime-fleet", window.location.origin));
+      if (queryResponse.ok) {
+        const querySnapshot = runtimeFleetSnapshotFromQueryResponse(await queryResponse.json());
+        if (querySnapshot) return querySnapshot;
+      }
+    } catch {
+      // Fall back to the local latest-snapshot API while the formal backend is not available.
+    }
+
+    const response = await fetch(new URL("/api/runtime-inventory/latest", window.location.origin));
     if (response.status === 404) return null;
     if (!response.ok) throw new Error(`runtime inventory request failed: ${response.status}`);
     return (await response.json()) as RuntimeInventorySnapshot;
@@ -304,6 +320,24 @@ export function RuntimeFleetPage() {
       </section>
     </section>
   );
+}
+
+function runtimeFleetSnapshotFromQueryResponse(value: unknown): RuntimeInventorySnapshot | null {
+  if (!isRuntimeFleetQueryResponse(value) || value.devices.length === 0) return null;
+  return {
+    observedAt: value.observedAt ?? value.devices[0].lastSeenAt ?? new Date().toISOString(),
+    collector: fixtureRuntimeSnapshot.collector,
+    device: value.devices[0],
+    runtimes: value.runtimes,
+    agents: value.agents,
+    reports: [],
+  };
+}
+
+function isRuntimeFleetQueryResponse(value: unknown): value is RuntimeFleetQueryResponse {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<RuntimeFleetQueryResponse>;
+  return Array.isArray(candidate.devices) && Array.isArray(candidate.runtimes) && Array.isArray(candidate.agents);
 }
 
 function Metric({ label, value, tone }: { label: string; value: number; tone: string }) {
