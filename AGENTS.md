@@ -4,7 +4,7 @@ Root guide for coding agents working in this repository. This file is operationa
 
 ## Project State
 
-Agentlane is currently in product definition and early engineering setup. The repository is becoming the control plane for operating an Agent Network. It now has a Chinese-first Catalog page, a Runtime Fleet page, a read-only Runs / Work Board page, collector-backed runtime inventory and work-state models, and a local dev backend with latest snapshot storage plus an outbound WebSocket device control channel. It does not yet have a production backend, auth system, multi-device orchestration, or runtime execution control system.
+Agentlane is currently in product definition and early engineering setup. The repository is becoming the control plane for operating an Agent Network. It now has a Chinese-first Catalog page, a Runtime Fleet page, a read-only Runs / Work Board page, collector-backed runtime inventory and work-state models, and a standalone local backend with Postgres-backed query APIs plus an outbound WebSocket device control channel. It does not yet have a production deployment, auth system, multi-device orchestration, or runtime execution control system.
 
 Current source of truth:
 
@@ -24,10 +24,10 @@ Current source of truth:
 - `src/runtime/runtime-work-state-query.ts`: frontend-facing query model for the read-only Runs / Work Board page.
 - `src/runtime/runtime-listening-acceptance.ts`: TypeScript source of truth for source-specific listening readiness and Runs lane policy.
 - `src/runtime/runtime-inventory-query.ts`: query and detail model for the Runtime Fleet page.
-- `src/server/runtime-inventory-store.ts`: local file-backed latest snapshot store used by the dev backend.
+- `src/server/runtime-inventory-store.ts`: internal snapshot and command state store used for collector validation and the v1 device control channel.
 - `src/server/postgres-store.ts`: Postgres-backed repository for normalized inventory and work-state ingestion.
 - `src/server/runtime-control-channel.ts`: in-memory v1 device control channel for connection, heartbeat, and refresh command lifecycle.
-- `src/server/runtime-http-api.ts`: local Runtime Fleet HTTP API for latest snapshot and refresh command requests.
+- `src/server/runtime-http-api.ts`: backend HTTP API for collector ingestion, Runtime Fleet / Runs query endpoints, refresh commands, and ingestion diagnostics.
 - `src/backend/backend-server.ts`: standalone local-first backend service that composes the HTTP API and device WebSocket control channel outside Vite.
 - `db/migrations/`: Postgres schema migrations for the formal backend service.
 - `scripts/db-migrate.mjs`: local Postgres migration runner.
@@ -83,8 +83,8 @@ Current spec and harness mapping:
 | Runtime listening acceptance | `docs/product/runtime-listening-acceptance-spec.md`, `src/runtime/runtime-listening-acceptance.ts`, `docs/product/runtime-work-state-probe.md` | `src/runtime/runtime-listening-acceptance.test.ts`, `src/runtime/runtime-work-state-adapters.test.ts`, `npm run check:runtime` |
 | Runs / Work Board page | `src/runtime/RuntimeWorkBoardPage.tsx`, `docs/product/runtime-work-state-probe.md` | `src/App.test.tsx`, `e2e/runtime-work-board.spec.ts`, `npm run check:quick`, `npm run check:e2e` |
 | Runtime Fleet page | `docs/product/runtime-fleet-page-spec.md`, `src/runtime/runtime-inventory-query.ts`, `src/runtime/RuntimeFleetPage.tsx` | `src/runtime/runtime-inventory-query.test.ts`, `src/App.test.tsx`, `e2e/runtime-fleet.spec.ts`, `npm run check:quick`, `npm run check:e2e` |
-| Runtime snapshot and control backend | `docs/product/runtime-device-registration-spec.md`, `src/server/runtime-inventory-store.ts`, `src/server/runtime-control-channel.ts`, `src/server/runtime-http-api.ts`, `vite.config.ts` | `src/server/runtime-inventory-store.test.ts`, `src/server/runtime-control-channel.test.ts`, `src/server/runtime-http-api.test.ts`, `src/runtime/device-collector-script.test.ts`, `npm run check:backend` |
-| Backend service formalization | `docs/product/backend-service-spec.md`, `docs/superpowers/plans/2026-05-11-backend-service.md`, `src/backend/backend-server.ts`, `src/server/postgres-store.ts`, `db/migrations/`, `scripts/db-migrate.mjs` | `src/backend/backend-server.test.ts`, `src/server/db-migrate.test.ts`, `src/server/postgres-store.test.ts`, `src/server/runtime-http-api-postgres.test.ts`, `npm run check:backend:standalone`, `npm run check:db`, `npm run check:backend` |
+| Runtime snapshot and control backend | `docs/product/runtime-device-registration-spec.md`, `src/server/runtime-inventory-store.ts`, `src/server/runtime-control-channel.ts`, `src/server/runtime-http-api.ts`, `src/backend/backend-server.ts` | `src/server/runtime-inventory-store.test.ts`, `src/server/runtime-control-channel.test.ts`, `src/server/runtime-http-api.test.ts`, `src/runtime/device-collector-script.test.ts`, `npm run check:backend` |
+| Backend service formalization | `docs/product/backend-service-spec.md`, `src/backend/backend-server.ts`, `src/server/postgres-store.ts`, `db/migrations/`, `scripts/db-migrate.mjs`, `scripts/dev-e2e.ts` | `src/backend/backend-server.test.ts`, `src/server/db-migrate.test.ts`, `src/server/postgres-store.test.ts`, `src/server/runtime-http-api-postgres.test.ts`, `npm run check:backend:standalone`, `npm run check:db`, `npm run check:backend` |
 | Repo context and docs | `AGENTS.md`, `README.md`, `docs/product/ui-design.md` | `npm run check:repo` |
 
 When a user points out a missed behavior or review gap, decide whether it should become:
@@ -101,12 +101,12 @@ Keep the test layout simple and tied to what each harness can prove:
 - Put React component and jsdom interaction tests near the component surface, for example `src/App.test.tsx`.
 - Keep shared Vitest / Testing Library setup in `src/test/setup.ts`.
 - Put real-browser Playwright specs in `e2e/`. Use this for user workflows, responsive layout, browser rendering, and behavior jsdom cannot prove.
-- Keep Playwright server state isolated from manual dev/acceptance state. The default e2e web server uses `.agentlane/e2e/...` snapshot paths so test fixture posts cannot overwrite `.agentlane/runtime-*` data used by local review.
+- Keep Playwright server state isolated from manual dev/acceptance state. The default e2e web server uses `scripts/dev-e2e.ts`, an isolated `agentlane_e2e` Postgres database, the standalone backend, and a Vite proxy so test fixture posts do not overwrite manual review data.
 - Prefer adding the smallest focused test that captures the important behavior. Do not create broad `tests/`, `specs/`, or `harnesses/` directories until the project has enough surfaces to justify them.
 
 ## Agent-Ready Growth
 
-Agentlane should become agent-ready by growing only the infrastructure the project actually needs. The current layer is **Catalog + Runtime Fleet + Runs Work-State Harness Ready** for the first frontend/runtime surfaces: root guide, TinySpecs, TypeScript object models, local dev API, outbound device control channel, collector snapshot harnesses, unit/component tests, browser layout harness, and one full verification entry point.
+Agentlane should become agent-ready by growing only the infrastructure the project actually needs. The current layer is **Catalog + Runtime Fleet + Runs Work-State Harness Ready** for the first frontend/runtime surfaces: root guide, TinySpecs, TypeScript object models, standalone local backend, Postgres-backed query APIs, outbound device control channel, collector snapshot harnesses, unit/component tests, browser layout harness, and one full verification entry point.
 
 Extend this guide and `./scripts/verify.sh` only when a real project surface appears:
 
@@ -144,11 +144,11 @@ Current harness scripts:
 | `npm run check:repo` | Required source-of-truth paths and local Markdown links. | Docs, assets, agent context, or product spec changes. |
 | `npm run check:backend:standalone` | Standalone backend HTTP and WebSocket smoke tests. | Backend server composition, local backend entrypoint, or server lifecycle changes. |
 | `npm run check:db` | Starts local Postgres, runs migration/repository integration tests against temporary databases, and drops them. | Database schema, migration runner, Postgres repository, Docker Compose, or Postgres dependency changes. |
-| `npm run check:backend` | Focused local backend store, control channel, HTTP API, and collector POST / WebSocket harness. | Runtime snapshot API, Vite API middleware, collector posting, device WebSocket, inventory + work-state refresh command lifecycle, or backend persistence changes. |
+| `npm run check:backend` | Focused local backend store, control channel, HTTP API, and collector POST / WebSocket harness. | Runtime snapshot API, backend API handler, collector posting, device WebSocket, inventory + work-state refresh command lifecycle, or backend persistence changes. |
 | `npm run check:runtime` | Focused Runtime / Device Registration and work-state unit/script harness. | Runtime inventory model, work-state model, collector, installer, fixture, probe adapter, or query changes. |
 | `npm run check:quick` | TypeScript typecheck plus Vitest unit/component tests. | Catalog model, Runtime Fleet query logic, React behavior, labels, or seed data changes. |
 | `npm run check:build` | Production TypeScript/Vite build. | Frontend, dependency, Vite, TypeScript, or package changes. |
-| `npm run check:e2e` | Playwright browser harness for core user workflow and responsive layout. | Catalog/Runtime Fleet interaction paths, layout, toolbar, responsive behavior, navigation shell, or visual regression risk. |
+| `npm run check:e2e` | Playwright browser harness using isolated Postgres, standalone backend, and Vite proxy. | Catalog/Runtime Fleet/Runs interaction paths, layout, toolbar, responsive behavior, navigation shell, backend query wiring, or visual regression risk. |
 | `npm run verify` | Full harness, same as `./scripts/verify.sh`. | Before handoff, commit, or review. |
 
 Local frontend development:
@@ -156,6 +156,14 @@ Local frontend development:
 ```sh
 npm install
 npm run setup:e2e
+npm run db:up
+npm run db:migrate
+```
+
+Then run these in separate terminals:
+
+```sh
+npm run dev:backend
 npm run dev
 ```
 

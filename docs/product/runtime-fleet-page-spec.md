@@ -34,9 +34,9 @@ Runtime Fleet 必须区分“数据从哪里采集”和“产品上归属哪一
 
 ## 数据源
 
-页面优先使用 `GET /api/runtime-fleet` 读取正式后端查询结果，并用 `GET /api/runtime-work-state/latest` 辅助推导 Runtime 运行状态和 Agent 展示状态。正式后端查询不可用时，页面回退到兼容期 `GET /api/runtime-inventory/latest`；仍没有设备上报或本地 API 不可用时，页面使用 `fixtures/runtime/collector-snapshot.sample.json` 作为开发期 fallback。组件不直接理解 OpenClaw、Slock 或 Multica 的内部结构，只消费标准化后的 Runtime Fleet view model。
+页面使用 `GET /api/runtime-fleet` 读取正式后端查询结果，并用 `GET /api/runtime-work-items` 的标准化工作项辅助推导 Runtime 运行状态和 Agent 展示状态。没有后端数据或本地 backend 不可用时，页面只保留明确标识的 `fixtures/runtime/collector-snapshot.sample.json` 作为开发期离线预览，不再读取兼容期 latest API。组件不直接理解 OpenClaw、Slock 或 Multica 的内部结构，只消费标准化后的 Runtime Fleet view model。
 
-页面挂载后每 30 秒读取一次后端查询结果或兼容期 latest snapshot，并显示页面自己的上次刷新时间。自动刷新只读取后端已有数据，不自动下发远端 `inventory.refresh` 命令；远端采集仍由 collector 定时上报或用户手动点击刷新触发。
+页面挂载后每 30 秒读取一次后端查询结果，并显示页面自己的上次刷新时间。自动刷新只读取后端已有数据，不自动下发远端 `inventory.refresh` 命令；远端采集仍由 collector 定时上报或用户手动点击刷新触发。
 
 远程刷新使用 `POST /api/devices/:deviceId/refresh`。后端能通过 WebSocket 找到在线设备时，返回命令状态；设备不在线时，页面展示可解释失败，不伪装成实时刷新。设备侧执行刷新时必须同时上报 inventory 与 work-state，这样 Runtime Fleet 的 Agent 状态和 Runs 看板不会使用不同步的数据源。
 
@@ -114,11 +114,11 @@ Agent：
 - 用户在桌面宽度滚动到 Agent 表格后点击行，详情面板仍停留在可视区域内。
 - 当旧 snapshot 缺少 Agent 级最近同步时间时，Agent 列表和详情使用归属 Runtime 或 snapshot 时间回退，不展示未知。
 - 用户可以点击 Runtime 行并在详情面板看到所属设备、Agent 数量、可用性和运行状态，不出现运行入口或任务/会话统计区块。
-- 当 latest work-state 中 Slock Runtime 关联的 Agent 有 `in_progress` 工作项时，Runtime 运行状态显示为 `工作中`。
-- 当 latest work-state 中 Slock task board 的 assignee 指向某个 Agent 且任务为 `in_progress` 时，该 Agent 状态显示为 `活跃`；已可观测但无处理中任务时显示为空闲。
+- 当后端工作项查询中 Slock Runtime 关联的 Agent 有 `in_progress` 工作项时，Runtime 运行状态显示为 `工作中`。
+- 当后端工作项查询中 Slock task board 的 assignee 指向某个 Agent 且任务为 `in_progress` 时，该 Agent 状态显示为 `活跃`；已可观测但无处理中任务时显示为空闲。
 - 用户可以点击 Device 卡片并在详情面板看到身份信息、连接状态和已注册 Runtime。
 - 当后端已有最新 snapshot 时，页面展示后端设备名称而不是 fixture 设备名称。
-- 页面自动读取后端查询结果或兼容期 latest snapshot，并展示上次刷新时间。
+- 页面自动读取后端查询结果，并展示上次刷新时间。
 - 当设备在线时，点击刷新按钮会请求后端下发远程刷新命令；设备离线时展示失败原因。
 - OpenClaw 历史 session 数展示为历史会话，不展示为活跃会话。
 - Slock 仅能识别 workspace 时，Agent 状态为未知，不伪装成活跃。

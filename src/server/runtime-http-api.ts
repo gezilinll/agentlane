@@ -33,26 +33,6 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
   return async function runtimeHttpApiHandler(request, response, next) {
     const requestUrl = new URL(request.url || "/", "http://agentlane.local");
 
-    if (request.method === "GET" && requestUrl.pathname === "/api/runtime-inventory/latest") {
-      const snapshot = options.store.readLatestSnapshot();
-      if (!snapshot) {
-        sendJson(response, 404, { error: "not_found" });
-        return;
-      }
-      sendJson(response, 200, snapshot);
-      return;
-    }
-
-    if (request.method === "GET" && requestUrl.pathname === "/api/runtime-work-state/latest") {
-      const snapshot = options.workStateStore?.readLatestSnapshot() ?? null;
-      if (!snapshot) {
-        sendJson(response, 404, { error: "not_found" });
-        return;
-      }
-      sendJson(response, 200, snapshot);
-      return;
-    }
-
     if (request.method === "GET" && requestUrl.pathname === "/api/runtime-fleet") {
       if (!options.postgresStore) {
         sendJson(response, 503, { error: "postgres_store_unavailable" });

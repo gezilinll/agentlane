@@ -1,17 +1,99 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type APIRequestContext } from "@playwright/test";
 import {
   mapMulticaWorkState,
   mapOpenClawWorkState,
   mapSlockWorkState,
+  type RuntimeInventorySnapshot,
   multicaWorkStateFixture,
   openClawWorkStateFixture,
   slockWorkStateFixture,
   type RuntimeWorkStateSnapshot,
 } from "../src/runtime";
+import { resetE2eDatabase } from "./db";
 
 const openclaw = mapOpenClawWorkState(openClawWorkStateFixture);
 const multica = mapMulticaWorkState(multicaWorkStateFixture);
 const slock = mapSlockWorkState(slockWorkStateFixture);
+
+const backendInventory: RuntimeInventorySnapshot = {
+  observedAt: "2026-05-09T08:00:00.000Z",
+  collector: { version: "0.1.0", status: "online" },
+  device: {
+    id: "fixture-device",
+    name: "Fixture Device",
+    hostname: "fixture-device.local",
+    os: "darwin",
+    architecture: "arm64",
+    status: "online",
+    connectionMode: "collector",
+    lastSeenAt: "2026-05-09T08:00:00.000Z",
+  },
+  runtimes: [
+    {
+      id: "fixture-device:openclaw:gateway",
+      deviceId: "fixture-device",
+      kind: "openclaw",
+      name: "OpenClaw Gateway",
+      status: "online",
+      capabilities: ["tasks"],
+      lastSeenAt: "2026-05-09T08:00:00.000Z",
+      sourceRefs: [{ source: "openclaw", externalId: "gateway", label: "OpenClaw Gateway" }],
+    },
+    {
+      id: "fixture-device:multica:runtime-openclaw",
+      deviceId: "fixture-device",
+      kind: "multica",
+      name: "Multica OpenClaw",
+      status: "online",
+      capabilities: ["issues", "runs"],
+      lastSeenAt: "2026-05-09T08:00:00.000Z",
+      sourceRefs: [{ source: "multica", externalId: "runtime-openclaw", label: "Multica OpenClaw" }],
+    },
+    {
+      id: "fixture-device:slock:daemon",
+      deviceId: "fixture-device",
+      kind: "slock",
+      name: "Slock daemon",
+      status: "online",
+      capabilities: ["task-board"],
+      lastSeenAt: "2026-05-09T08:00:00.000Z",
+      sourceRefs: [{ source: "slock", externalId: "daemon", label: "Slock daemon" }],
+    },
+  ],
+  agents: [
+    {
+      id: "fixture-device:openclaw:gateway:agent:main",
+      runtimeId: "fixture-device:openclaw:gateway",
+      name: "main",
+      origin: "openclaw",
+      status: "idle",
+      channelBindings: [{ kind: "dingtalk", label: "DingTalk default", status: "enabled" }],
+      sourceRefs: [{ source: "openclaw", externalId: "main", label: "main" }],
+      lastSeenAt: "2026-05-09T08:00:00.000Z",
+    },
+    {
+      id: "fixture-device:multica:runtime-openclaw:agent:fixture-agent",
+      runtimeId: "fixture-device:multica:runtime-openclaw",
+      name: "@example-agent",
+      origin: "multica",
+      status: "idle",
+      channelBindings: [{ kind: "multica", label: "Multica", status: "enabled" }],
+      sourceRefs: [{ source: "multica", externalId: "fixture-agent", label: "@example-agent" }],
+      lastSeenAt: "2026-05-09T08:00:00.000Z",
+    },
+    {
+      id: "fixture-device:slock:daemon:agent:tester",
+      runtimeId: "fixture-device:slock:daemon",
+      name: "tester",
+      origin: "slock",
+      status: "idle",
+      channelBindings: [{ kind: "slock", label: "Slock", status: "enabled" }],
+      sourceRefs: [{ source: "slock", externalId: "tester", label: "tester" }],
+      lastSeenAt: "2026-05-09T08:00:00.000Z",
+    },
+  ],
+  reports: [],
+};
 
 const backendSnapshot: RuntimeWorkStateSnapshot = {
   observedAt: "2026-05-09T08:00:00.000Z",
@@ -39,16 +121,19 @@ const backendSnapshot: RuntimeWorkStateSnapshot = {
 };
 
 test.describe("Runs / Work Board", () => {
+  test.beforeEach(async () => {
+    await resetE2eDatabase();
+  });
+
   test("filters Slock work by task context, opens details, and stays responsive", async ({ page, request }) => {
-    const seedResponse = await request.post("/api/runtime-work-state-snapshots", { data: backendSnapshot });
-    expect(seedResponse.ok()).toBe(true);
+    await seedWorkBoardData(request, backendSnapshot);
 
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/");
     await page.getByRole("button", { name: "Runs" }).click();
 
     await expect(page.getByRole("heading", { name: "工作看板" })).toBeVisible();
-    await expect(page.getByText(/当前数据源：后端快照/)).toBeVisible();
+    await expect(page.getByText(/当前数据源：后端查询/)).toBeVisible();
     for (const lane of ["待处理", "处理中", "待验收", "已关闭", "需关注"]) {
       await expect(page.getByRole("heading", { name: lane })).toBeVisible();
     }
@@ -141,13 +226,12 @@ test.describe("Runs / Work Board", () => {
   });
 
   test("keeps the board within the viewport on laptop widths", async ({ page, request }) => {
-    const seedResponse = await request.post("/api/runtime-work-state-snapshots", { data: backendSnapshot });
-    expect(seedResponse.ok()).toBe(true);
+    await seedWorkBoardData(request, backendSnapshot);
 
     await page.setViewportSize({ width: 1185, height: 900 });
     await page.goto("/");
     await page.getByRole("button", { name: "Runs" }).click();
-    await expect(page.getByText(/当前数据源：后端快照/)).toBeVisible();
+    await expect(page.getByText(/当前数据源：后端查询/)).toBeVisible();
 
     const pageOverflows = await page.evaluate(
       () => document.documentElement.scrollWidth > window.innerWidth + 1,
@@ -185,8 +269,7 @@ test.describe("Runs / Work Board", () => {
         },
       }],
     };
-    const seedResponse = await request.post("/api/runtime-work-state-snapshots", { data: workspaceOnlySnapshot });
-    expect(seedResponse.ok()).toBe(true);
+    await seedWorkBoardData(request, workspaceOnlySnapshot);
 
     await page.goto("/");
     await page.getByRole("button", { name: "Runs" }).click();
@@ -199,3 +282,13 @@ test.describe("Runs / Work Board", () => {
     await expect(page.getByText("能力缺口")).not.toBeVisible();
   });
 });
+
+async function seedWorkBoardData(
+  request: APIRequestContext,
+  workStateSnapshot: RuntimeWorkStateSnapshot,
+): Promise<void> {
+  const inventoryResponse = await request.post("/api/device-snapshots", { data: backendInventory });
+  expect(inventoryResponse.ok()).toBe(true);
+  const workStateResponse = await request.post("/api/runtime-work-state-snapshots", { data: workStateSnapshot });
+  expect(workStateResponse.ok()).toBe(true);
+}

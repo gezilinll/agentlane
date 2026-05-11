@@ -27,6 +27,10 @@ import {
   type RuntimeKind,
 } from "./runtime-normalize";
 import type { RuntimeWorkStateSnapshot } from "./runtime-work-state";
+import {
+  createWorkItemsQueryUrl,
+  runtimeWorkStateSnapshotFromQueryResponse,
+} from "./runtime-work-query-api";
 
 const fixtureRuntimeSnapshot = fixtureSnapshot as RuntimeInventorySnapshot;
 const autoRefreshIntervalMs = 30_000;
@@ -59,32 +63,19 @@ export function RuntimeFleetPage() {
   const [selection, setSelection] = useState<RuntimeFleetSelection | null>(null);
 
   async function fetchLatestSnapshot(): Promise<RuntimeInventorySnapshot | null> {
-    try {
-      const queryResponse = await fetch(new URL("/api/runtime-fleet", window.location.origin));
-      if (queryResponse.ok) {
-        const querySnapshot = runtimeFleetSnapshotFromQueryResponse(await queryResponse.json());
-        if (querySnapshot) return querySnapshot;
-      }
-    } catch {
-      // Fall back to the local latest-snapshot API while the formal backend is not available.
+    const queryResponse = await fetch(new URL("/api/runtime-fleet", window.location.origin));
+    if (!queryResponse.ok) {
+      throw new Error(`runtime fleet query failed: ${queryResponse.status}`);
     }
-
-    const response = await fetch(new URL("/api/runtime-inventory/latest", window.location.origin));
-    if (response.status === 404) return null;
-    if (!response.ok) throw new Error(`runtime inventory request failed: ${response.status}`);
-    return (await response.json()) as RuntimeInventorySnapshot;
+    const querySnapshot = runtimeFleetSnapshotFromQueryResponse(await queryResponse.json());
+    if (!querySnapshot) throw new Error("runtime fleet query returned an invalid payload");
+    return querySnapshot;
   }
 
   async function fetchLatestWorkStateSnapshot(): Promise<RuntimeWorkStateSnapshot | null> {
-    const requestUrl = new URL("/api/runtime-work-state/latest", window.location.origin);
-    const response = await fetch(requestUrl);
-    if (response.status === 404) return null;
-    if (!response.ok) return null;
-    const body = (await response.json()) as Partial<RuntimeWorkStateSnapshot>;
-    if (!Array.isArray(body.workItems) || !Array.isArray(body.conversations) || !Array.isArray(body.executions)) {
-      return null;
-    }
-    return body as RuntimeWorkStateSnapshot;
+    const response = await fetch(createWorkItemsQueryUrl(window.location.origin, undefined));
+    if (!response.ok) throw new Error(`runtime work item query failed: ${response.status}`);
+    return runtimeWorkStateSnapshotFromQueryResponse(await response.json());
   }
 
   function applySnapshot(latestSnapshot: RuntimeInventorySnapshot, latestWorkState: RuntimeWorkStateSnapshot | null) {
@@ -159,16 +150,16 @@ export function RuntimeFleetPage() {
   const summary = useMemo(() => summarizeRuntimeFleet(snapshot, workStateSnapshot), [snapshot, workStateSnapshot]);
   const detail = selection ? getRuntimeFleetDetail(snapshot, selection.kind, selection.id, workStateSnapshot) : null;
   const isRefreshRunning = refreshState.status === "running";
-  const refreshButtonLabel = dataSource === "backend" ? "请求设备刷新" : "读取最新快照";
+  const refreshButtonLabel = dataSource === "backend" ? "请求设备刷新" : "读取后端数据";
 
   async function handleRefresh() {
     if (dataSource !== "backend") {
-      setRefreshState({ status: "running", message: "正在读取后端快照" });
+      setRefreshState({ status: "running", message: "正在读取后端数据" });
       const latestSnapshot = await loadLatestSnapshot();
       setRefreshState(
         latestSnapshot
-          ? { status: "success", message: "已读取最新快照" }
-          : { status: "error", message: "当前没有后端快照，继续使用 Fixture" },
+          ? { status: "success", message: "已读取后端数据" }
+          : { status: "error", message: "读取后端数据失败" },
       );
       return;
     }
@@ -217,7 +208,7 @@ export function RuntimeFleetPage() {
           <h1>运行资产</h1>
           <p className="pageSubtitle">
             统一识别设备、Runtime、Agent 与它们暴露到的渠道。当前数据源：
-            {dataSource === "backend" ? "后端快照" : "Fixture 样例"}
+            {dataSource === "backend" ? "后端查询" : "Fixture 样例"}
           </p>
           {lastLoadedAt ? (
             <p className="pageRefreshMeta">上次刷新 {formatRuntimeTimestamp(lastLoadedAt)}</p>

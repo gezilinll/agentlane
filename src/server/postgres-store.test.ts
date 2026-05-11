@@ -59,6 +59,53 @@ describeDb("Postgres runtime store", () => {
       await database.drop();
     }
   });
+
+  it("keeps query tables aligned to the latest snapshot for one device", async () => {
+    const database = await createTemporaryPostgresDatabase();
+    try {
+      runMigrationsScript(database.url);
+      const store = createPostgresStore({ connectionString: database.url });
+      try {
+        const inventorySnapshot = fixtureSnapshot as RuntimeInventorySnapshot;
+        const workStateSnapshot = createWorkStateSnapshot(inventorySnapshot);
+        const reducedInventorySnapshot: RuntimeInventorySnapshot = {
+          ...inventorySnapshot,
+          runtimes: [inventorySnapshot.runtimes[0]],
+          agents: [inventorySnapshot.agents[0]],
+        };
+        const emptyWorkStateSnapshot: RuntimeWorkStateSnapshot = {
+          ...workStateSnapshot,
+          workItems: [],
+          conversations: [],
+          executions: [],
+        };
+
+        await store.upsertInventorySnapshot(inventorySnapshot);
+        await store.upsertWorkStateSnapshot(workStateSnapshot);
+        await store.upsertInventorySnapshot(reducedInventorySnapshot);
+        await store.upsertWorkStateSnapshot(emptyWorkStateSnapshot);
+
+        const fleet = await store.readRuntimeFleet();
+        const workItems = await store.listRuntimeWorkItems();
+        expect(fleet.summary).toEqual({ agentCount: 1, deviceCount: 1, runtimeCount: 1 });
+        expect(fleet.runtimes.map((runtime) => runtime.id)).toEqual([inventorySnapshot.runtimes[0].id]);
+        expect(fleet.agents.map((agent) => agent.id)).toEqual([inventorySnapshot.agents[0].id]);
+        expect(workItems).toEqual({ items: [], total: 0 });
+        expect(await store.readEntityCounts()).toMatchObject({
+          agents: 1,
+          channelBindings: inventorySnapshot.agents[0].channelBindings.length,
+          runtimes: 1,
+          workConversations: 0,
+          workExecutions: 0,
+          workItems: 0,
+        });
+      } finally {
+        await store.close();
+      }
+    } finally {
+      await database.drop();
+    }
+  });
 });
 
 function createWorkStateSnapshot(snapshot: RuntimeInventorySnapshot): RuntimeWorkStateSnapshot {

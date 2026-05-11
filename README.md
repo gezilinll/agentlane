@@ -78,7 +78,7 @@ A single Run may contain multiple Tasks. For example, one Workflow Run may creat
 
 ## Current Status
 
-Agentlane is in product definition and early engineering. The first implemented surfaces are a Chinese-first Catalog / Registry page, a Runtime Fleet page, and a read-only Runs / Work Board for Agent work-state visibility. These surfaces are backed by the initial TypeScript Catalog Object model, normalized runtime inventory and work-state models, a device collector, local file-backed dev APIs, and an outbound WebSocket device control channel for refreshing inventory plus work-state snapshots.
+Agentlane is in product definition and early engineering. The first implemented surfaces are a Chinese-first Catalog / Registry page, a Runtime Fleet page, and a read-only Runs / Work Board for Agent work-state visibility. These surfaces are backed by the initial TypeScript Catalog Object model, normalized runtime inventory and work-state models, a device collector, a standalone local backend with Postgres-backed query APIs, and an outbound WebSocket device control channel for refreshing inventory plus work-state snapshots.
 
 Runtime and device registration can now complete a local development loop against OpenClaw, Multica, and Slock-style sources. The current backend is still a local development backend; production persistence, auth, multi-device orchestration, and execution control are still being built.
 

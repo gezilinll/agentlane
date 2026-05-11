@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { RuntimeInventorySnapshot, RuntimeWorkStateSnapshot } from "../src/runtime";
+import { resetE2eDatabase } from "./db";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const fixtureSnapshot = JSON.parse(
@@ -43,16 +44,15 @@ const backendWorkState: RuntimeWorkStateSnapshot = {
 };
 
 test.describe("Runtime Fleet", () => {
+  test.beforeEach(async () => {
+    await resetE2eDatabase();
+  });
+
   test("filters agents, opens details, and stays responsive", async ({ page, request }) => {
     const seedResponse = await request.post("/api/device-snapshots", { data: backendSnapshot });
     expect(seedResponse.ok()).toBe(true);
-    await page.route("**/api/runtime-work-state/latest", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(backendWorkState),
-      });
-    });
+    const workStateSeedResponse = await request.post("/api/runtime-work-state-snapshots", { data: backendWorkState });
+    expect(workStateSeedResponse.ok()).toBe(true);
 
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/");

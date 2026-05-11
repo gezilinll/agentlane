@@ -4,9 +4,11 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import fixtureSnapshot from "../../fixtures/runtime/collector-snapshot.sample.json";
-import type { RuntimeInventorySnapshot } from "../runtime";
+import type { RuntimeInventorySnapshot, RuntimeWorkStateSnapshot } from "../runtime";
+import { createTemporaryPostgresDatabase, runMigrationsScript, shouldRunPostgresTests } from "../test/postgres";
 import { createAgentlaneBackendServer, type AgentlaneBackendServer } from "./backend-server";
 
+const describeDb = shouldRunPostgresTests() ? describe : describe.skip;
 const backends: AgentlaneBackendServer[] = [];
 
 afterEach(async () => {
@@ -15,29 +17,6 @@ afterEach(async () => {
 });
 
 describe("standalone Agentlane backend server", () => {
-  it("accepts collector snapshots and returns latest runtime state over HTTP", async () => {
-    const backend = await startBackend();
-    const snapshot = {
-      ...(fixtureSnapshot as RuntimeInventorySnapshot),
-      device: { ...(fixtureSnapshot as RuntimeInventorySnapshot).device, name: "Standalone Backend Mac" },
-    };
-
-    const initialResponse = await fetch(`${backend.url}/api/runtime-inventory/latest`);
-    expect(initialResponse.status).toBe(404);
-
-    const postResponse = await fetch(`${backend.url}/api/device-snapshots`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(snapshot),
-    });
-    const latestResponse = await fetch(`${backend.url}/api/runtime-inventory/latest`);
-    const latestBody = (await latestResponse.json()) as RuntimeInventorySnapshot;
-
-    expect(postResponse.status).toBe(201);
-    expect(latestResponse.status).toBe(200);
-    expect(latestBody.device.name).toBe("Standalone Backend Mac");
-  });
-
   it("keeps the device control websocket available outside Vite", async () => {
     const backend = await startBackend({ createCommandId: () => "cmd-standalone-refresh" });
     const socket = new WebSocket(`${backend.wsUrl}/api/device-control/ws`);
@@ -73,10 +52,48 @@ describe("standalone Agentlane backend server", () => {
   });
 });
 
-async function startBackend(options: { createCommandId?: () => string } = {}) {
+describeDb("standalone Agentlane backend server with Postgres", () => {
+  it("persists collector posts and serves formal query APIs", async () => {
+    const database = await createTemporaryPostgresDatabase();
+    let backend: AgentlaneBackendServer | null = null;
+    try {
+      runMigrationsScript(database.url);
+      backend = await startBackend({ databaseUrl: database.url });
+      const inventorySnapshot = fixtureSnapshot as RuntimeInventorySnapshot;
+      const workStateSnapshot = createWorkStateSnapshot(inventorySnapshot);
+
+      const inventoryResponse = await postJson(`${backend.url}/api/device-snapshots`, inventorySnapshot);
+      const workStateResponse = await postJson(`${backend.url}/api/runtime-work-state-snapshots`, workStateSnapshot);
+      const fleetResponse = await fetch(`${backend.url}/api/runtime-fleet`);
+      const workItemsResponse = await fetch(`${backend.url}/api/runtime-work-items?source=slock&stage=processing`);
+
+      expect(inventoryResponse.status).toBe(201);
+      expect(workStateResponse.status).toBe(201);
+      await expect(fleetResponse.json()).resolves.toMatchObject({
+        summary: { agentCount: 2, deviceCount: 1, runtimeCount: 2 },
+        devices: [expect.objectContaining({ id: "fixture-mac" })],
+      });
+      await expect(workItemsResponse.json()).resolves.toMatchObject({
+        total: 1,
+        items: [expect.objectContaining({
+          id: workStateSnapshot.workItems[0].id,
+          source: "slock",
+          stage: "processing",
+          title: "AGTD-001 Fix queue handoff",
+        })],
+      });
+    } finally {
+      if (backend) await closeRegisteredBackend(backend);
+      await database.drop();
+    }
+  });
+});
+
+async function startBackend(options: { createCommandId?: () => string; databaseUrl?: string } = {}) {
   const dataDir = mkdtempSync(path.join(tmpdir(), "agentlane-standalone-backend-"));
   const backend = createAgentlaneBackendServer({
     createCommandId: options.createCommandId,
+    databaseUrl: options.databaseUrl,
     host: "127.0.0.1",
     inventorySnapshotPath: path.join(dataDir, "runtime-inventory.json"),
     port: 0,
@@ -85,6 +102,78 @@ async function startBackend(options: { createCommandId?: () => string } = {}) {
   backends.push(backend);
   await backend.listen();
   return backend;
+}
+
+async function closeRegisteredBackend(backend: AgentlaneBackendServer): Promise<void> {
+  await backend.close();
+  const index = backends.indexOf(backend);
+  if (index >= 0) backends.splice(index, 1);
+}
+
+function postJson(url: string, payload: unknown): Promise<Response> {
+  return fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+function createWorkStateSnapshot(snapshot: RuntimeInventorySnapshot): RuntimeWorkStateSnapshot {
+  const runtime = snapshot.runtimes.find((item) => item.kind === "slock");
+  const agent = snapshot.agents.find((item) => item.origin === "slock");
+  if (!runtime || !agent) throw new Error("fixture must include slock runtime and agent");
+
+  const workItemId = `${runtime.id}:work-item:task-1`;
+  const conversationId = `${runtime.id}:conversation:thread-1`;
+  return {
+    observedAt: "2026-05-10T10:00:00.000Z",
+    deviceId: snapshot.device.id,
+    workItems: [{
+      id: workItemId,
+      source: "slock",
+      externalId: "task-1",
+      title: "AGTD-001 Fix queue handoff",
+      description: "PMO asked the Slock agent to inspect queue handoff.",
+      status: "in_progress",
+      channel: { kind: "other", label: "#AjisGTD", externalId: "AjisGTD" },
+      creator: { kind: "human", label: "PMO" },
+      assignee: { kind: "agent", label: "tester", objectId: agent.id },
+      agentId: agent.id,
+      runtimeId: runtime.id,
+      conversationId,
+      createdAt: "2026-05-10T09:50:00.000Z",
+      updatedAt: "2026-05-10T09:58:00.000Z",
+      lastSeenAt: "2026-05-10T10:00:00.000Z",
+      sourceRefs: [{ source: "slock", externalId: "task-1" }],
+    }],
+    conversations: [{
+      id: conversationId,
+      source: "slock",
+      externalId: "thread-1",
+      status: "active",
+      channel: { kind: "other", label: "#AjisGTD", externalId: "AjisGTD" },
+      title: "#AjisGTD",
+      workItemId,
+      agentId: agent.id,
+      runtimeId: runtime.id,
+      lastSeenAt: "2026-05-10T10:00:00.000Z",
+      sourceRefs: [{ source: "slock", externalId: "thread-1" }],
+    }],
+    executions: [{
+      id: `${runtime.id}:execution:run-1`,
+      source: "slock",
+      externalId: "run-1",
+      runtimeId: runtime.id,
+      agentId: agent.id,
+      workItemId,
+      conversationId,
+      status: "running",
+      startedAt: "2026-05-10T09:51:00.000Z",
+      lastSeenAt: "2026-05-10T10:00:00.000Z",
+      sourceRefs: [{ source: "slock", externalId: "run-1" }],
+    }],
+    capabilities: [],
+  };
 }
 
 function waitForOpen(socket: WebSocket): Promise<void> {

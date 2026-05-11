@@ -26,7 +26,7 @@ afterEach(async () => {
 });
 
 describe("runtime HTTP API", () => {
-  it("returns the latest runtime inventory snapshot", async () => {
+  it("does not expose legacy latest snapshot APIs", async () => {
     const { baseUrl, store } = await startRuntimeApi();
     const snapshot = {
       ...(fixtureSnapshot as RuntimeInventorySnapshot),
@@ -34,11 +34,11 @@ describe("runtime HTTP API", () => {
     };
     store.writeLatestSnapshot(snapshot);
 
-    const response = await fetch(`${baseUrl}/api/runtime-inventory/latest`);
-    const body = (await response.json()) as RuntimeInventorySnapshot;
+    const inventoryResponse = await fetch(`${baseUrl}/api/runtime-inventory/latest`);
+    const workStateResponse = await fetch(`${baseUrl}/api/runtime-work-state/latest`);
 
-    expect(response.status).toBe(200);
-    expect(body.device.name).toBe("Backend Device");
+    expect(inventoryResponse.status).toBe(404);
+    expect(workStateResponse.status).toBe(404);
   });
 
   it("dispatches a refresh command to a connected device", async () => {
@@ -93,8 +93,8 @@ describe("runtime HTTP API", () => {
     });
   });
 
-  it("accepts and returns the latest runtime work state snapshot", async () => {
-    const { baseUrl } = await startRuntimeApi();
+  it("accepts runtime work state snapshots without exposing a latest GET API", async () => {
+    const { baseUrl, workStateStore } = await startRuntimeApi();
     const snapshot = {
       observedAt: "2026-05-09T08:00:00.000Z",
       deviceId: "fixture-device",
@@ -110,15 +110,14 @@ describe("runtime HTTP API", () => {
       body: JSON.stringify(snapshot),
     });
     const latestResponse = await fetch(`${baseUrl}/api/runtime-work-state/latest`);
-    const latestBody = await latestResponse.json();
 
     expect(postResponse.status).toBe(201);
-    expect(latestResponse.status).toBe(200);
-    expect(latestBody).toEqual(snapshot);
+    expect(latestResponse.status).toBe(404);
+    expect(workStateStore.readLatestSnapshot()).toEqual(snapshot);
   });
 
   it("accepts real-sized runtime work state snapshots from remote collectors", async () => {
-    const { baseUrl } = await startRuntimeApi();
+    const { baseUrl, workStateStore } = await startRuntimeApi();
     const snapshot = {
       observedAt: "2026-05-10T02:44:20.000Z",
       deviceId: "remote-device",
@@ -140,22 +139,9 @@ describe("runtime HTTP API", () => {
       headers: { "content-type": "application/json" },
       body: payload,
     });
-    const latestResponse = await fetch(`${baseUrl}/api/runtime-work-state/latest`);
-    const latestBody = await latestResponse.json();
 
     expect(postResponse.status).toBe(201);
-    expect(latestResponse.status).toBe(200);
-    expect(latestBody.workItems).toHaveLength(2_200);
-  });
-
-  it("returns not found when no runtime work state snapshot exists", async () => {
-    const { baseUrl } = await startRuntimeApi();
-
-    const response = await fetch(`${baseUrl}/api/runtime-work-state/latest`);
-    const body = await response.json();
-
-    expect(response.status).toBe(404);
-    expect(body).toEqual({ error: "not_found" });
+    expect(workStateStore.readLatestSnapshot()?.workItems).toHaveLength(2_200);
   });
 });
 

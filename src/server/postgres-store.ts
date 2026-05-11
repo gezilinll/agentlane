@@ -140,6 +140,7 @@ export function createPostgresStore(options: PostgresStoreOptions = {}): Postgre
             await upsertChannelBinding(client, agent.id, binding, index);
           }
         }
+        await deleteStaleInventoryObjects(client, snapshot);
 
         const counts = {
           agents: snapshot.agents.length,
@@ -159,6 +160,7 @@ export function createPostgresStore(options: PostgresStoreOptions = {}): Postgre
     },
     upsertWorkStateSnapshot(snapshot) {
       return withTransaction(pool, async (client) => {
+        await deleteExistingWorkStateForDevice(client, snapshot.deviceId);
         for (const conversation of snapshot.conversations) {
           await upsertWorkConversation(client, snapshot.deviceId, conversation);
         }
@@ -415,6 +417,27 @@ async function upsertAgent(client: pg.PoolClient, agent: RuntimeInventorySnapsho
 async function deleteChannelBindingsForAgents(client: pg.PoolClient, agentIds: string[]): Promise<void> {
   if (agentIds.length === 0) return;
   await client.query("DELETE FROM channel_bindings WHERE agent_id = ANY($1::text[])", [agentIds]);
+}
+
+async function deleteStaleInventoryObjects(client: pg.PoolClient, snapshot: RuntimeInventorySnapshot): Promise<void> {
+  const runtimeIds = snapshot.runtimes.map((runtime) => runtime.id);
+  const agentIds = snapshot.agents.map((agent) => agent.id);
+  await client.query(`
+    DELETE FROM agents
+    WHERE runtime_id IN (SELECT id FROM runtimes WHERE device_id = $1)
+      AND NOT (id = ANY($2::text[]))
+  `, [snapshot.device.id, agentIds]);
+  await client.query(`
+    DELETE FROM runtimes
+    WHERE device_id = $1
+      AND NOT (id = ANY($2::text[]))
+  `, [snapshot.device.id, runtimeIds]);
+}
+
+async function deleteExistingWorkStateForDevice(client: pg.PoolClient, deviceId: string): Promise<void> {
+  await client.query("DELETE FROM work_executions WHERE device_id = $1", [deviceId]);
+  await client.query("DELETE FROM work_items WHERE device_id = $1", [deviceId]);
+  await client.query("DELETE FROM work_conversations WHERE device_id = $1", [deviceId]);
 }
 
 async function upsertChannelBinding(

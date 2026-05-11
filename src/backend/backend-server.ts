@@ -4,6 +4,7 @@ import WebSocket, { WebSocketServer } from "ws";
 import { createRuntimeControlChannel, type RuntimeControlSocket } from "../server/runtime-control-channel";
 import { createRuntimeHttpApiHandler } from "../server/runtime-http-api";
 import { createRuntimeInventoryStore } from "../server/runtime-inventory-store";
+import { createPostgresStore, type PostgresStore } from "../server/postgres-store";
 import { createRuntimeWorkStateStore } from "../server/runtime-work-state-store";
 
 /** Construction options for the standalone Agentlane backend. */
@@ -12,14 +13,18 @@ export interface AgentlaneBackendServerOptions {
   host?: string;
   /** Port passed to `server.listen`; use 0 for tests. */
   port?: number;
-  /** Optional file-backed inventory path used until Postgres persistence lands. */
+  /** Optional internal inventory snapshot path used for collector validation and control state. */
   inventorySnapshotPath?: string;
-  /** Optional file-backed work-state path used until Postgres persistence lands. */
+  /** Optional internal work-state snapshot path used for collector validation. */
   workStateSnapshotPath?: string;
   /** Milliseconds before a silent connected device is considered stale. */
   staleAfterMs?: number;
   /** Deterministic command id injection for tests. */
   createCommandId?: () => string;
+  /** Postgres connection string for the formal backend repository. */
+  databaseUrl?: string;
+  /** Optional repository injection for tests. */
+  postgresStore?: PostgresStore;
 }
 
 /** Running standalone backend handle used by tests and local dev. */
@@ -51,7 +56,16 @@ export function createAgentlaneBackendServer(
     store,
     createCommandId: options.createCommandId,
   });
-  const httpHandler = createRuntimeHttpApiHandler({ store, controlChannel, workStateStore });
+  const ownedPostgresStore = options.postgresStore
+    ? null
+    : createPostgresStore({ connectionString: options.databaseUrl });
+  const postgresStore = options.postgresStore ?? ownedPostgresStore;
+  const httpHandler = createRuntimeHttpApiHandler({
+    store,
+    controlChannel,
+    workStateStore,
+    postgresStore: postgresStore ?? undefined,
+  });
   const webSocketServer = new WebSocketServer({ noServer: true });
   const server = createServer((request, response) => {
     void httpHandler(request, response, () => {
@@ -62,6 +76,7 @@ export function createAgentlaneBackendServer(
   });
   let baseUrl = "";
   let listening = false;
+  let postgresClosed = false;
 
   server.on("upgrade", (request, socket, head) => {
     const requestUrl = new URL(request.url || "/", "http://agentlane.local");
@@ -127,10 +142,15 @@ export function createAgentlaneBackendServer(
     },
     async close() {
       await closeWebSocketServer(webSocketServer);
-      if (!listening) return;
-      await closeHttpServer(server);
-      listening = false;
-      baseUrl = "";
+      if (listening) {
+        await closeHttpServer(server);
+        listening = false;
+        baseUrl = "";
+      }
+      if (ownedPostgresStore && !postgresClosed) {
+        postgresClosed = true;
+        await ownedPostgresStore.close();
+      }
     },
   };
 }

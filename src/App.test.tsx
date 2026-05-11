@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
@@ -12,6 +12,55 @@ afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
+
+function runtimeFleetQueryResponse(snapshot: RuntimeInventorySnapshot, deviceName?: string) {
+  return {
+    observedAt: snapshot.observedAt,
+    devices: [{ ...snapshot.device, name: deviceName ?? snapshot.device.name }],
+    runtimes: snapshot.runtimes,
+    agents: snapshot.agents,
+    summary: {
+      agentCount: snapshot.agents.length,
+      deviceCount: 1,
+      runtimeCount: snapshot.runtimes.length,
+    },
+  };
+}
+
+function workStateQueryResponse(snapshot: RuntimeWorkStateSnapshot) {
+  return {
+    items: snapshot.workItems.map((item) => ({
+      agentId: item.agentId ?? null,
+      assignee: item.assignee,
+      channelKind: item.channel?.kind ?? null,
+      channelLabel: item.channel?.label ?? null,
+      conversationId: item.conversationId ?? null,
+      creator: item.creator,
+      description: item.description ?? null,
+      externalId: item.externalId,
+      id: item.id,
+      lastSeenAt: item.lastSeenAt ?? null,
+      runtimeId: item.runtimeId ?? null,
+      source: item.source,
+      stage: stageFromWorkItemStatus(item.status),
+      status: item.status,
+      title: item.title,
+    })),
+    total: snapshot.workItems.length,
+  };
+}
+
+function emptyWorkStateQueryResponse() {
+  return { items: [], total: 0 };
+}
+
+function stageFromWorkItemStatus(status: RuntimeWorkStateSnapshot["workItems"][number]["status"]): string {
+  if (status === "todo") return "pending";
+  if (status === "in_progress") return "processing";
+  if (status === "in_review") return "review";
+  if (status === "done" || status === "cancelled") return "closed";
+  return "attention";
+}
 
 describe("Catalog page", () => {
   it("renders the Chinese Catalog page with seed objects", () => {
@@ -80,9 +129,9 @@ describe("Catalog page", () => {
     const user = userEvent.setup();
     globalThis.fetch = vi.fn(async (input) => {
       const url = input.toString();
-      if (url.includes("/api/runtime-work-state/latest")) {
-        return new Response(JSON.stringify({ error: "not_found" }), {
-          status: 404,
+      if (url.includes("/api/runtime-work-items")) {
+        return new Response(JSON.stringify({ error: "backend_unavailable" }), {
+          status: 503,
           headers: { "content-type": "application/json" },
         });
       }
@@ -154,8 +203,8 @@ describe("Catalog page", () => {
     };
     globalThis.fetch = vi.fn(async (input) => {
       const url = input.toString();
-      if (url.includes("/api/runtime-work-state/latest")) {
-        return new Response(JSON.stringify(backendSnapshot), {
+      if (url.includes("/api/runtime-work-items")) {
+        return new Response(JSON.stringify(workStateQueryResponse(backendSnapshot)), {
           status: 200,
           headers: { "content-type": "application/json" },
         });
@@ -216,8 +265,8 @@ describe("Catalog page", () => {
     };
     globalThis.fetch = vi.fn(async (input) => {
       const url = input.toString();
-      if (url.includes("/api/runtime-work-state/latest")) {
-        return new Response(JSON.stringify(backendSnapshot), {
+      if (url.includes("/api/runtime-work-items")) {
+        return new Response(JSON.stringify(workStateQueryResponse(backendSnapshot)), {
           status: 200,
           headers: { "content-type": "application/json" },
         });
@@ -227,7 +276,7 @@ describe("Catalog page", () => {
     render(<App />);
 
     await user.click(screen.getByRole("button", { name: "Runs" }));
-    expect(await screen.findByText(/当前数据源：后端快照/)).toBeInTheDocument();
+    expect(await screen.findByText(/当前数据源：后端查询/)).toBeInTheDocument();
 
     await user.selectOptions(screen.getByLabelText("来源 Runtime"), "slock");
     expect(screen.queryByText("Slock 监听未就绪")).not.toBeInTheDocument();
@@ -268,19 +317,16 @@ describe("Catalog page", () => {
     globalThis.fetch = vi.fn(async (input) => {
       const url = input.toString();
       if (url.includes("/api/runtime-fleet")) {
-        return new Response(JSON.stringify({
-          observedAt: "2026-05-10T10:00:00.000Z",
-          devices: [{ ...backendSnapshot.device, name: "Backend DB Mac" }],
-          runtimes: backendSnapshot.runtimes,
-          agents: backendSnapshot.agents,
-          summary: { agentCount: 2, deviceCount: 1, runtimeCount: 2 },
-        }), {
+        return new Response(JSON.stringify(runtimeFleetQueryResponse(backendSnapshot, "Backend DB Mac")), {
           status: 200,
           headers: { "content-type": "application/json" },
         });
       }
-      if (url.includes("/api/runtime-work-state/latest")) {
-        return new Response(JSON.stringify({ error: "not_found" }), { status: 404 });
+      if (url.includes("/api/runtime-work-items")) {
+        return new Response(JSON.stringify(emptyWorkStateQueryResponse()), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
       }
       return new Response(JSON.stringify({ error: "unexpected request" }), { status: 500 });
     }) as unknown as typeof fetch;
@@ -289,7 +335,35 @@ describe("Catalog page", () => {
     await user.click(screen.getByRole("button", { name: "Runtime Fleet" }));
 
     expect((await screen.findAllByText("Backend DB Mac")).length).toBeGreaterThan(0);
-    expect(screen.getByText(/当前数据源：后端快照/)).toBeInTheDocument();
+    expect(screen.getByText(/当前数据源：后端查询/)).toBeInTheDocument();
+  });
+
+  it("does not fall back to the legacy latest inventory API when Runtime Fleet query fails", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn(async (input) => {
+      const url = input.toString();
+      if (url.includes("/api/runtime-fleet")) {
+        return new Response(JSON.stringify({ error: "backend_unavailable" }), { status: 503 });
+      }
+      if (url.includes("/api/runtime-work-items")) {
+        return new Response(JSON.stringify({ items: [], total: 0 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "legacy endpoint should not be requested" }), { status: 500 });
+    }) as unknown as typeof fetch;
+    globalThis.fetch = fetchMock;
+
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Runtime Fleet" }));
+
+    await waitFor(() => {
+      expect(vi.mocked(fetchMock).mock.calls.some((call) => call[0].toString().includes("/api/runtime-fleet"))).toBe(true);
+    });
+    expect(vi.mocked(fetchMock).mock.calls.some((call) =>
+      call[0].toString().includes("/api/runtime-inventory/latest"),
+    )).toBe(false);
   });
 
   it("loads Runs from the backend work-item query API when available", async () => {
@@ -331,6 +405,28 @@ describe("Catalog page", () => {
     expect(screen.getByText(/当前数据源：后端查询/)).toBeInTheDocument();
   });
 
+  it("does not fall back to the legacy latest work-state API when Runs query fails", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn(async (input) => {
+      const url = input.toString();
+      if (url.includes("/api/runtime-work-items")) {
+        return new Response(JSON.stringify({ error: "backend_unavailable" }), { status: 503 });
+      }
+      return new Response(JSON.stringify({ error: "legacy endpoint should not be requested" }), { status: 500 });
+    }) as unknown as typeof fetch;
+    globalThis.fetch = fetchMock;
+
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Runs" }));
+
+    await waitFor(() => {
+      expect(vi.mocked(fetchMock).mock.calls.some((call) => call[0].toString().includes("/api/runtime-work-items"))).toBe(true);
+    });
+    expect(vi.mocked(fetchMock).mock.calls.some((call) =>
+      call[0].toString().includes("/api/runtime-work-state/latest"),
+    )).toBe(false);
+  });
+
   it("filters Runs cards by manual time range and exposes quick ranges", async () => {
     const user = userEvent.setup();
     const backendSnapshot: RuntimeWorkStateSnapshot = {
@@ -360,8 +456,8 @@ describe("Catalog page", () => {
     };
     globalThis.fetch = vi.fn(async (input) => {
       const url = input.toString();
-      if (url.includes("/api/runtime-work-state/latest")) {
-        return new Response(JSON.stringify(backendSnapshot), {
+      if (url.includes("/api/runtime-work-items")) {
+        return new Response(JSON.stringify(workStateQueryResponse(backendSnapshot)), {
           status: 200,
           headers: { "content-type": "application/json" },
         });
@@ -371,7 +467,7 @@ describe("Catalog page", () => {
     render(<App />);
 
     await user.click(screen.getByRole("button", { name: "Runs" }));
-    expect(await screen.findByText(/当前数据源：后端快照/)).toBeInTheDocument();
+    expect(await screen.findByText(/当前数据源：后端查询/)).toBeInTheDocument();
     const lanes = screen.getByLabelText("工作态泳道");
     expect(within(lanes).getAllByText("Old card").length).toBeGreaterThan(0);
     expect(within(lanes).getAllByText("New card").length).toBeGreaterThan(0);
@@ -394,35 +490,6 @@ describe("Catalog page", () => {
     await user.click(screen.getByRole("button", { name: "清除时间" }));
     expect(within(lanes).getAllByText("Old card").length).toBeGreaterThan(0);
     expect(within(lanes).getAllByText("New card").length).toBeGreaterThan(0);
-  });
-
-  it("loads Runtime Fleet from the latest backend snapshot when available", async () => {
-    const user = userEvent.setup();
-    const backendSnapshot: RuntimeInventorySnapshot = {
-      ...(fixtureSnapshot as RuntimeInventorySnapshot),
-      device: {
-        ...(fixtureSnapshot as RuntimeInventorySnapshot).device,
-        name: "Backend Fixture Mac",
-      },
-    };
-    globalThis.fetch = vi.fn(async (input) => {
-      const url = input.toString();
-      if (url.includes("/api/runtime-fleet")) {
-        return new Response(JSON.stringify({ error: "postgres_store_unavailable" }), { status: 503 });
-      }
-      return new Response(JSON.stringify(backendSnapshot), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
-    }) as unknown as typeof fetch;
-    render(<App />);
-
-    await user.click(screen.getByRole("button", { name: "Runtime Fleet" }));
-
-    expect((await screen.findAllByText("Backend Fixture Mac")).length).toBeGreaterThan(0);
-    expect(vi.mocked(globalThis.fetch).mock.calls.some((call) =>
-      call[0]?.toString().includes("/api/runtime-inventory/latest"),
-    )).toBe(true);
   });
 
   it("shows Runtime operating status from the latest Agent work state", async () => {
@@ -448,14 +515,14 @@ describe("Catalog page", () => {
     };
     globalThis.fetch = vi.fn(async (input) => {
       const url = input.toString();
-      if (url.includes("/api/runtime-inventory/latest")) {
-        return new Response(JSON.stringify(backendSnapshot), {
+      if (url.includes("/api/runtime-fleet")) {
+        return new Response(JSON.stringify(runtimeFleetQueryResponse(backendSnapshot)), {
           status: 200,
           headers: { "content-type": "application/json" },
         });
       }
-      if (url.includes("/api/runtime-work-state/latest")) {
-        return new Response(JSON.stringify(workState), {
+      if (url.includes("/api/runtime-work-items")) {
+        return new Response(JSON.stringify(workStateQueryResponse(workState)), {
           status: 200,
           headers: { "content-type": "application/json" },
         });
@@ -532,14 +599,14 @@ describe("Catalog page", () => {
     };
     globalThis.fetch = vi.fn(async (input) => {
       const url = input.toString();
-      if (url.includes("/api/runtime-inventory/latest")) {
-        return new Response(JSON.stringify(backendSnapshot), {
+      if (url.includes("/api/runtime-fleet")) {
+        return new Response(JSON.stringify(runtimeFleetQueryResponse(backendSnapshot)), {
           status: 200,
           headers: { "content-type": "application/json" },
         });
       }
-      if (url.includes("/api/runtime-work-state/latest")) {
-        return new Response(JSON.stringify(workState), {
+      if (url.includes("/api/runtime-work-items")) {
+        return new Response(JSON.stringify(workStateQueryResponse(workState)), {
           status: 200,
           headers: { "content-type": "application/json" },
         });
@@ -610,8 +677,14 @@ describe("Catalog page", () => {
     };
     globalThis.fetch = vi.fn(async (input) => {
       const url = input.toString();
-      if (url.includes("/api/runtime-inventory/latest")) {
-        return new Response(JSON.stringify(backendSnapshot), {
+      if (url.includes("/api/runtime-fleet")) {
+        return new Response(JSON.stringify(runtimeFleetQueryResponse(backendSnapshot)), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/api/runtime-work-items")) {
+        return new Response(JSON.stringify(emptyWorkStateQueryResponse()), {
           status: 200,
           headers: { "content-type": "application/json" },
         });
@@ -629,12 +702,12 @@ describe("Catalog page", () => {
     expect(duplicateKeyWarning).toBe(false);
   });
 
-  it("automatically refreshes the latest Runtime Fleet snapshot while mounted", async () => {
+  it("automatically refreshes Runtime Fleet query data while mounted", async () => {
     vi.useFakeTimers();
     let latestRequests = 0;
     globalThis.fetch = vi.fn(async (input) => {
       const url = input.toString();
-      if (url.includes("/api/runtime-inventory/latest")) {
+      if (url.includes("/api/runtime-fleet")) {
         latestRequests += 1;
         const snapshot: RuntimeInventorySnapshot = {
           ...(fixtureSnapshot as RuntimeInventorySnapshot),
@@ -644,7 +717,13 @@ describe("Catalog page", () => {
           },
           observedAt: `2026-05-08T08:00:0${latestRequests}.000Z`,
         };
-        return new Response(JSON.stringify(snapshot), {
+        return new Response(JSON.stringify(runtimeFleetQueryResponse(snapshot)), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/api/runtime-work-items")) {
+        return new Response(JSON.stringify(emptyWorkStateQueryResponse()), {
           status: 200,
           headers: { "content-type": "application/json" },
         });
@@ -670,7 +749,7 @@ describe("Catalog page", () => {
     expect(screen.getByText(/上次刷新/)).toBeInTheDocument();
   });
 
-  it("requests a remote device refresh and reloads the latest backend snapshot", async () => {
+  it("requests a remote device refresh and reloads backend query data", async () => {
     const user = userEvent.setup();
     let latestRequests = 0;
     const backendSnapshot: RuntimeInventorySnapshot = {
@@ -689,9 +768,17 @@ describe("Catalog page", () => {
     };
     globalThis.fetch = vi.fn(async (input, init) => {
       const url = input.toString();
-      if (url.includes("/api/runtime-inventory/latest")) {
+      if (url.includes("/api/runtime-fleet")) {
         latestRequests += 1;
-        return new Response(JSON.stringify(latestRequests === 1 ? backendSnapshot : refreshedSnapshot), {
+        return new Response(JSON.stringify(runtimeFleetQueryResponse(
+          latestRequests === 1 ? backendSnapshot : refreshedSnapshot,
+        )), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/api/runtime-work-items")) {
+        return new Response(JSON.stringify(emptyWorkStateQueryResponse()), {
           status: 200,
           headers: { "content-type": "application/json" },
         });
@@ -727,8 +814,14 @@ describe("Catalog page", () => {
     const backendSnapshot = fixtureSnapshot as RuntimeInventorySnapshot;
     globalThis.fetch = vi.fn(async (input, init) => {
       const url = input.toString();
-      if (url.includes("/api/runtime-inventory/latest")) {
-        return new Response(JSON.stringify(backendSnapshot), {
+      if (url.includes("/api/runtime-fleet")) {
+        return new Response(JSON.stringify(runtimeFleetQueryResponse(backendSnapshot)), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/api/runtime-work-items")) {
+        return new Response(JSON.stringify(emptyWorkStateQueryResponse()), {
           status: 200,
           headers: { "content-type": "application/json" },
         });

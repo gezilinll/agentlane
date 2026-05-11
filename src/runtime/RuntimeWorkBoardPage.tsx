@@ -18,15 +18,13 @@ import {
   type RuntimeWorkChannelKind,
   type RuntimeWorkTimeRangeFilter,
 } from "./runtime-work-state-query";
-import type { ChannelKind, RuntimeSource } from "./runtime-normalize";
-import type {
-  RuntimeWorkItem,
-  RuntimeWorkItemStatus,
-  RuntimeWorkParticipant,
-  RuntimeWorkStageId,
-  RuntimeWorkStateSnapshot,
-} from "./runtime-work-state";
+import type { RuntimeSource } from "./runtime-normalize";
+import type { RuntimeWorkStageId, RuntimeWorkStateSnapshot } from "./runtime-work-state";
 import { formatRuntimeTimestamp } from "./runtime-inventory-query";
+import {
+  createWorkItemsQueryUrl,
+  runtimeWorkStateSnapshotFromQueryResponse,
+} from "./runtime-work-query-api";
 
 const autoRefreshIntervalMs = 30_000;
 
@@ -80,34 +78,11 @@ const quickRangeLabels: Record<QuickRangeOption, string> = {
 
 const fixtureWorkStateSnapshot = createFixtureWorkStateSnapshot();
 
-type RuntimeWorkDataSource = "fixture" | "backend" | "backend-query";
-
-interface RuntimeWorkItemsQueryResponse {
-  items: RuntimeWorkItemQueryRow[];
-  total: number;
-}
-
-interface RuntimeWorkItemQueryRow {
-  id: string;
-  externalId?: string;
-  source: string;
-  status: string;
-  stage: string;
-  title: string;
-  description: string | null;
-  runtimeId: string | null;
-  agentId: string | null;
-  conversationId: string | null;
-  channelKind: string | null;
-  channelLabel: string | null;
-  creator: unknown;
-  assignee: unknown;
-  lastSeenAt: string | null;
-}
+type RuntimeWorkDataSource = "fixture" | "backend-query";
 
 interface RuntimeWorkSnapshotLoadResult {
   snapshot: RuntimeWorkStateSnapshot;
-  source: Extract<RuntimeWorkDataSource, "backend" | "backend-query">;
+  source: Extract<RuntimeWorkDataSource, "backend-query">;
 }
 
 /** Read-only board for normalized Agent work state across runtimes and platforms. */
@@ -130,21 +105,14 @@ export function RuntimeWorkBoardPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const timeRangeRef = useRef<HTMLDivElement | null>(null);
 
-  async function fetchLatestSnapshot(filterOptions?: RuntimeWorkBoardFilters): Promise<RuntimeWorkSnapshotLoadResult | null> {
-    try {
-      const queryResponse = await fetch(createWorkItemsQueryUrl(filterOptions));
-      if (queryResponse.ok) {
-        const querySnapshot = runtimeWorkStateSnapshotFromQueryResponse(await queryResponse.json());
-        if (querySnapshot) return { snapshot: querySnapshot, source: "backend-query" };
-      }
-    } catch {
-      // Fall back to the latest-snapshot API while the formal query backend is not available.
+  async function fetchLatestSnapshot(filterOptions?: RuntimeWorkBoardFilters): Promise<RuntimeWorkSnapshotLoadResult> {
+    const queryResponse = await fetch(createWorkItemsQueryUrl(window.location.origin, filterOptions));
+    if (!queryResponse.ok) {
+      throw new Error(`runtime work item query failed: ${queryResponse.status}`);
     }
-
-    const response = await fetch(new URL("/api/runtime-work-state/latest", window.location.origin));
-    if (response.status === 404) return null;
-    if (!response.ok) throw new Error(`runtime work state request failed: ${response.status}`);
-    return { snapshot: (await response.json()) as RuntimeWorkStateSnapshot, source: "backend" };
+    const querySnapshot = runtimeWorkStateSnapshotFromQueryResponse(await queryResponse.json());
+    if (!querySnapshot) throw new Error("runtime work item query returned an invalid payload");
+    return { snapshot: querySnapshot, source: "backend-query" };
   }
 
   function applySnapshot(latestSnapshot: RuntimeWorkStateSnapshot, latestDataSource: RuntimeWorkDataSource) {
@@ -156,12 +124,8 @@ export function RuntimeWorkBoardPage() {
   async function loadLatestSnapshot(options: { silent?: boolean } = {}) {
     try {
       const latestSnapshot = await fetchLatestSnapshot(filters);
-      if (latestSnapshot) {
-        applySnapshot(latestSnapshot.snapshot, latestSnapshot.source);
-        if (!options.silent) setRefreshState({ status: "success", message: "已读取最新工作态" });
-        return;
-      }
-      if (!options.silent) setRefreshState({ status: "success", message: "暂无后端快照，继续使用 Fixture" });
+      applySnapshot(latestSnapshot.snapshot, latestSnapshot.source);
+      if (!options.silent) setRefreshState({ status: "success", message: "已读取最新工作态" });
     } catch (error) {
       if (!options.silent) {
         setRefreshState({
@@ -178,7 +142,7 @@ export function RuntimeWorkBoardPage() {
     async function loadInitialSnapshot() {
       try {
         const latestSnapshot = await fetchLatestSnapshot();
-        if (!cancelled && latestSnapshot) applySnapshot(latestSnapshot.snapshot, latestSnapshot.source);
+        if (!cancelled) applySnapshot(latestSnapshot.snapshot, latestSnapshot.source);
       } catch {
         // Keep the read-only board usable with fixture data while local backend is unavailable.
       }
@@ -219,7 +183,7 @@ export function RuntimeWorkBoardPage() {
       void (async () => {
         try {
           const latestSnapshot = await fetchLatestSnapshot(filters);
-          if (!cancelled && latestSnapshot) applySnapshot(latestSnapshot.snapshot, latestSnapshot.source);
+          if (!cancelled) applySnapshot(latestSnapshot.snapshot, latestSnapshot.source);
         } catch {
           // Keep the current visible snapshot when a filtered backend refresh fails.
         }
@@ -282,7 +246,7 @@ export function RuntimeWorkBoardPage() {
           <h1>工作看板</h1>
           <p className="pageSubtitle">
             统一查看 Agent 承接的工作项、发起人、Channel、会话/群组、消息摘要和当前阶段。当前数据源：
-            {dataSource === "backend-query" ? "后端查询" : dataSource === "backend" ? "后端快照" : "Fixture 样例"}
+            {dataSource === "backend-query" ? "后端查询" : "Fixture 样例"}
           </p>
           <p className="pageRefreshMeta">
             快照时间 {formatRuntimeTimestamp(snapshot.observedAt)}
@@ -509,140 +473,6 @@ export function RuntimeWorkBoardPage() {
       </section>
     </section>
   );
-}
-
-function createWorkItemsQueryUrl(filters: RuntimeWorkBoardFilters | undefined): URL {
-  const requestUrl = new URL("/api/runtime-work-items", window.location.origin);
-  requestUrl.searchParams.set("limit", "500");
-  if (filters?.source && filters.source !== "all") requestUrl.searchParams.set("source", filters.source);
-  if (filters?.stage && filters.stage !== "all") requestUrl.searchParams.set("stage", filters.stage);
-  if (filters?.channelKind && filters.channelKind !== "all") requestUrl.searchParams.set("channelKind", filters.channelKind);
-  if (filters?.search?.trim()) requestUrl.searchParams.set("search", filters.search.trim());
-  const startAt = isoTimestampFromFilter(filters?.timeRange?.start);
-  const endAt = isoTimestampFromFilter(filters?.timeRange?.end);
-  if (startAt) requestUrl.searchParams.set("startAt", startAt);
-  if (endAt) requestUrl.searchParams.set("endAt", endAt);
-  return requestUrl;
-}
-
-function runtimeWorkStateSnapshotFromQueryResponse(value: unknown): RuntimeWorkStateSnapshot | null {
-  if (!isRuntimeWorkItemsQueryResponse(value)) return null;
-  const workItems = value.items.map(runtimeWorkItemFromQueryRow);
-  return {
-    observedAt: latestWorkItemTimestamp(workItems) ?? new Date().toISOString(),
-    deviceId: inferDeviceId(workItems),
-    workItems,
-    conversations: [],
-    executions: [],
-    capabilities: [],
-  };
-}
-
-function runtimeWorkItemFromQueryRow(row: RuntimeWorkItemQueryRow): RuntimeWorkItem {
-  return {
-    id: row.id,
-    source: normalizeRuntimeSource(row.source),
-    externalId: row.externalId || row.id,
-    title: row.title,
-    description: row.description ?? undefined,
-    status: normalizeWorkItemStatus(row.status),
-    channel: row.channelKind || row.channelLabel
-      ? {
-          kind: normalizeChannelKind(row.channelKind),
-          label: row.channelLabel ?? channelLabelFromKind(row.channelKind),
-        }
-      : undefined,
-    assignee: normalizeParticipant(row.assignee),
-    creator: normalizeParticipant(row.creator),
-    agentId: row.agentId ?? undefined,
-    runtimeId: row.runtimeId ?? undefined,
-    conversationId: row.conversationId ?? undefined,
-    lastSeenAt: row.lastSeenAt ?? undefined,
-  };
-}
-
-function isRuntimeWorkItemsQueryResponse(value: unknown): value is RuntimeWorkItemsQueryResponse {
-  if (!value || typeof value !== "object") return false;
-  const candidate = value as Partial<RuntimeWorkItemsQueryResponse>;
-  return Array.isArray(candidate.items);
-}
-
-function normalizeRuntimeSource(value: string): RuntimeSource {
-  if (value === "openclaw" || value === "multica" || value === "slock" || value === "codex" || value === "claude_code" || value === "manual") {
-    return value;
-  }
-  return "unknown";
-}
-
-function normalizeWorkItemStatus(value: string): RuntimeWorkItemStatus {
-  if (
-    value === "todo" ||
-    value === "in_progress" ||
-    value === "in_review" ||
-    value === "done" ||
-    value === "blocked" ||
-    value === "cancelled" ||
-    value === "unknown"
-  ) {
-    return value;
-  }
-  return "unknown";
-}
-
-function normalizeChannelKind(value: string | null): ChannelKind {
-  if (
-    value === "dingtalk" ||
-    value === "telegram" ||
-    value === "slack" ||
-    value === "slock" ||
-    value === "multica" ||
-    value === "openclaw" ||
-    value === "other"
-  ) {
-    return value;
-  }
-  return "other";
-}
-
-function channelLabelFromKind(value: string | null): string {
-  if (value === "dingtalk") return "DingTalk";
-  if (value === "telegram") return "Telegram";
-  if (value === "slack") return "Slack";
-  return "默认渠道";
-}
-
-function normalizeParticipant(value: unknown): RuntimeWorkParticipant | undefined {
-  if (!value || typeof value !== "object") return undefined;
-  const candidate = value as Partial<RuntimeWorkParticipant>;
-  if (typeof candidate.kind !== "string" || typeof candidate.label !== "string") return undefined;
-  const kind = candidate.kind === "human" || candidate.kind === "agent" || candidate.kind === "runtime" || candidate.kind === "system"
-    ? candidate.kind
-    : "unknown";
-  return {
-    kind,
-    label: candidate.label,
-    objectId: typeof candidate.objectId === "string" ? candidate.objectId : undefined,
-    externalId: typeof candidate.externalId === "string" ? candidate.externalId : undefined,
-  };
-}
-
-function latestWorkItemTimestamp(workItems: RuntimeWorkItem[]): string | undefined {
-  return workItems
-    .map((item) => item.lastSeenAt ?? item.updatedAt ?? item.createdAt)
-    .filter((value): value is string => Boolean(value))
-    .sort()
-    .at(-1);
-}
-
-function inferDeviceId(workItems: RuntimeWorkItem[]): string {
-  const firstId = workItems[0]?.id;
-  if (!firstId) return "backend";
-  return firstId.split(":")[0] || "backend";
-}
-
-function isoTimestampFromFilter(value: string | undefined): string | undefined {
-  const date = parseDateTimeLocal(value ?? "");
-  return date ? date.toISOString() : undefined;
 }
 
 function Metric({ label, value, tone }: { label: string; value: number; tone: string }) {
