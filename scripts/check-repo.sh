@@ -31,6 +31,8 @@ required_paths=(
   "src/test/postgres.ts"
   "db/migrations/0001_backend_core.sql"
   "scripts/db-migrate.mjs"
+  "scripts/check-commit-message.mjs"
+  "scripts/check-commit-message.test.mjs"
   "scripts/dev-e2e.ts"
   "scripts/agentlane-device-collector.mjs"
   "scripts/install-device-collector.sh"
@@ -38,6 +40,7 @@ required_paths=(
   "docs/product/agent-network-runtime-panorama.png"
   "docs/product/agent-network-build-objects.png"
   "assets/product-ui/01-command-center.png"
+  ".githooks/commit-msg"
 )
 
 for path in "${required_paths[@]}"; do
