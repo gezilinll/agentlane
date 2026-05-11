@@ -161,15 +161,23 @@ export function createPostgresStore(options: PostgresStoreOptions = {}): Postgre
     upsertWorkStateSnapshot(snapshot) {
       return withTransaction(pool, async (client) => {
         await deleteExistingWorkStateForDevice(client, snapshot.deviceId);
+        const workItemIds = new Set(snapshot.workItems.map((workItem) => workItem.id));
+        const conversationIds = new Set(snapshot.conversations.map((conversation) => conversation.id));
         for (const conversation of snapshot.conversations) {
           await upsertWorkConversation(client, snapshot.deviceId, conversation);
         }
         const latestExecutionsByWorkItemId = createLatestExecutionsByWorkItemId(snapshot.executions);
         for (const workItem of snapshot.workItems) {
-          await upsertWorkItem(client, snapshot.deviceId, workItem, latestExecutionsByWorkItemId.get(workItem.id));
+          await upsertWorkItem(
+            client,
+            snapshot.deviceId,
+            workItem,
+            latestExecutionsByWorkItemId.get(workItem.id),
+            conversationIds,
+          );
         }
         for (const execution of snapshot.executions) {
-          await upsertWorkExecution(client, snapshot.deviceId, execution);
+          await upsertWorkExecution(client, snapshot.deviceId, execution, workItemIds, conversationIds);
         }
 
         const counts = {
@@ -523,6 +531,7 @@ async function upsertWorkItem(
   deviceId: string,
   workItem: RuntimeWorkItem,
   execution?: RuntimeExecution,
+  conversationIds: Set<string> = new Set(),
 ): Promise<void> {
   const stage = deriveRuntimeWorkStage({
     executionStatus: execution?.status,
@@ -567,7 +576,7 @@ async function upsertWorkItem(
     deviceId,
     workItem.runtimeId ?? null,
     workItem.agentId ?? null,
-    workItem.conversationId ?? null,
+    knownOptionalRef(workItem.conversationId, conversationIds),
     workItem.source,
     workItem.externalId,
     workItem.title,
@@ -590,6 +599,8 @@ async function upsertWorkExecution(
   client: pg.PoolClient,
   deviceId: string,
   execution: RuntimeExecution,
+  workItemIds: Set<string> = new Set(),
+  conversationIds: Set<string> = new Set(),
 ): Promise<void> {
   await client.query(`
     INSERT INTO work_executions (
@@ -619,8 +630,8 @@ async function upsertWorkExecution(
     deviceId,
     execution.runtimeId,
     execution.agentId ?? null,
-    execution.workItemId ?? null,
-    execution.conversationId ?? null,
+    knownOptionalRef(execution.workItemId, workItemIds),
+    knownOptionalRef(execution.conversationId, conversationIds),
     execution.source,
     execution.externalId,
     execution.status,
@@ -632,6 +643,11 @@ async function upsertWorkExecution(
     toJson(execution.sourceRefs ?? []),
     toJson(execution),
   ]);
+}
+
+function knownOptionalRef(value: string | undefined, knownIds: Set<string>): string | null {
+  if (!value) return null;
+  return knownIds.has(value) ? value : null;
 }
 
 async function insertCollectorIngestion(

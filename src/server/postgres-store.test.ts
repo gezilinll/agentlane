@@ -106,6 +106,39 @@ describeDb("Postgres runtime store", () => {
       await database.drop();
     }
   });
+
+  it("accepts executions whose optional work item link is missing from the latest snapshot", async () => {
+    const database = await createTemporaryPostgresDatabase();
+    try {
+      runMigrationsScript(database.url);
+      const store = createPostgresStore({ connectionString: database.url });
+      try {
+        const inventorySnapshot = fixtureSnapshot as RuntimeInventorySnapshot;
+        const workStateSnapshot = createWorkStateSnapshot(inventorySnapshot);
+        const danglingExecution = {
+          ...workStateSnapshot.executions[0],
+          id: `${workStateSnapshot.executions[0].id}:dangling-work-item`,
+          externalId: "run-dangling-work-item",
+          workItemId: "missing-work-item",
+        };
+
+        await store.upsertInventorySnapshot(inventorySnapshot);
+        await store.upsertWorkStateSnapshot({
+          ...workStateSnapshot,
+          executions: [...workStateSnapshot.executions, danglingExecution],
+        });
+
+        await expect(store.readEntityCounts()).resolves.toMatchObject({
+          workExecutions: 2,
+          workItems: 1,
+        });
+      } finally {
+        await store.close();
+      }
+    } finally {
+      await database.drop();
+    }
+  });
 });
 
 function createWorkStateSnapshot(snapshot: RuntimeInventorySnapshot): RuntimeWorkStateSnapshot {
