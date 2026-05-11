@@ -116,11 +116,11 @@ The server must expose `listen`, `close`, and `url`.
 Add:
 
 ```json
-"dev:backend": "node --loader ts-node/esm src/backend/backend-server.ts",
-"check:backend:standalone": "vitest run src/backend src/server src/runtime/device-collector-script.test.ts"
+"dev:backend": "tsx src/backend/backend-server.ts",
+"check:backend:standalone": "vitest run src/backend"
 ```
 
-If `ts-node` is not introduced, use a tiny JavaScript bootstrap instead of adding an unnecessary runtime dependency.
+Use `tsx` as the small TypeScript runner for the standalone backend dev process.
 
 - [ ] **Step 4: Verify**
 
@@ -403,4 +403,3 @@ git commit -m "Close backend service harness"
 - The repo documents local environment dependencies.
 - `./scripts/verify.sh` passes.
 - No ECS deployment work is included in this phase.
-
