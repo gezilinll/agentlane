@@ -283,6 +283,7 @@ export function RuntimeWorkBoardPage() {
             aria-expanded={timeRangeOpen}
             aria-label={`选择时间范围：${timeRangeSummary}`}
             className="timeRangeTrigger"
+            title={timeRangeSummary}
             type="button"
             onClick={toggleTimeRangeOpen}
           >

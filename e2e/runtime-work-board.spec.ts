@@ -16,7 +16,23 @@ const slock = mapSlockWorkState(slockWorkStateFixture);
 const backendSnapshot: RuntimeWorkStateSnapshot = {
   observedAt: "2026-05-09T08:00:00.000Z",
   deviceId: "fixture-device",
-  workItems: [...openclaw.workItems, ...multica.workItems, ...slock.workItems],
+  workItems: [
+    ...openclaw.workItems,
+    ...multica.workItems,
+    ...slock.workItems,
+    {
+      id: "fixture-long-title-card",
+      source: "slock",
+      externalId: "fixture-long-title-card",
+      title: "https://git.intra.gaoding.com/gdesign/meta/-/merge_requests/184 让大卷执行review，如果有问题让codex继续修复",
+      description: "https://git.intra.gaoding.com/gdesign/meta/-/merge_requests/184 让大卷执行review，如果有问题让codex继续修复并回报结果",
+      status: "done",
+      channel: { kind: "slock", label: "#AjisGTD" },
+      creator: { kind: "human", label: "AjiHuang" },
+      assignee: { kind: "agent", label: "PMO" },
+      lastSeenAt: "2026-05-09T08:00:00.000Z",
+    },
+  ],
   conversations: [...openclaw.conversations, ...multica.conversations, ...slock.conversations],
   executions: [...openclaw.executions, ...multica.executions, ...slock.executions],
   capabilities: [...openclaw.capabilities, ...multica.capabilities, ...slock.capabilities],
@@ -47,6 +63,13 @@ test.describe("Runs / Work Board", () => {
     await expect(page.getByRole("button", { name: /帮我检查今天的线上异常/ })).toBeVisible();
     await page.getByRole("button", { name: /选择时间范围/ }).click();
     await expect(page.getByRole("button", { name: "清除时间" })).toBeVisible();
+    await page.getByRole("button", { name: "1天" }).click();
+    await page.getByRole("button", { name: "确认" }).click();
+    const timeSummaryFits = await page.locator(".timeRangeSummary").evaluate(
+      (element) => element.scrollWidth <= element.clientWidth + 1,
+    );
+    expect(timeSummaryFits).toBe(true);
+    await page.getByRole("button", { name: /选择时间范围/ }).click();
     await page.getByRole("button", { name: "日历中选择" }).click();
     await page.getByLabel("开始时间").fill("2026-05-09T15:45");
     await page.getByLabel("结束时间").fill("2026-05-09T16:00");
@@ -81,6 +104,21 @@ test.describe("Runs / Work Board", () => {
     await expect(detail).toContainText("发起人: @fixture-human");
     await expect(detail).toContainText("承接 Agent: @example-agent");
     await expect(detail).toContainText("会话/群组: #example-board");
+
+    await page.getByPlaceholder("搜索任务、消息、发起人、Agent 或会话/群组").fill("merge_requests/184");
+    const longCard = page.getByRole("button", { name: /merge_requests\/184/ });
+    await expect(longCard).toBeVisible();
+    const longCardFits = await longCard.evaluate(
+      (element) => element.scrollWidth <= element.clientWidth + 1,
+    );
+    expect(longCardFits).toBe(true);
+
+    await longCard.click();
+    const longDetail = page.getByRole("complementary", { name: "工作项详情" });
+    const longDetailFits = await longDetail.evaluate(
+      (element) => element.scrollWidth <= element.clientWidth + 1,
+    );
+    expect(longDetailFits).toBe(true);
 
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.getByRole("heading", { name: "工作看板" })).toBeVisible();

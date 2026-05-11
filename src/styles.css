@@ -188,7 +188,7 @@ h1 {
 
 .workBoardToolbar {
   align-items: start;
-  grid-template-columns: minmax(240px, 380px) repeat(3, minmax(120px, 1fr)) minmax(240px, 320px);
+  grid-template-columns: minmax(220px, 250px) repeat(3, minmax(96px, 100px)) minmax(520px, 1fr);
   justify-content: start;
 }
 
@@ -498,6 +498,7 @@ h1 {
   gap: 12px;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   min-width: 0;
+  overflow: hidden;
 }
 
 .workLane {
@@ -538,6 +539,7 @@ h1 {
   display: grid;
   gap: 10px;
   min-height: 180px;
+  min-width: 0;
   padding: 10px;
 }
 
@@ -549,8 +551,10 @@ h1 {
   display: grid;
   gap: 8px;
   min-width: 0;
+  overflow: hidden;
   padding: 10px;
   text-align: left;
+  width: 100%;
 }
 
 .workCard:hover,
@@ -564,11 +568,15 @@ h1 {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  min-width: 0;
 }
 
 .workCard strong,
 .workCard small,
 .workCardMeta {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -821,6 +829,7 @@ button.tableRow:hover,
 .detailPanel {
   max-height: calc(100vh - 32px);
   overflow: auto;
+  overflow-x: hidden;
   padding: 16px;
   position: sticky;
   top: 16px;
@@ -832,13 +841,21 @@ button.tableRow:hover,
   display: flex;
   justify-content: space-between;
   margin-bottom: 14px;
+  min-width: 0;
   padding-bottom: 14px;
+}
+
+.detailHeader > div {
+  min-width: 0;
 }
 
 .detailHeader h2 {
   color: #071943;
   font-size: 20px;
   margin-bottom: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
 }
 
 .detailBlock {
@@ -858,6 +875,8 @@ button.tableRow:hover,
   color: #52617a;
   font-size: 13px;
   line-height: 1.55;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .detailBlock ul {
@@ -968,6 +987,17 @@ button.tableRow:hover,
   overflow: hidden;
   position: absolute;
   width: 1px;
+}
+
+@media (max-width: 1280px) {
+  .workBoardToolbar {
+    grid-template-columns: minmax(240px, 1fr) repeat(3, minmax(105px, 125px));
+  }
+
+  .workBoardToolbar .timeRangeField {
+    grid-column: 1 / -1;
+    max-width: 520px;
+  }
 }
 
 @media (max-width: 1120px) {
