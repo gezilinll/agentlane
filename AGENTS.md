@@ -4,7 +4,7 @@ Root guide for coding agents working in this repository. This file is operationa
 
 ## Project State
 
-Agentlane is currently in product definition and early engineering setup. The repository is becoming the control plane for operating an Agent Network. It now has a Chinese-first Catalog page, a Runtime Fleet page, a read-only Runs / Work Board page, collector-backed runtime inventory and work-state models, and a standalone local backend with Postgres-backed query APIs plus an outbound WebSocket device control channel. It does not yet have a production deployment, auth system, multi-device orchestration, or runtime execution control system.
+Agentlane is currently in product definition and early engineering setup. The repository is becoming the control plane for operating an Agent Network. It now has a Chinese-first Catalog page, a Runtime Fleet page, a read-only Runs / Work Board page, collector-backed runtime inventory and work-state models, and a standalone backend with Postgres-backed query APIs, production-like Docker / Nginx local deployment files, plus an outbound WebSocket device control channel. It does not yet have an ECS deployment, production auth system, multi-device orchestration, or runtime execution control system.
 
 Current source of truth:
 
@@ -22,6 +22,8 @@ Current source of truth:
 - `src/runtime/runtime-work-state.ts`: TypeScript source of truth for work item, conversation, execution, and observation capability models.
 - `src/runtime/runtime-work-state-adapters.ts`: adapter normalization for OpenClaw, Multica, and Slock work-state inputs.
 - `src/runtime/runtime-work-state-query.ts`: frontend-facing query model for the read-only Runs / Work Board page.
+- `src/runtime/runtime-work-query-api.ts`: frontend API adapter for backend Runs query responses and cursor pagination.
+- `src/runtime/runtime-data-source.ts`: source-of-truth helper for whether fixture fallback is allowed in a given build mode.
 - `src/runtime/runtime-listening-acceptance.ts`: TypeScript source of truth for source-specific listening readiness and Runs lane policy.
 - `src/runtime/runtime-inventory-query.ts`: query and detail model for the Runtime Fleet page.
 - `src/server/runtime-inventory-store.ts`: internal snapshot and command state store used for collector validation and the v1 device control channel.
@@ -29,8 +31,11 @@ Current source of truth:
 - `src/server/runtime-control-channel.ts`: in-memory v1 device control channel for connection, heartbeat, and refresh command lifecycle.
 - `src/server/runtime-http-api.ts`: backend HTTP API for collector ingestion, Runtime Fleet / Runs query endpoints, refresh commands, and ingestion diagnostics.
 - `src/backend/backend-server.ts`: standalone local-first backend service that composes the HTTP API and device WebSocket control channel outside Vite.
+- `vite.backend.config.ts`: backend bundle entry for production-like Node execution.
 - `db/migrations/`: Postgres schema migrations for the formal backend service.
 - `scripts/db-migrate.mjs`: local Postgres migration runner.
+- `scripts/check-deploy-config.mjs`: production-like deploy config smoke check.
+- `Dockerfile.backend`, `Dockerfile.frontend`, `nginx.agentlane.conf`, `docker-compose.prod-like.yml`: production-like local deployment shape before ECS.
 - `scripts/agentlane-device-collector.mjs`: device-side collector / Device Agent script.
 - `scripts/install-device-collector.sh`: local-path collector installer for development and remote-device testing.
 - `e2e/catalog-workflow.spec.ts`: browser-level user workflow harness for the Catalog page.
@@ -81,10 +86,10 @@ Current spec and harness mapping:
 | Runtime work state adapters and board query | `src/runtime/runtime-work-state-adapters.ts`, `src/runtime/runtime-work-state-query.ts`, `docs/product/runtime-work-state-probe.md` | `src/runtime/runtime-work-state-adapters.test.ts`, `src/runtime/runtime-work-state-query.test.ts`, `npm run check:runtime` |
 | Runtime work state collector | `scripts/agentlane-device-collector.mjs`, `docs/product/runtime-work-state-probe.md` | `src/runtime/device-collector-script.test.ts`, `npm run check:runtime`, `npm run check:backend` |
 | Runtime listening acceptance | `docs/product/runtime-listening-acceptance-spec.md`, `src/runtime/runtime-listening-acceptance.ts`, `docs/product/runtime-work-state-probe.md` | `src/runtime/runtime-listening-acceptance.test.ts`, `src/runtime/runtime-work-state-adapters.test.ts`, `npm run check:runtime` |
-| Runs / Work Board page | `src/runtime/RuntimeWorkBoardPage.tsx`, `docs/product/runtime-work-state-probe.md` | `src/App.test.tsx`, `e2e/runtime-work-board.spec.ts`, `npm run check:quick`, `npm run check:e2e` |
+| Runs / Work Board page | `src/runtime/RuntimeWorkBoardPage.tsx`, `src/runtime/runtime-work-query-api.ts`, `src/runtime/runtime-data-source.ts`, `docs/product/runtime-work-state-probe.md` | `src/App.test.tsx`, `src/runtime/runtime-work-query-api.test.ts`, `src/runtime/runtime-data-source.test.ts`, `e2e/runtime-work-board.spec.ts`, `npm run check:quick`, `npm run check:e2e` |
 | Runtime Fleet page | `docs/product/runtime-fleet-page-spec.md`, `src/runtime/runtime-inventory-query.ts`, `src/runtime/RuntimeFleetPage.tsx` | `src/runtime/runtime-inventory-query.test.ts`, `src/App.test.tsx`, `e2e/runtime-fleet.spec.ts`, `npm run check:quick`, `npm run check:e2e` |
 | Runtime snapshot and control backend | `docs/product/runtime-device-registration-spec.md`, `src/server/runtime-inventory-store.ts`, `src/server/runtime-control-channel.ts`, `src/server/runtime-http-api.ts`, `src/backend/backend-server.ts` | `src/server/runtime-inventory-store.test.ts`, `src/server/runtime-control-channel.test.ts`, `src/server/runtime-http-api.test.ts`, `src/runtime/device-collector-script.test.ts`, `npm run check:backend` |
-| Backend service formalization | `docs/product/backend-service-spec.md`, `src/backend/backend-server.ts`, `src/server/postgres-store.ts`, `db/migrations/`, `scripts/db-migrate.mjs`, `scripts/dev-e2e.ts` | `src/backend/backend-server.test.ts`, `src/backend/dev-e2e-config.test.ts`, `src/server/db-migrate.test.ts`, `src/server/postgres-store.test.ts`, `src/server/runtime-http-api-postgres.test.ts`, `npm run check:backend:standalone`, `npm run check:db`, `npm run check:backend` |
+| Backend service formalization | `docs/product/backend-service-spec.md`, `src/backend/backend-server.ts`, `src/server/postgres-store.ts`, `db/migrations/`, `scripts/db-migrate.mjs`, `scripts/dev-e2e.ts`, `vite.backend.config.ts`, `Dockerfile.backend`, `Dockerfile.frontend`, `nginx.agentlane.conf`, `docker-compose.prod-like.yml` | `src/backend/backend-server.test.ts`, `src/backend/dev-e2e-config.test.ts`, `src/server/db-migrate.test.ts`, `src/server/postgres-store.test.ts`, `src/server/runtime-http-api-postgres.test.ts`, `scripts/check-deploy-config.mjs`, `npm run check:backend:standalone`, `npm run check:db`, `npm run check:backend`, `npm run check:deploy` |
 | Repo context and docs | `AGENTS.md`, `README.md`, `docs/product/ui-design.md` | `npm run check:repo` |
 
 When a user points out a missed behavior or review gap, decide whether it should become:
@@ -106,7 +111,7 @@ Keep the test layout simple and tied to what each harness can prove:
 
 ## Agent-Ready Growth
 
-Agentlane should become agent-ready by growing only the infrastructure the project actually needs. The current layer is **Catalog + Runtime Fleet + Runs Work-State Harness Ready** for the first frontend/runtime surfaces: root guide, TinySpecs, TypeScript object models, standalone local backend, Postgres-backed query APIs, outbound device control channel, collector snapshot harnesses, unit/component tests, browser layout harness, and one full verification entry point.
+Agentlane should become agent-ready by growing only the infrastructure the project actually needs. The current layer is **Catalog + Runtime Fleet + Runs Work-State + Production-Like Backend Harness Ready** for the first frontend/runtime surfaces: root guide, TinySpecs, TypeScript object models, standalone backend, Postgres-backed query APIs, backend bundle and Docker/Nginx config checks, outbound device control channel, collector snapshot harnesses, unit/component tests, browser layout harness, and one full verification entry point.
 
 Extend this guide and `./scripts/verify.sh` only when a real project surface appears:
 
@@ -126,7 +131,7 @@ Run the full repository harness before handing off changes:
 ./scripts/verify.sh
 ```
 
-Equivalent package entry points are `npm run verify`, `npm run check`, and `npm run harness`. The full harness verifies required product documents/assets, local Markdown links, Postgres migration checks, backend store/control/API checks, collector script behavior, TypeScript typecheck, unit/component tests, production build, and the Playwright responsive layout harness.
+Equivalent package entry points are `npm run verify`, `npm run check`, and `npm run harness`. The full harness verifies required product documents/assets, local Markdown links, Postgres migration checks, backend store/control/API checks, backend bundle and deploy config checks, collector script behavior, TypeScript typecheck, unit/component tests, production build, and the Playwright responsive layout harness.
 
 If the local Playwright browser is missing, install the current test browser once:
 
@@ -148,6 +153,9 @@ Current harness scripts:
 | `npm run check:runtime` | Focused Runtime / Device Registration and work-state unit/script harness. | Runtime inventory model, work-state model, collector, installer, fixture, probe adapter, or query changes. |
 | `npm run check:quick` | TypeScript typecheck plus Vitest unit/component tests. | Catalog model, Runtime Fleet query logic, React behavior, labels, or seed data changes. |
 | `npm run check:build` | Production TypeScript/Vite build. | Frontend, dependency, Vite, TypeScript, or package changes. |
+| `npm run build:backend` | Bundle the standalone backend to `dist/backend/backend-server.mjs`. | Backend entrypoint, server imports, or production-like runtime changes. |
+| `npm run start:backend` | Run the bundled backend artifact. | Manual smoke of production-like backend output after `npm run build:backend`. |
+| `npm run check:deploy` | Build backend bundle and verify Docker / Nginx / production-like compose config. | Deployment-shape, backend bundle, Dockerfile, compose, or Nginx changes. |
 | `npm run check:e2e` | Playwright browser harness using isolated Postgres, standalone backend, and Vite proxy. | Catalog/Runtime Fleet/Runs interaction paths, layout, toolbar, responsive behavior, navigation shell, backend query wiring, or visual regression risk. |
 | `npm run verify` | Full harness, same as `./scripts/verify.sh`. | Before handoff, commit, or review. |
 
@@ -173,6 +181,13 @@ Local backend development:
 npm run db:up
 npm run db:migrate
 npm run dev:backend
+```
+
+Production-like local smoke before ECS:
+
+```sh
+npm run check:deploy
+docker compose -f docker-compose.prod-like.yml up --build
 ```
 
 ## Change Hygiene

@@ -1,8 +1,8 @@
 # Runtime Fleet Page Spec
 
-版本：TinySpec v0.8
+版本：TinySpec v0.9
 
-Runtime Fleet 是 Agentlane v1 用来查看设备、runtime、agent 和 channel binding 的第一版管理页面。页面优先读取本地后端最新 collector snapshot 和设备连接状态；没有后端数据时回退到 collector snapshot fixture，保证开发期仍可离线预览。
+Runtime Fleet 是 Agentlane v1 用来查看设备、runtime、agent 和 channel binding 的第一版管理页面。页面正式数据来自 backend 查询 API；fixture 只作为开发期离线预览和测试辅助，不作为生产或正式本地验收路径。
 
 ## 分层原则
 
@@ -34,7 +34,7 @@ Runtime Fleet 必须区分“数据从哪里采集”和“产品上归属哪一
 
 ## 数据源
 
-页面使用 `GET /api/runtime-fleet` 读取正式后端查询结果，并用 `GET /api/runtime-work-items` 的标准化工作项辅助推导 Runtime 运行状态和 Agent 展示状态。没有后端数据或本地 backend 不可用时，页面只保留明确标识的 `fixtures/runtime/collector-snapshot.sample.json` 作为开发期离线预览，不再读取兼容期 latest API。组件不直接理解 OpenClaw、Slock 或 Multica 的内部结构，只消费标准化后的 Runtime Fleet view model。
+页面使用 `GET /api/runtime-fleet` 读取正式后端查询结果，并用 `GET /api/runtime-work-items` 的标准化工作项辅助推导 Runtime 运行状态和 Agent 展示状态。没有后端数据或本地 backend 不可用时，页面只在非 production 模式允许使用明确标识的 `fixtures/runtime/collector-snapshot.sample.json` 做开发期离线预览；production 构建必须展示明确错误和空状态，不回退 fixture，不读取兼容期 latest API。组件不直接理解 OpenClaw、Slock 或 Multica 的内部结构，只消费标准化后的 Runtime Fleet view model。
 
 页面挂载后每 30 秒读取一次后端查询结果，并显示页面自己的上次刷新时间。自动刷新只读取后端已有数据，不自动下发远端 `inventory.refresh` 命令；远端采集仍由 collector 定时上报或用户手动点击刷新触发。
 
@@ -118,6 +118,7 @@ Agent：
 - 当后端工作项查询中 Slock task board 的 assignee 指向某个 Agent 且任务为 `in_progress` 时，该 Agent 状态显示为 `活跃`；已可观测但无处理中任务时显示为空闲。
 - 用户可以点击 Device 卡片并在详情面板看到身份信息、连接状态和已注册 Runtime。
 - 当后端已有最新 snapshot 时，页面展示后端设备名称而不是 fixture 设备名称。
+- Production 构建下，后端查询失败时页面展示后端错误状态，不展示 fixture 设备、Runtime 或 Agent。
 - 页面自动读取后端查询结果，并展示上次刷新时间。
 - 当设备在线时，点击刷新按钮会请求后端下发远程刷新命令；设备离线时展示失败原因。
 - OpenClaw 历史 session 数展示为历史会话，不展示为活跃会话。

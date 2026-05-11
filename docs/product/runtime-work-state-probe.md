@@ -249,7 +249,9 @@ Harness：
 
 Runs / Work Board 第一版是只读 Agent 工作视图，用于验证统一工作态模型是否能被用户理解和验收。
 
-- 页面读取 `GET /api/runtime-work-items`，由后端执行搜索、来源 Runtime、Channel、阶段和时间范围筛选；正式查询不可用时保留当前页面状态，开发期离线预览只使用明确标识的 fixture，不再读取 latest snapshot API。
+- 页面读取 `GET /api/runtime-work-items`，由后端执行搜索、来源 Runtime、Channel、阶段、时间范围、排序和 cursor 分页；正式查询不可用时保留当前页面状态并展示错误，生产构建不得回退 fixture，开发期离线预览只使用明确标识的 fixture，不再读取 latest snapshot API。
+- 后端搜索语义必须覆盖用户在 Runs 页面看到的主要识别信息：任务标题、消息摘要、发起人、承接 Agent、Runtime、Channel、会话/群组。前端不再本地重放一套不同的搜索规则。
+- 页面以 `total` 和 `nextCursor` 展示已加载数量，并通过 `加载更多` 继续请求后端下一页；加载更多只能追加当前筛选条件下的同一查询结果。
 - 页面只消费 `runtime-work-state-query.ts` 生成的 lane、summary 和 detail。
 - 页面不直接判断 OpenClaw、Multica、Slock 原始状态含义。
 - 页面不提供拖拽、写回、指派、接管聊天或代理流量入口。
