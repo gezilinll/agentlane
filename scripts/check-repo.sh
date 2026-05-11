@@ -25,6 +25,7 @@ required_paths=(
   "src/backend/backend-server.ts"
   "src/server/runtime-inventory-store.ts"
   "src/server/postgres-store.ts"
+  "src/server/runtime-http-api-postgres.test.ts"
   "src/test/postgres.ts"
   "db/migrations/0001_backend_core.sql"
   "scripts/db-migrate.mjs"

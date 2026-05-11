@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { RuntimeControlChannel } from "./runtime-control-channel";
 import type { RuntimeInventoryStore } from "./runtime-inventory-store";
+import type { PostgresStore } from "./postgres-store";
 import type { RuntimeWorkStateStore } from "./runtime-work-state-store";
 
 const maxJsonBodyChars = 10_000_000;
@@ -13,6 +14,8 @@ export interface RuntimeHttpApiHandlerOptions {
   controlChannel: RuntimeControlChannel;
   /** Latest runtime work-state snapshot store. */
   workStateStore?: RuntimeWorkStateStore;
+  /** Optional Postgres-backed formal repository. */
+  postgresStore?: PostgresStore;
 }
 
 /** Node/Vite middleware-style next callback. */
@@ -50,16 +53,43 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
       return;
     }
 
+    if (request.method === "GET" && requestUrl.pathname === "/api/runtime-fleet") {
+      if (!options.postgresStore) {
+        sendJson(response, 503, { error: "postgres_store_unavailable" });
+        return;
+      }
+      sendJson(response, 200, await options.postgresStore.readRuntimeFleet());
+      return;
+    }
+
+    if (request.method === "GET" && requestUrl.pathname === "/api/runtime-work-items") {
+      if (!options.postgresStore) {
+        sendJson(response, 503, { error: "postgres_store_unavailable" });
+        return;
+      }
+      sendJson(response, 200, await options.postgresStore.listRuntimeWorkItems({
+        channelKind: requestUrl.searchParams.get("channelKind"),
+        endAt: requestUrl.searchParams.get("endAt"),
+        limit: parseLimit(requestUrl.searchParams.get("limit")),
+        search: requestUrl.searchParams.get("search"),
+        source: requestUrl.searchParams.get("source"),
+        stage: requestUrl.searchParams.get("stage"),
+        startAt: requestUrl.searchParams.get("startAt"),
+      }));
+      return;
+    }
+
     if (request.method === "POST" && requestUrl.pathname === "/api/device-snapshots") {
       try {
         const snapshot = options.store.writeLatestSnapshot(await readJsonBody(request));
+        await options.postgresStore?.upsertInventorySnapshot(snapshot);
         sendJson(response, 201, {
           ok: true,
           deviceId: snapshot.device.id,
           observedAt: snapshot.observedAt,
         });
       } catch (error) {
-        sendJson(response, 400, {
+        sendJson(response, statusCodeForWriteError(error), {
           error: error instanceof Error ? error.message : "invalid snapshot",
         });
       }
@@ -73,13 +103,14 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
       }
       try {
         const snapshot = options.workStateStore.writeLatestSnapshot(await readJsonBody(request));
+        await options.postgresStore?.upsertWorkStateSnapshot(snapshot);
         sendJson(response, 201, {
           ok: true,
           deviceId: snapshot.deviceId,
           observedAt: snapshot.observedAt,
         });
       } catch (error) {
-        sendJson(response, 400, {
+        sendJson(response, statusCodeForWriteError(error), {
           error: error instanceof Error ? error.message : "invalid runtime work state snapshot",
         });
       }
@@ -120,8 +151,34 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
       return;
     }
 
+    const ingestionMatch = requestUrl.pathname.match(/^\/api\/devices\/([^/]+)\/ingestions$/);
+    if (request.method === "GET" && ingestionMatch) {
+      if (!options.postgresStore) {
+        sendJson(response, 503, { error: "postgres_store_unavailable" });
+        return;
+      }
+      const deviceId = decodeURIComponent(ingestionMatch[1] ?? "");
+      sendJson(response, 200, {
+        deviceId,
+        ingestions: await options.postgresStore.listCollectorIngestions(deviceId),
+      });
+      return;
+    }
+
     next();
   };
+}
+
+function parseLimit(value: string | null): number | undefined {
+  if (!value) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function statusCodeForWriteError(error: unknown): number {
+  const message = error instanceof Error ? error.message : "";
+  if (message.includes("invalid") || message.includes("too large")) return 400;
+  return 500;
 }
 
 function readJsonBody(request: IncomingMessage): Promise<unknown> {

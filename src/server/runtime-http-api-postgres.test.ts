@@ -1,0 +1,157 @@
+import { createServer, type Server } from "node:http";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import fixtureSnapshot from "../../fixtures/runtime/collector-snapshot.sample.json";
+import type { RuntimeInventorySnapshot, RuntimeWorkStateSnapshot } from "../runtime";
+import { createTemporaryPostgresDatabase, runMigrationsScript, shouldRunPostgresTests } from "../test/postgres";
+import { createPostgresStore, type PostgresStore } from "./postgres-store";
+import { createRuntimeControlChannel } from "./runtime-control-channel";
+import { createRuntimeHttpApiHandler } from "./runtime-http-api";
+import { createRuntimeInventoryStore } from "./runtime-inventory-store";
+import { createRuntimeWorkStateStore } from "./runtime-work-state-store";
+
+const describeDb = shouldRunPostgresTests() ? describe : describe.skip;
+const servers: Server[] = [];
+
+afterEach(async () => {
+  await Promise.all(servers.map((server) => new Promise<void>((resolve) => server.close(() => resolve()))));
+  servers.length = 0;
+});
+
+describeDb("runtime HTTP API with Postgres store", () => {
+  it("persists collector posts and serves backend query endpoints", async () => {
+    const database = await createTemporaryPostgresDatabase();
+    try {
+      runMigrationsScript(database.url);
+      const postgresStore = createPostgresStore({ connectionString: database.url });
+      try {
+        const { baseUrl } = await startRuntimeApi(postgresStore);
+        const inventorySnapshot = fixtureSnapshot as RuntimeInventorySnapshot;
+        const workStateSnapshot = createWorkStateSnapshot(inventorySnapshot);
+
+        const inventoryResponse = await postJson(`${baseUrl}/api/device-snapshots`, inventorySnapshot);
+        const workStateResponse = await postJson(`${baseUrl}/api/runtime-work-state-snapshots`, workStateSnapshot);
+        const fleetResponse = await fetch(`${baseUrl}/api/runtime-fleet`);
+        const workItemsResponse = await fetch(`${baseUrl}/api/runtime-work-items?source=slock&stage=processing`);
+        const ingestionsResponse = await fetch(`${baseUrl}/api/devices/fixture-mac/ingestions`);
+
+        expect(inventoryResponse.status).toBe(201);
+        expect(workStateResponse.status).toBe(201);
+        await expect(fleetResponse.json()).resolves.toMatchObject({
+          summary: { agentCount: 2, deviceCount: 1, runtimeCount: 2 },
+          devices: [expect.objectContaining({ id: "fixture-mac" })],
+        });
+        await expect(workItemsResponse.json()).resolves.toMatchObject({
+          items: [expect.objectContaining({
+            id: workStateSnapshot.workItems[0].id,
+            source: "slock",
+            stage: "processing",
+            title: "AGTD-001 Fix queue handoff",
+          })],
+          total: 1,
+        });
+        await expect(ingestionsResponse.json()).resolves.toMatchObject({
+          ingestions: [
+            expect.objectContaining({ snapshotType: "inventory" }),
+            expect.objectContaining({ snapshotType: "work_state" }),
+          ],
+        });
+      } finally {
+        await postgresStore.close();
+      }
+    } finally {
+      await database.drop();
+    }
+  });
+});
+
+async function startRuntimeApi(postgresStore: PostgresStore) {
+  const dataDir = mkdtempSync(path.join(tmpdir(), "agentlane-runtime-api-postgres-"));
+  const store = createRuntimeInventoryStore({
+    snapshotPath: path.join(dataDir, "latest.json"),
+  });
+  const workStateStore = createRuntimeWorkStateStore({
+    snapshotPath: path.join(dataDir, "work-state-latest.json"),
+  });
+  const controlChannel = createRuntimeControlChannel({ store });
+  const handler = createRuntimeHttpApiHandler({ store, controlChannel, workStateStore, postgresStore });
+  const server = createServer((request, response) => {
+    void handler(request, response, () => {
+      response.statusCode = 404;
+      response.end("not found");
+    });
+  });
+  servers.push(server);
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("missing test server address");
+  return { baseUrl: `http://127.0.0.1:${address.port}` };
+}
+
+function postJson(url: string, payload: unknown): Promise<Response> {
+  return fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+function createWorkStateSnapshot(snapshot: RuntimeInventorySnapshot): RuntimeWorkStateSnapshot {
+  const runtime = snapshot.runtimes.find((item) => item.kind === "slock");
+  const agent = snapshot.agents.find((item) => item.origin === "slock");
+  if (!runtime || !agent) throw new Error("fixture must include slock runtime and agent");
+
+  const workItemId = `${runtime.id}:work-item:task-1`;
+  const conversationId = `${runtime.id}:conversation:thread-1`;
+  return {
+    observedAt: "2026-05-10T10:00:00.000Z",
+    deviceId: snapshot.device.id,
+    workItems: [{
+      id: workItemId,
+      source: "slock",
+      externalId: "task-1",
+      title: "AGTD-001 Fix queue handoff",
+      description: "PMO asked the Slock agent to inspect queue handoff.",
+      status: "in_progress",
+      channel: { kind: "other", label: "#AjisGTD", externalId: "AjisGTD" },
+      creator: { kind: "human", label: "PMO" },
+      assignee: { kind: "agent", label: "tester", objectId: agent.id },
+      agentId: agent.id,
+      runtimeId: runtime.id,
+      conversationId,
+      createdAt: "2026-05-10T09:50:00.000Z",
+      updatedAt: "2026-05-10T09:58:00.000Z",
+      lastSeenAt: "2026-05-10T10:00:00.000Z",
+      sourceRefs: [{ source: "slock", externalId: "task-1" }],
+    }],
+    conversations: [{
+      id: conversationId,
+      source: "slock",
+      externalId: "thread-1",
+      status: "active",
+      channel: { kind: "other", label: "#AjisGTD", externalId: "AjisGTD" },
+      title: "#AjisGTD",
+      workItemId,
+      agentId: agent.id,
+      runtimeId: runtime.id,
+      lastSeenAt: "2026-05-10T10:00:00.000Z",
+      sourceRefs: [{ source: "slock", externalId: "thread-1" }],
+    }],
+    executions: [{
+      id: `${runtime.id}:execution:run-1`,
+      source: "slock",
+      externalId: "run-1",
+      runtimeId: runtime.id,
+      agentId: agent.id,
+      workItemId,
+      conversationId,
+      status: "running",
+      startedAt: "2026-05-10T09:51:00.000Z",
+      lastSeenAt: "2026-05-10T10:00:00.000Z",
+      sourceRefs: [{ source: "slock", externalId: "run-1" }],
+    }],
+    capabilities: [],
+  };
+}

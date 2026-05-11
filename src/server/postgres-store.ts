@@ -5,7 +5,12 @@ import {
   type RuntimeWorkItem,
   type RuntimeWorkStateSnapshot,
 } from "../runtime/runtime-work-state";
-import type { RuntimeInventorySnapshot } from "../runtime/runtime-normalize";
+import type {
+  AgentlaneRuntime,
+  ManagedRuntimeAgent,
+  RuntimeDevice,
+  RuntimeInventorySnapshot,
+} from "../runtime/runtime-normalize";
 
 const { Pool } = pg;
 
@@ -53,8 +58,45 @@ export interface PostgresWorkItemRow {
   status: string;
   stage: string;
   title: string;
+  description: string | null;
+  runtimeId: string | null;
+  agentId: string | null;
+  conversationId: string | null;
   channelKind: string | null;
   channelLabel: string | null;
+  creator: unknown;
+  assignee: unknown;
+  lastSeenAt: string | null;
+}
+
+/** Backend query result for Runtime Fleet. */
+export interface PostgresRuntimeFleetResult {
+  observedAt: string | null;
+  devices: RuntimeDevice[];
+  runtimes: AgentlaneRuntime[];
+  agents: ManagedRuntimeAgent[];
+  summary: {
+    deviceCount: number;
+    runtimeCount: number;
+    agentCount: number;
+  };
+}
+
+/** Backend query filters for work items. */
+export interface PostgresRuntimeWorkItemFilters {
+  source?: string | null;
+  stage?: string | null;
+  channelKind?: string | null;
+  startAt?: string | null;
+  endAt?: string | null;
+  search?: string | null;
+  limit?: number;
+}
+
+/** Backend query result for work items. */
+export interface PostgresRuntimeWorkItemResult {
+  items: PostgresWorkItemRow[];
+  total: number;
 }
 
 /** Postgres-backed repository for normalized runtime inventory and work-state snapshots. */
@@ -67,6 +109,10 @@ export interface PostgresStore {
   readEntityCounts: () => Promise<PostgresEntityCounts>;
   /** Count work items by normalized source. */
   countWorkItemsBySource: () => Promise<Record<string, number>>;
+  /** Read current Runtime Fleet records from Postgres. */
+  readRuntimeFleet: () => Promise<PostgresRuntimeFleetResult>;
+  /** Query normalized work items from Postgres. */
+  listRuntimeWorkItems: (filters?: PostgresRuntimeWorkItemFilters) => Promise<PostgresRuntimeWorkItemResult>;
   /** Read one stored work item row. */
   readWorkItem: (id: string) => Promise<PostgresWorkItemRow | null>;
   /** List collector ingestion metadata for a device. */
@@ -164,6 +210,66 @@ export function createPostgresStore(options: PostgresStoreOptions = {}): Postgre
       `);
       return Object.fromEntries(result.rows.map((row) => [row.source, Number(row.count)]));
     },
+    async readRuntimeFleet() {
+      const [deviceResult, runtimeResult, agentResult] = await Promise.all([
+        pool.query<{ raw: RuntimeDevice; observed_at: Date | null }>("SELECT raw, observed_at FROM devices ORDER BY name"),
+        pool.query<{ raw: AgentlaneRuntime }>("SELECT raw FROM runtimes ORDER BY name"),
+        pool.query<{ raw: ManagedRuntimeAgent }>("SELECT raw FROM agents ORDER BY name"),
+      ]);
+      const observedAt = deviceResult.rows
+        .map((row) => row.observed_at?.toISOString() ?? null)
+        .filter((value): value is string => Boolean(value))
+        .sort()
+        .at(-1) ?? null;
+      const devices = deviceResult.rows.map((row) => row.raw);
+      const runtimes = runtimeResult.rows.map((row) => row.raw);
+      const agents = agentResult.rows.map((row) => row.raw);
+
+      return {
+        observedAt,
+        devices,
+        runtimes,
+        agents,
+        summary: {
+          agentCount: agents.length,
+          deviceCount: devices.length,
+          runtimeCount: runtimes.length,
+        },
+      };
+    },
+    async listRuntimeWorkItems(filters = {}) {
+      const { clause, values } = createWorkItemWhereClause(filters);
+      const countResult = await pool.query<{ count: string }>(
+        `SELECT count(*) AS count FROM work_items ${clause}`,
+        values,
+      );
+      const limit = Math.min(Math.max(filters.limit ?? 200, 1), 500);
+      const result = await pool.query<PostgresWorkItemRow>(`
+        SELECT
+          id,
+          source,
+          status,
+          stage,
+          title,
+          description,
+          runtime_id AS "runtimeId",
+          agent_id AS "agentId",
+          conversation_id AS "conversationId",
+          channel_kind AS "channelKind",
+          channel_label AS "channelLabel",
+          creator,
+          assignee,
+          last_seen_at AS "lastSeenAt"
+        FROM work_items
+        ${clause}
+        ORDER BY coalesce(last_seen_at, updated_source_at, created_source_at, updated_at, created_at) DESC
+        LIMIT $${values.length + 1}
+      `, [...values, limit]);
+      return {
+        items: result.rows,
+        total: Number(countResult.rows[0]?.count ?? 0),
+      };
+    },
     async readWorkItem(id) {
       const result = await pool.query<PostgresWorkItemRow>(`
         SELECT
@@ -172,8 +278,15 @@ export function createPostgresStore(options: PostgresStoreOptions = {}): Postgre
           status,
           stage,
           title,
+          description,
+          runtime_id AS "runtimeId",
+          agent_id AS "agentId",
+          conversation_id AS "conversationId",
           channel_kind AS "channelKind",
-          channel_label AS "channelLabel"
+          channel_label AS "channelLabel",
+          creator,
+          assignee,
+          last_seen_at AS "lastSeenAt"
         FROM work_items
         WHERE id = $1
       `, [id]);
@@ -550,6 +663,52 @@ function createLatestExecutionsByWorkItemId(executions: RuntimeExecution[]): Map
     }
   }
   return latestExecutions;
+}
+
+function createWorkItemWhereClause(filters: PostgresRuntimeWorkItemFilters): {
+  clause: string;
+  values: unknown[];
+} {
+  const conditions: string[] = [];
+  const values: unknown[] = [];
+
+  addTextFilter(conditions, values, "source", filters.source);
+  addTextFilter(conditions, values, "stage", filters.stage);
+  addTextFilter(conditions, values, "channel_kind", filters.channelKind);
+
+  if (filters.startAt) {
+    values.push(toDate(filters.startAt));
+    conditions.push(`coalesce(last_seen_at, updated_source_at, created_source_at, updated_at, created_at) >= $${values.length}`);
+  }
+  if (filters.endAt) {
+    values.push(toDate(filters.endAt));
+    conditions.push(`coalesce(last_seen_at, updated_source_at, created_source_at, updated_at, created_at) <= $${values.length}`);
+  }
+  if (filters.search?.trim()) {
+    values.push(`%${filters.search.trim()}%`);
+    conditions.push(`(
+      title ILIKE $${values.length}
+      OR coalesce(description, '') ILIKE $${values.length}
+      OR source ILIKE $${values.length}
+      OR coalesce(channel_label, '') ILIKE $${values.length}
+    )`);
+  }
+
+  return {
+    clause: conditions.length ? `WHERE ${conditions.join(" AND ")}` : "",
+    values,
+  };
+}
+
+function addTextFilter(
+  conditions: string[],
+  values: unknown[],
+  column: string,
+  value: string | null | undefined,
+): void {
+  if (!value || value === "all") return;
+  values.push(value);
+  conditions.push(`${column} = $${values.length}`);
 }
 
 function executionTimestamp(execution: RuntimeExecution): number {
