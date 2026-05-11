@@ -78,6 +78,7 @@ const quickRangeLabels: Record<QuickRangeOption, string> = {
 };
 
 const fixtureWorkStateSnapshot = createFixtureWorkStateSnapshot();
+const defaultFiltersKey = createRuntimeWorkFiltersKey();
 
 type RuntimeWorkDataSource = "fixture" | "backend-query";
 
@@ -101,6 +102,7 @@ export function RuntimeWorkBoardPage() {
     allowFixtureFallback ? fixtureWorkStateSnapshot.workItems.length : 0,
   );
   const [nextCursor, setNextCursor] = useState<string | undefined>(undefined);
+  const [loadedFiltersKey, setLoadedFiltersKey] = useState(defaultFiltersKey);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshState, setRefreshState] = useState<{
     status: "idle" | "running" | "success" | "error";
@@ -134,11 +136,12 @@ export function RuntimeWorkBoardPage() {
   function applySnapshot(
     latestSnapshot: RuntimeWorkStateSnapshot,
     latestDataSource: RuntimeWorkDataSource,
-    options: { append?: boolean; nextCursor?: string; total?: number } = {},
+    options: { append?: boolean; filtersKey?: string; nextCursor?: string; total?: number } = {},
   ) {
     setSnapshot((current) => options.append ? mergeWorkStateSnapshots(current, latestSnapshot) : latestSnapshot);
     setDataSource(latestDataSource);
     setNextCursor(options.nextCursor);
+    setLoadedFiltersKey(options.filtersKey ?? defaultFiltersKey);
     setTotalMatchingItems(options.total ?? latestSnapshot.workItems.length);
     setLastLoadedAt(new Date().toISOString());
   }
@@ -147,6 +150,7 @@ export function RuntimeWorkBoardPage() {
     try {
       const latestSnapshot = await fetchLatestSnapshot(filters);
       applySnapshot(latestSnapshot.snapshot, latestSnapshot.source, {
+        filtersKey,
         nextCursor: latestSnapshot.nextCursor,
         total: latestSnapshot.total,
       });
@@ -169,6 +173,7 @@ export function RuntimeWorkBoardPage() {
         const latestSnapshot = await fetchLatestSnapshot();
         if (!cancelled) {
           applySnapshot(latestSnapshot.snapshot, latestSnapshot.source, {
+            filtersKey: defaultFiltersKey,
             nextCursor: latestSnapshot.nextCursor,
             total: latestSnapshot.total,
           });
@@ -207,6 +212,7 @@ export function RuntimeWorkBoardPage() {
     }),
     [channelKind, search, source, stage, timeEnd, timeStart],
   );
+  const filtersKey = useMemo(() => createRuntimeWorkFiltersKey(filters), [filters]);
 
   useEffect(() => {
     if (dataSource === "fixture") return undefined;
@@ -217,6 +223,7 @@ export function RuntimeWorkBoardPage() {
           const latestSnapshot = await fetchLatestSnapshot(filters);
           if (!cancelled) {
             applySnapshot(latestSnapshot.snapshot, latestSnapshot.source, {
+              filtersKey,
               nextCursor: latestSnapshot.nextCursor,
               total: latestSnapshot.total,
             });
@@ -238,6 +245,9 @@ export function RuntimeWorkBoardPage() {
   const timeRangeSummary = formatCompactTimeRangeSummary(timeStart, timeEnd);
   const timeRangeDuration = formatTimeRangeDuration(timeStart, timeEnd);
   const displayedItems = board.visibleItems.length;
+  const paginationMatchesFilters = loadedFiltersKey === filtersKey;
+  const displayedTotal = paginationMatchesFilters ? totalMatchingItems : displayedItems;
+  const canLoadMore = Boolean(nextCursor && paginationMatchesFilters);
 
   useEffect(() => {
     if (!timeRangeOpen) return undefined;
@@ -277,12 +287,13 @@ export function RuntimeWorkBoardPage() {
   }
 
   async function loadMoreWorkItems() {
-    if (!nextCursor || loadingMore) return;
+    if (!nextCursor || loadingMore || !paginationMatchesFilters) return;
     setLoadingMore(true);
     try {
       const page = await fetchLatestSnapshot(filters, nextCursor);
       applySnapshot(page.snapshot, page.source, {
         append: true,
+        filtersKey,
         nextCursor: page.nextCursor,
         total: page.total,
       });
@@ -487,8 +498,8 @@ export function RuntimeWorkBoardPage() {
       <section className="workBoardGrid">
         <div className="workBoardMain">
           <div className="boardResultMeta">
-            <span>已显示 {displayedItems} / {totalMatchingItems}</span>
-            {nextCursor ? (
+            <span>已显示 {displayedItems} / {displayedTotal}</span>
+            {canLoadMore ? (
               <button className="loadMoreButton" type="button" disabled={loadingMore} onClick={() => void loadMoreWorkItems()}>
                 {loadingMore ? "加载中" : "加载更多"}
               </button>
@@ -572,7 +583,7 @@ function WorkItemDetail({
       <div className="detailHeader">
         <div>
           <p className="eyebrow">工作项</p>
-          <h2>{item.title}</h2>
+          <h2 className="detailTitle" title={item.title}>{item.title}</h2>
         </div>
         <StatusPill>{stageLabels[item.stage]}</StatusPill>
       </div>
@@ -644,6 +655,17 @@ function createTimeRangeFilter(start: string, end: string): RuntimeWorkTimeRange
     start: normalizedStart || undefined,
     end: normalizedEnd || undefined,
   };
+}
+
+function createRuntimeWorkFiltersKey(filters?: RuntimeWorkBoardFilters): string {
+  return JSON.stringify({
+    channelKind: filters?.channelKind ?? "all",
+    search: filters?.search?.trim() ?? "",
+    source: filters?.source ?? "all",
+    stage: filters?.stage ?? "all",
+    timeEnd: filters?.timeRange?.end ?? "",
+    timeStart: filters?.timeRange?.start ?? "",
+  });
 }
 
 function createQuickTimeRange(option: QuickRangeOption, now: Date): { start: Date; end: Date } {

@@ -888,11 +888,15 @@ button.tableRow:hover,
 
 .detailHeader h2 {
   color: #071943;
+  display: -webkit-box;
   font-size: 20px;
+  line-height: 1.28;
   margin-bottom: 0;
   overflow: hidden;
   overflow-wrap: anywhere;
   text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 
 .detailBlock {

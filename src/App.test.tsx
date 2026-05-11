@@ -222,6 +222,49 @@ describe("Catalog page", () => {
     expect(within(detail).queryByText("执行状态: 不支持采集")).not.toBeInTheDocument();
   });
 
+  it("keeps long Runs detail titles constrained while preserving the full title", async () => {
+    const user = userEvent.setup();
+    const longTitle = "使用Aetheris CLI帮我查询数据1、数据连接是：http://s-fat.dancf.com/4hzk 2、查询日期为多个周期内的数据并返回报告";
+    const backendSnapshot: RuntimeWorkStateSnapshot = {
+      observedAt: "2026-05-09T08:00:00.000Z",
+      deviceId: "fixture-device",
+      workItems: [
+        {
+          id: "fixture-long-title",
+          source: "slock",
+          externalId: "fixture-long-title",
+          title: longTitle,
+          status: "in_review",
+          assignee: { kind: "agent", label: "ZyangSenefactor" },
+          creator: { kind: "human", label: "zhaoyang" },
+          lastSeenAt: "2026-05-09T08:00:00.000Z",
+        },
+      ],
+      conversations: [],
+      executions: [],
+      capabilities: [],
+    };
+    globalThis.fetch = vi.fn(async (input) => {
+      const url = input.toString();
+      if (url.includes("/api/runtime-work-items")) {
+        return new Response(JSON.stringify(workStateQueryResponse(backendSnapshot)), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "unexpected request" }), { status: 500 });
+    }) as unknown as typeof fetch;
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Runs" }));
+    await user.click(await screen.findByRole("button", { name: new RegExp(longTitle.slice(0, 12)) }));
+
+    const detail = screen.getByRole("complementary", { name: "工作项详情" });
+    const title = within(detail).getByRole("heading", { name: longTitle });
+    expect(title).toHaveClass("detailTitle");
+    expect(title).toHaveAttribute("title", longTitle);
+  });
+
   it("does not turn OpenClaw executions or Slock listening gaps into Runs cards", async () => {
     const user = userEvent.setup();
     const backendSnapshot: RuntimeWorkStateSnapshot = {
@@ -345,6 +388,63 @@ describe("Catalog page", () => {
     expect(await screen.findByRole("button", { name: /Second backend card/ })).toBeInTheDocument();
     expect(screen.getByText("已显示 2 / 2")).toBeInTheDocument();
     expect(requests.some((url) => url.includes("cursor=cursor-1"))).toBe(true);
+  });
+
+  it("hides stale Runs pagination when filters change before the next query returns", async () => {
+    const user = userEvent.setup();
+    const initialPage: RuntimeWorkStateSnapshot = {
+      observedAt: "2026-05-09T08:00:00.000Z",
+      deviceId: "fixture-device",
+      workItems: [
+        {
+          id: "initial-openclaw-card",
+          source: "openclaw",
+          externalId: "initial-openclaw-card",
+          title: "Initial OpenClaw card",
+          status: "todo",
+          lastSeenAt: "2026-05-09T08:00:00.000Z",
+        },
+        {
+          id: "initial-slock-card",
+          source: "slock",
+          externalId: "initial-slock-card",
+          title: "Initial Slock card",
+          status: "todo",
+          lastSeenAt: "2026-05-09T08:00:00.000Z",
+        },
+      ],
+      conversations: [],
+      executions: [],
+      capabilities: [],
+    };
+    globalThis.fetch = vi.fn(async (input) => {
+      const url = input.toString();
+      if (url.includes("/api/runtime-work-items") && url.includes("source=openclaw")) {
+        return new Response(JSON.stringify({
+          items: [workStateQueryResponse(initialPage).items[0]],
+          total: 1,
+        }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/api/runtime-work-items")) {
+        return new Response(JSON.stringify({ ...workStateQueryResponse(initialPage), nextCursor: "stale-cursor", total: 3 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "unexpected request" }), { status: 500 });
+    }) as unknown as typeof fetch;
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Runs" }));
+    expect(await screen.findByRole("button", { name: "加载更多" })).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("来源 Runtime"), "openclaw");
+
+    expect(screen.queryByRole("button", { name: "加载更多" })).not.toBeInTheDocument();
+    expect(screen.getByText("已显示 1 / 1")).toBeInTheDocument();
   });
 
   it("opens Runtime Fleet and renders the fixture runtime inventory", async () => {
