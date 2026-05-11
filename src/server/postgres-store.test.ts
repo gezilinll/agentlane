@@ -1,0 +1,127 @@
+import { describe, expect, it } from "vitest";
+import fixtureSnapshot from "../../fixtures/runtime/collector-snapshot.sample.json";
+import type { RuntimeInventorySnapshot, RuntimeWorkStateSnapshot } from "../runtime";
+import { createTemporaryPostgresDatabase, runMigrationsScript, shouldRunPostgresTests } from "../test/postgres";
+import { createPostgresStore } from "./postgres-store";
+
+const describeDb = shouldRunPostgresTests() ? describe : describe.skip;
+
+describeDb("Postgres runtime store", () => {
+  it("upserts inventory and work-state snapshots into queryable backend tables", async () => {
+    const database = await createTemporaryPostgresDatabase();
+    try {
+      runMigrationsScript(database.url);
+      const store = createPostgresStore({ connectionString: database.url });
+      try {
+        const inventorySnapshot = fixtureSnapshot as RuntimeInventorySnapshot;
+        const workStateSnapshot = createWorkStateSnapshot(inventorySnapshot);
+
+        await store.upsertInventorySnapshot(inventorySnapshot);
+        await store.upsertWorkStateSnapshot(workStateSnapshot);
+
+        expect(await store.readEntityCounts()).toEqual({
+          agents: 2,
+          channelBindings: 2,
+          collectorIngestions: 2,
+          devices: 1,
+          runtimes: 2,
+          workConversations: 1,
+          workExecutions: 1,
+          workItems: 1,
+        });
+        expect(await store.countWorkItemsBySource()).toEqual({ slock: 1 });
+        expect(await store.readWorkItem(workStateSnapshot.workItems[0].id)).toMatchObject({
+          id: workStateSnapshot.workItems[0].id,
+          source: "slock",
+          stage: "processing",
+          title: "AGTD-001 Fix queue handoff",
+        });
+        expect(await store.listCollectorIngestions("fixture-mac")).toEqual([
+          expect.objectContaining({
+            counts: { agents: 2, channelBindings: 2, devices: 1, runtimes: 2 },
+            deviceId: "fixture-mac",
+            snapshotType: "inventory",
+            status: "succeeded",
+          }),
+          expect.objectContaining({
+            counts: { conversations: 1, executions: 1, workItems: 1 },
+            deviceId: "fixture-mac",
+            snapshotType: "work_state",
+            status: "succeeded",
+            warnings: ["fixture warning"],
+          }),
+        ]);
+      } finally {
+        await store.close();
+      }
+    } finally {
+      await database.drop();
+    }
+  });
+});
+
+function createWorkStateSnapshot(snapshot: RuntimeInventorySnapshot): RuntimeWorkStateSnapshot {
+  const runtime = snapshot.runtimes.find((item) => item.kind === "slock");
+  const agent = snapshot.agents.find((item) => item.origin === "slock");
+  if (!runtime || !agent) throw new Error("fixture must include slock runtime and agent");
+
+  const workItemId = `${runtime.id}:work-item:task-1`;
+  const conversationId = `${runtime.id}:conversation:thread-1`;
+  return {
+    observedAt: "2026-05-10T10:00:00.000Z",
+    deviceId: snapshot.device.id,
+    workItems: [{
+      id: workItemId,
+      source: "slock",
+      externalId: "task-1",
+      title: "AGTD-001 Fix queue handoff",
+      description: "PMO asked the Slock agent to inspect queue handoff.",
+      status: "in_progress",
+      channel: { kind: "other", label: "#AjisGTD", externalId: "AjisGTD" },
+      creator: { kind: "human", label: "PMO" },
+      assignee: { kind: "agent", label: "tester", objectId: agent.id },
+      agentId: agent.id,
+      runtimeId: runtime.id,
+      conversationId,
+      createdAt: "2026-05-10T09:50:00.000Z",
+      updatedAt: "2026-05-10T09:58:00.000Z",
+      lastSeenAt: "2026-05-10T10:00:00.000Z",
+      sourceRefs: [{ source: "slock", externalId: "task-1" }],
+    }],
+    conversations: [{
+      id: conversationId,
+      source: "slock",
+      externalId: "thread-1",
+      status: "active",
+      channel: { kind: "other", label: "#AjisGTD", externalId: "AjisGTD" },
+      title: "#AjisGTD",
+      workItemId,
+      agentId: agent.id,
+      runtimeId: runtime.id,
+      participants: [
+        { kind: "human", label: "PMO" },
+        { kind: "agent", label: "tester", objectId: agent.id },
+      ],
+      startedAt: "2026-05-10T09:50:00.000Z",
+      lastActivityAt: "2026-05-10T09:58:00.000Z",
+      lastSeenAt: "2026-05-10T10:00:00.000Z",
+      sourceRefs: [{ source: "slock", externalId: "thread-1" }],
+    }],
+    executions: [{
+      id: `${runtime.id}:execution:run-1`,
+      source: "slock",
+      externalId: "run-1",
+      runtimeId: runtime.id,
+      agentId: agent.id,
+      workItemId,
+      conversationId,
+      status: "running",
+      queuedAt: "2026-05-10T09:50:00.000Z",
+      startedAt: "2026-05-10T09:51:00.000Z",
+      lastSeenAt: "2026-05-10T10:00:00.000Z",
+      sourceRefs: [{ source: "slock", externalId: "run-1" }],
+    }],
+    capabilities: [],
+    warnings: ["fixture warning"],
+  };
+}

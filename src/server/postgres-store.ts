@@ -1,0 +1,583 @@
+import pg from "pg";
+import {
+  deriveRuntimeWorkStage,
+  type RuntimeExecution,
+  type RuntimeWorkItem,
+  type RuntimeWorkStateSnapshot,
+} from "../runtime/runtime-work-state";
+import type { RuntimeInventorySnapshot } from "../runtime/runtime-normalize";
+
+const { Pool } = pg;
+
+/** Construction options for the Postgres-backed Agentlane repository. */
+export interface PostgresStoreOptions {
+  /** Postgres connection string; defaults to local compose Postgres. */
+  connectionString?: string;
+}
+
+/** Counts returned from a successful collector ingestion. */
+export interface PostgresIngestionResult {
+  /** Device that produced the snapshot. */
+  deviceId: string;
+  /** Snapshot type persisted by the repository. */
+  snapshotType: "inventory" | "work_state";
+  /** Object counts written by this ingestion. */
+  counts: Record<string, number>;
+}
+
+/** Small table-count summary used by backend harnesses. */
+export interface PostgresEntityCounts {
+  devices: number;
+  runtimes: number;
+  agents: number;
+  channelBindings: number;
+  workItems: number;
+  workConversations: number;
+  workExecutions: number;
+  collectorIngestions: number;
+}
+
+/** Query row for one collector ingestion. */
+export interface PostgresCollectorIngestion {
+  deviceId: string;
+  snapshotType: "inventory" | "work_state";
+  status: "succeeded" | "failed";
+  counts: Record<string, number>;
+  warnings: string[];
+}
+
+/** Minimal work item row used by repository tests and future query API composition. */
+export interface PostgresWorkItemRow {
+  id: string;
+  source: string;
+  status: string;
+  stage: string;
+  title: string;
+  channelKind: string | null;
+  channelLabel: string | null;
+}
+
+/** Postgres-backed repository for normalized runtime inventory and work-state snapshots. */
+export interface PostgresStore {
+  /** Upsert a normalized inventory snapshot and record collector ingestion metadata. */
+  upsertInventorySnapshot: (snapshot: RuntimeInventorySnapshot) => Promise<PostgresIngestionResult>;
+  /** Upsert a normalized work-state snapshot and record collector ingestion metadata. */
+  upsertWorkStateSnapshot: (snapshot: RuntimeWorkStateSnapshot) => Promise<PostgresIngestionResult>;
+  /** Read coarse entity counts for harnesses and smoke diagnostics. */
+  readEntityCounts: () => Promise<PostgresEntityCounts>;
+  /** Count work items by normalized source. */
+  countWorkItemsBySource: () => Promise<Record<string, number>>;
+  /** Read one stored work item row. */
+  readWorkItem: (id: string) => Promise<PostgresWorkItemRow | null>;
+  /** List collector ingestion metadata for a device. */
+  listCollectorIngestions: (deviceId: string) => Promise<PostgresCollectorIngestion[]>;
+  /** Close owned Postgres connections. */
+  close: () => Promise<void>;
+}
+
+/** Create a Postgres repository using Agentlane's normalized snapshot semantics. */
+export function createPostgresStore(options: PostgresStoreOptions = {}): PostgresStore {
+  const pool = new Pool({
+    connectionString: options.connectionString ?? process.env.DATABASE_URL ?? "postgres://agentlane:agentlane@127.0.0.1:54329/agentlane",
+  });
+
+  return {
+    upsertInventorySnapshot(snapshot) {
+      return withTransaction(pool, async (client) => {
+        await upsertDevice(client, snapshot);
+        for (const runtime of snapshot.runtimes) await upsertRuntime(client, runtime);
+        for (const agent of snapshot.agents) await upsertAgent(client, agent);
+        await deleteChannelBindingsForAgents(client, snapshot.agents.map((agent) => agent.id));
+        for (const agent of snapshot.agents) {
+          for (const [index, binding] of agent.channelBindings.entries()) {
+            await upsertChannelBinding(client, agent.id, binding, index);
+          }
+        }
+
+        const counts = {
+          agents: snapshot.agents.length,
+          channelBindings: snapshot.agents.reduce((total, agent) => total + agent.channelBindings.length, 0),
+          devices: 1,
+          runtimes: snapshot.runtimes.length,
+        };
+        await insertCollectorIngestion(client, {
+          counts,
+          deviceId: snapshot.device.id,
+          observedAt: snapshot.observedAt,
+          snapshotType: "inventory",
+          warnings: snapshot.reports.flatMap((report) => report.warnings ?? []),
+        });
+        return { deviceId: snapshot.device.id, snapshotType: "inventory", counts };
+      });
+    },
+    upsertWorkStateSnapshot(snapshot) {
+      return withTransaction(pool, async (client) => {
+        for (const conversation of snapshot.conversations) {
+          await upsertWorkConversation(client, snapshot.deviceId, conversation);
+        }
+        const latestExecutionsByWorkItemId = createLatestExecutionsByWorkItemId(snapshot.executions);
+        for (const workItem of snapshot.workItems) {
+          await upsertWorkItem(client, snapshot.deviceId, workItem, latestExecutionsByWorkItemId.get(workItem.id));
+        }
+        for (const execution of snapshot.executions) {
+          await upsertWorkExecution(client, snapshot.deviceId, execution);
+        }
+
+        const counts = {
+          conversations: snapshot.conversations.length,
+          executions: snapshot.executions.length,
+          workItems: snapshot.workItems.length,
+        };
+        await insertCollectorIngestion(client, {
+          counts,
+          deviceId: snapshot.deviceId,
+          observedAt: snapshot.observedAt,
+          snapshotType: "work_state",
+          warnings: snapshot.warnings ?? [],
+        });
+        return { deviceId: snapshot.deviceId, snapshotType: "work_state", counts };
+      });
+    },
+    async readEntityCounts() {
+      const client = await pool.connect();
+      try {
+        return {
+          agents: await countTable(client, "agents"),
+          channelBindings: await countTable(client, "channel_bindings"),
+          collectorIngestions: await countTable(client, "collector_ingestions"),
+          devices: await countTable(client, "devices"),
+          runtimes: await countTable(client, "runtimes"),
+          workConversations: await countTable(client, "work_conversations"),
+          workExecutions: await countTable(client, "work_executions"),
+          workItems: await countTable(client, "work_items"),
+        };
+      } finally {
+        client.release();
+      }
+    },
+    async countWorkItemsBySource() {
+      const result = await pool.query<{ source: string; count: string }>(`
+        SELECT source, count(*) AS count
+        FROM work_items
+        GROUP BY source
+        ORDER BY source
+      `);
+      return Object.fromEntries(result.rows.map((row) => [row.source, Number(row.count)]));
+    },
+    async readWorkItem(id) {
+      const result = await pool.query<PostgresWorkItemRow>(`
+        SELECT
+          id,
+          source,
+          status,
+          stage,
+          title,
+          channel_kind AS "channelKind",
+          channel_label AS "channelLabel"
+        FROM work_items
+        WHERE id = $1
+      `, [id]);
+      return result.rows[0] ?? null;
+    },
+    async listCollectorIngestions(deviceId) {
+      const result = await pool.query<PostgresCollectorIngestion>(`
+        SELECT
+          device_id AS "deviceId",
+          snapshot_type AS "snapshotType",
+          status,
+          counts,
+          warnings
+        FROM collector_ingestions
+        WHERE device_id = $1
+        ORDER BY id
+      `, [deviceId]);
+      return result.rows;
+    },
+    close() {
+      return pool.end();
+    },
+  };
+}
+
+async function upsertDevice(client: pg.PoolClient, snapshot: RuntimeInventorySnapshot): Promise<void> {
+  await client.query(`
+    INSERT INTO devices (
+      id, name, hostname, os, architecture, status, connection_mode, collector, last_seen_at, observed_at, raw, updated_at
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11::jsonb, now())
+    ON CONFLICT (id) DO UPDATE SET
+      name = excluded.name,
+      hostname = excluded.hostname,
+      os = excluded.os,
+      architecture = excluded.architecture,
+      status = excluded.status,
+      connection_mode = excluded.connection_mode,
+      collector = excluded.collector,
+      last_seen_at = excluded.last_seen_at,
+      observed_at = excluded.observed_at,
+      raw = excluded.raw,
+      updated_at = now()
+  `, [
+    snapshot.device.id,
+    snapshot.device.name,
+    snapshot.device.hostname,
+    snapshot.device.os,
+    snapshot.device.architecture ?? null,
+    snapshot.device.status,
+    snapshot.device.connectionMode,
+    toJson(snapshot.collector),
+    toDate(snapshot.device.lastSeenAt),
+    toDate(snapshot.observedAt),
+    toJson(snapshot.device),
+  ]);
+}
+
+async function upsertRuntime(client: pg.PoolClient, runtime: RuntimeInventorySnapshot["runtimes"][number]): Promise<void> {
+  await client.query(`
+    INSERT INTO runtimes (
+      id, device_id, kind, name, status, version, endpoint, capabilities, health, last_seen_at, source_refs, raw, updated_at
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10, $11::jsonb, $12::jsonb, now())
+    ON CONFLICT (id) DO UPDATE SET
+      device_id = excluded.device_id,
+      kind = excluded.kind,
+      name = excluded.name,
+      status = excluded.status,
+      version = excluded.version,
+      endpoint = excluded.endpoint,
+      capabilities = excluded.capabilities,
+      health = excluded.health,
+      last_seen_at = excluded.last_seen_at,
+      source_refs = excluded.source_refs,
+      raw = excluded.raw,
+      updated_at = now()
+  `, [
+    runtime.id,
+    runtime.deviceId,
+    runtime.kind,
+    runtime.name,
+    runtime.status,
+    runtime.version ?? null,
+    runtime.endpoint ?? null,
+    toJson(runtime.capabilities),
+    toJson(runtime.health ?? {}),
+    toDate(runtime.lastSeenAt),
+    toJson(runtime.sourceRefs),
+    toJson(runtime),
+  ]);
+}
+
+async function upsertAgent(client: pg.PoolClient, agent: RuntimeInventorySnapshot["agents"][number]): Promise<void> {
+  await client.query(`
+    INSERT INTO agents (
+      id, runtime_id, name, origin, status, load, last_seen_at, source_refs, raw, updated_at
+    )
+    VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8::jsonb, $9::jsonb, now())
+    ON CONFLICT (id) DO UPDATE SET
+      runtime_id = excluded.runtime_id,
+      name = excluded.name,
+      origin = excluded.origin,
+      status = excluded.status,
+      load = excluded.load,
+      last_seen_at = excluded.last_seen_at,
+      source_refs = excluded.source_refs,
+      raw = excluded.raw,
+      updated_at = now()
+  `, [
+    agent.id,
+    agent.runtimeId,
+    agent.name,
+    agent.origin,
+    agent.status,
+    toJson(agent.load ?? {}),
+    toDate(agent.lastSeenAt),
+    toJson(agent.sourceRefs),
+    toJson(agent),
+  ]);
+}
+
+async function deleteChannelBindingsForAgents(client: pg.PoolClient, agentIds: string[]): Promise<void> {
+  if (agentIds.length === 0) return;
+  await client.query("DELETE FROM channel_bindings WHERE agent_id = ANY($1::text[])", [agentIds]);
+}
+
+async function upsertChannelBinding(
+  client: pg.PoolClient,
+  agentId: string,
+  binding: RuntimeInventorySnapshot["agents"][number]["channelBindings"][number],
+  index: number,
+): Promise<void> {
+  await client.query(`
+    INSERT INTO channel_bindings (id, agent_id, kind, label, external_id, status, raw, updated_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, now())
+    ON CONFLICT (id) DO UPDATE SET
+      agent_id = excluded.agent_id,
+      kind = excluded.kind,
+      label = excluded.label,
+      external_id = excluded.external_id,
+      status = excluded.status,
+      raw = excluded.raw,
+      updated_at = now()
+  `, [
+    createChannelBindingId(agentId, binding, index),
+    agentId,
+    binding.kind,
+    binding.label,
+    binding.externalId ?? null,
+    binding.status ?? null,
+    toJson(binding),
+  ]);
+}
+
+async function upsertWorkConversation(
+  client: pg.PoolClient,
+  deviceId: string,
+  conversation: RuntimeWorkStateSnapshot["conversations"][number],
+): Promise<void> {
+  await client.query(`
+    INSERT INTO work_conversations (
+      id, device_id, runtime_id, agent_id, source, external_id, status, channel_kind, channel_label, title,
+      work_item_id, participants, started_at, last_activity_at, last_seen_at, source_refs, raw, updated_at
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14, $15, $16::jsonb, $17::jsonb, now())
+    ON CONFLICT (id) DO UPDATE SET
+      device_id = excluded.device_id,
+      runtime_id = excluded.runtime_id,
+      agent_id = excluded.agent_id,
+      source = excluded.source,
+      external_id = excluded.external_id,
+      status = excluded.status,
+      channel_kind = excluded.channel_kind,
+      channel_label = excluded.channel_label,
+      title = excluded.title,
+      work_item_id = excluded.work_item_id,
+      participants = excluded.participants,
+      started_at = excluded.started_at,
+      last_activity_at = excluded.last_activity_at,
+      last_seen_at = excluded.last_seen_at,
+      source_refs = excluded.source_refs,
+      raw = excluded.raw,
+      updated_at = now()
+  `, [
+    conversation.id,
+    deviceId,
+    conversation.runtimeId ?? null,
+    conversation.agentId ?? null,
+    conversation.source,
+    conversation.externalId,
+    conversation.status,
+    conversation.channel?.kind ?? null,
+    conversation.channel?.label ?? null,
+    conversation.title ?? null,
+    conversation.workItemId ?? null,
+    toJson(conversation.participants ?? []),
+    toDate(conversation.startedAt),
+    toDate(conversation.lastActivityAt),
+    toDate(conversation.lastSeenAt),
+    toJson(conversation.sourceRefs ?? []),
+    toJson(conversation),
+  ]);
+}
+
+async function upsertWorkItem(
+  client: pg.PoolClient,
+  deviceId: string,
+  workItem: RuntimeWorkItem,
+  execution?: RuntimeExecution,
+): Promise<void> {
+  const stage = deriveRuntimeWorkStage({
+    executionStatus: execution?.status,
+    source: workItem.source,
+    workItemStatus: workItem.status,
+  }).stage;
+
+  await client.query(`
+    INSERT INTO work_items (
+      id, device_id, runtime_id, agent_id, conversation_id, source, external_id, title, description, status,
+      stage, channel_kind, channel_label, creator, assignee, created_source_at, updated_source_at, last_seen_at,
+      source_refs, raw, updated_at
+    )
+    VALUES (
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+      $11, $12, $13, $14::jsonb, $15::jsonb, $16, $17, $18,
+      $19::jsonb, $20::jsonb, now()
+    )
+    ON CONFLICT (id) DO UPDATE SET
+      device_id = excluded.device_id,
+      runtime_id = excluded.runtime_id,
+      agent_id = excluded.agent_id,
+      conversation_id = excluded.conversation_id,
+      source = excluded.source,
+      external_id = excluded.external_id,
+      title = excluded.title,
+      description = excluded.description,
+      status = excluded.status,
+      stage = excluded.stage,
+      channel_kind = excluded.channel_kind,
+      channel_label = excluded.channel_label,
+      creator = excluded.creator,
+      assignee = excluded.assignee,
+      created_source_at = excluded.created_source_at,
+      updated_source_at = excluded.updated_source_at,
+      last_seen_at = excluded.last_seen_at,
+      source_refs = excluded.source_refs,
+      raw = excluded.raw,
+      updated_at = now()
+  `, [
+    workItem.id,
+    deviceId,
+    workItem.runtimeId ?? null,
+    workItem.agentId ?? null,
+    workItem.conversationId ?? null,
+    workItem.source,
+    workItem.externalId,
+    workItem.title,
+    workItem.description ?? null,
+    workItem.status,
+    stage,
+    workItem.channel?.kind ?? null,
+    workItem.channel?.label ?? null,
+    toJsonOrNull(workItem.creator),
+    toJsonOrNull(workItem.assignee),
+    toDate(workItem.createdAt),
+    toDate(workItem.updatedAt),
+    toDate(workItem.lastSeenAt),
+    toJson(workItem.sourceRefs ?? []),
+    toJson(workItem),
+  ]);
+}
+
+async function upsertWorkExecution(
+  client: pg.PoolClient,
+  deviceId: string,
+  execution: RuntimeExecution,
+): Promise<void> {
+  await client.query(`
+    INSERT INTO work_executions (
+      id, device_id, runtime_id, agent_id, work_item_id, conversation_id, source, external_id, status,
+      queued_at, started_at, ended_at, last_seen_at, error, source_refs, raw, updated_at
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::jsonb, $16::jsonb, now())
+    ON CONFLICT (id) DO UPDATE SET
+      device_id = excluded.device_id,
+      runtime_id = excluded.runtime_id,
+      agent_id = excluded.agent_id,
+      work_item_id = excluded.work_item_id,
+      conversation_id = excluded.conversation_id,
+      source = excluded.source,
+      external_id = excluded.external_id,
+      status = excluded.status,
+      queued_at = excluded.queued_at,
+      started_at = excluded.started_at,
+      ended_at = excluded.ended_at,
+      last_seen_at = excluded.last_seen_at,
+      error = excluded.error,
+      source_refs = excluded.source_refs,
+      raw = excluded.raw,
+      updated_at = now()
+  `, [
+    execution.id,
+    deviceId,
+    execution.runtimeId,
+    execution.agentId ?? null,
+    execution.workItemId ?? null,
+    execution.conversationId ?? null,
+    execution.source,
+    execution.externalId,
+    execution.status,
+    toDate(execution.queuedAt),
+    toDate(execution.startedAt),
+    toDate(execution.endedAt),
+    toDate(execution.lastSeenAt),
+    execution.error ?? null,
+    toJson(execution.sourceRefs ?? []),
+    toJson(execution),
+  ]);
+}
+
+async function insertCollectorIngestion(
+  client: pg.PoolClient,
+  input: {
+    deviceId: string;
+    snapshotType: "inventory" | "work_state";
+    observedAt: string;
+    counts: Record<string, number>;
+    warnings: string[];
+  },
+): Promise<void> {
+  await client.query(`
+    INSERT INTO collector_ingestions (device_id, snapshot_type, status, observed_at, counts, warnings)
+    VALUES ($1, $2, 'succeeded', $3, $4::jsonb, $5::jsonb)
+  `, [
+    input.deviceId,
+    input.snapshotType,
+    toDate(input.observedAt),
+    toJson(input.counts),
+    toJson(input.warnings),
+  ]);
+}
+
+async function countTable(client: pg.PoolClient, table: string): Promise<number> {
+  const result = await client.query<{ count: string }>(`SELECT count(*) AS count FROM ${table}`);
+  return Number(result.rows[0]?.count ?? 0);
+}
+
+async function withTransaction<T>(
+  pool: InstanceType<typeof Pool>,
+  operation: (client: pg.PoolClient) => Promise<T>,
+): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await operation(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+function createLatestExecutionsByWorkItemId(executions: RuntimeExecution[]): Map<string, RuntimeExecution> {
+  const latestExecutions = new Map<string, RuntimeExecution>();
+  for (const execution of executions) {
+    if (!execution.workItemId) continue;
+    const current = latestExecutions.get(execution.workItemId);
+    if (!current || executionTimestamp(execution) > executionTimestamp(current)) {
+      latestExecutions.set(execution.workItemId, execution);
+    }
+  }
+  return latestExecutions;
+}
+
+function executionTimestamp(execution: RuntimeExecution): number {
+  return Date.parse(execution.lastSeenAt ?? execution.endedAt ?? execution.startedAt ?? execution.queuedAt ?? "") || 0;
+}
+
+function createChannelBindingId(
+  agentId: string,
+  binding: RuntimeInventorySnapshot["agents"][number]["channelBindings"][number],
+  index: number,
+): string {
+  return `${agentId}:channel:${normalizeObjectKey(binding.kind)}:${normalizeObjectKey(binding.externalId ?? binding.label)}:${index}`;
+}
+
+function normalizeObjectKey(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "unknown";
+}
+
+function toDate(value: string | undefined): Date | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function toJson(value: unknown): string {
+  return JSON.stringify(value);
+}
+
+function toJsonOrNull(value: unknown): string | null {
+  return value === undefined ? null : JSON.stringify(value);
+}

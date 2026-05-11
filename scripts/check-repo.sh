@@ -24,6 +24,8 @@ required_paths=(
   "src/runtime/runtime-normalize.ts"
   "src/backend/backend-server.ts"
   "src/server/runtime-inventory-store.ts"
+  "src/server/postgres-store.ts"
+  "src/test/postgres.ts"
   "db/migrations/0001_backend_core.sql"
   "scripts/db-migrate.mjs"
   "scripts/agentlane-device-collector.mjs"
