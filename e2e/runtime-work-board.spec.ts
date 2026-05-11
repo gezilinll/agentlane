@@ -66,16 +66,24 @@ test.describe("Runs / Work Board", () => {
     await page.getByRole("button", { name: /选择时间范围/ }).click();
     await expect(page.getByRole("button", { name: "清除时间" })).toBeVisible();
     await page.getByRole("button", { name: "1天" }).click();
+    await expect(page.getByRole("dialog", { name: "时间范围选择" })).toHaveCount(0);
+    await page.getByRole("button", { name: /选择时间范围/ }).click();
     await page.getByRole("button", { name: "确认" }).click();
+    await expect(page.getByRole("dialog", { name: "时间范围选择" })).toHaveCount(0);
     const timeSummaryFits = await page.locator(".timeRangeSummary").evaluate(
       (element) => element.scrollWidth <= element.clientWidth + 1,
     );
     expect(timeSummaryFits).toBe(true);
     await page.getByRole("button", { name: /选择时间范围/ }).click();
+    await page.getByRole("heading", { name: "工作看板" }).click();
+    await expect(page.getByRole("dialog", { name: "时间范围选择" })).toHaveCount(0);
+    await page.getByRole("button", { name: /选择时间范围/ }).click();
     await page.getByRole("button", { name: "日历中选择" }).click();
+    await expect(page.getByRole("dialog", { name: "时间范围选择" })).toBeVisible();
     await page.getByLabel("开始时间").fill("2026-05-09T15:45");
     await page.getByLabel("结束时间").fill("2026-05-09T16:00");
     await page.getByRole("button", { name: "立即查询" }).click();
+    await expect(page.getByRole("dialog", { name: "时间范围选择" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /帮我检查今天的线上异常/ })).toBeVisible();
     await page.getByRole("button", { name: /选择时间范围/ }).click();
     await page.getByRole("button", { name: "日历中选择" }).click();
@@ -85,6 +93,7 @@ test.describe("Runs / Work Board", () => {
     await expect(page.getByRole("button", { name: /帮我检查今天的线上异常/ })).not.toBeVisible();
     await page.getByRole("button", { name: /选择时间范围/ }).click();
     await page.getByRole("button", { name: "清除时间" }).click();
+    await expect(page.getByRole("dialog", { name: "时间范围选择" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /帮我检查今天的线上异常/ })).toBeVisible();
 
     await page.getByLabel("来源 Runtime").selectOption("slock");

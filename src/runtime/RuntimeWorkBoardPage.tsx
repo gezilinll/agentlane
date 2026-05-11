@@ -1,5 +1,5 @@
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronUp, RefreshCw, Search } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   mapMulticaWorkState,
   mapOpenClawWorkState,
@@ -92,6 +92,7 @@ export function RuntimeWorkBoardPage() {
   const [timeRangeOpen, setTimeRangeOpen] = useState(false);
   const [timeRangeMode, setTimeRangeMode] = useState<TimeRangePanelMode>("quick");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const timeRangeRef = useRef<HTMLDivElement | null>(null);
 
   async function fetchLatestSnapshot(): Promise<RuntimeWorkStateSnapshot | null> {
     const response = await fetch(new URL("/api/runtime-work-state/latest", window.location.origin));
@@ -170,16 +171,32 @@ export function RuntimeWorkBoardPage() {
   const timeRangeSummary = formatCompactTimeRangeSummary(timeStart, timeEnd);
   const timeRangeDuration = formatTimeRangeDuration(timeStart, timeEnd);
 
+  useEffect(() => {
+    if (!timeRangeOpen) return undefined;
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (timeRangeRef.current?.contains(target)) return;
+      setTimeRangeOpen(false);
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [timeRangeOpen]);
+
   function applyQuickRange(option: QuickRangeOption) {
     const range = createQuickTimeRange(option, new Date());
     setTimeStart(formatDateTimeLocal(range.start));
     setTimeEnd(formatDateTimeLocal(range.end));
+    setTimeRangeOpen(false);
   }
 
   function clearTimeRange() {
     setTimeStart("");
     setTimeEnd("");
     setTimeRangeMode("quick");
+    setTimeRangeOpen(false);
   }
 
   function toggleTimeRangeOpen() {
@@ -277,7 +294,7 @@ export function RuntimeWorkBoardPage() {
           </select>
         </label>
 
-        <div className="toolbarField timeRangeField">
+        <div className="toolbarField timeRangeField" ref={timeRangeRef}>
           <span className="controlLabel">时间范围</span>
           <button
             aria-controls="runs-time-range-panel"
