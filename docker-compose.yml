@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: agentlane
+      POSTGRES_USER: agentlane
+      POSTGRES_PASSWORD: agentlane
+    ports:
+      - "54329:5432"
+    volumes:
+      - agentlane-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentlane -d agentlane"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+volumes:
+  agentlane-postgres-data:

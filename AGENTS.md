@@ -28,6 +28,8 @@ Current source of truth:
 - `src/server/runtime-control-channel.ts`: in-memory v1 device control channel for connection, heartbeat, and refresh command lifecycle.
 - `src/server/runtime-http-api.ts`: local Runtime Fleet HTTP API for latest snapshot and refresh command requests.
 - `src/backend/backend-server.ts`: standalone local-first backend service that composes the HTTP API and device WebSocket control channel outside Vite.
+- `db/migrations/`: Postgres schema migrations for the formal backend service.
+- `scripts/db-migrate.mjs`: local Postgres migration runner.
 - `scripts/agentlane-device-collector.mjs`: device-side collector / Device Agent script.
 - `scripts/install-device-collector.sh`: local-path collector installer for development and remote-device testing.
 - `e2e/catalog-workflow.spec.ts`: browser-level user workflow harness for the Catalog page.
@@ -81,7 +83,7 @@ Current spec and harness mapping:
 | Runs / Work Board page | `src/runtime/RuntimeWorkBoardPage.tsx`, `docs/product/runtime-work-state-probe.md` | `src/App.test.tsx`, `e2e/runtime-work-board.spec.ts`, `npm run check:quick`, `npm run check:e2e` |
 | Runtime Fleet page | `docs/product/runtime-fleet-page-spec.md`, `src/runtime/runtime-inventory-query.ts`, `src/runtime/RuntimeFleetPage.tsx` | `src/runtime/runtime-inventory-query.test.ts`, `src/App.test.tsx`, `e2e/runtime-fleet.spec.ts`, `npm run check:quick`, `npm run check:e2e` |
 | Runtime snapshot and control backend | `docs/product/runtime-device-registration-spec.md`, `src/server/runtime-inventory-store.ts`, `src/server/runtime-control-channel.ts`, `src/server/runtime-http-api.ts`, `vite.config.ts` | `src/server/runtime-inventory-store.test.ts`, `src/server/runtime-control-channel.test.ts`, `src/server/runtime-http-api.test.ts`, `src/runtime/device-collector-script.test.ts`, `npm run check:backend` |
-| Backend service formalization | `docs/product/backend-service-spec.md`, `docs/superpowers/plans/2026-05-11-backend-service.md`, `src/backend/backend-server.ts` | `src/backend/backend-server.test.ts`, `npm run check:backend:standalone`, `npm run check:backend` |
+| Backend service formalization | `docs/product/backend-service-spec.md`, `docs/superpowers/plans/2026-05-11-backend-service.md`, `src/backend/backend-server.ts`, `db/migrations/`, `scripts/db-migrate.mjs` | `src/backend/backend-server.test.ts`, `src/server/db-migrate.test.ts`, `npm run check:backend:standalone`, `npm run check:db`, `npm run check:backend` |
 | Repo context and docs | `AGENTS.md`, `README.md`, `docs/product/ui-design.md` | `npm run check:repo` |
 
 When a user points out a missed behavior or review gap, decide whether it should become:
@@ -123,7 +125,7 @@ Run the full repository harness before handing off changes:
 ./scripts/verify.sh
 ```
 
-Equivalent package entry points are `npm run verify`, `npm run check`, and `npm run harness`. The full harness verifies required product documents/assets, local Markdown links, backend store/control/API checks, collector script behavior, TypeScript typecheck, unit/component tests, production build, and the Playwright responsive layout harness.
+Equivalent package entry points are `npm run verify`, `npm run check`, and `npm run harness`. The full harness verifies required product documents/assets, local Markdown links, Postgres migration checks, backend store/control/API checks, collector script behavior, TypeScript typecheck, unit/component tests, production build, and the Playwright responsive layout harness.
 
 If the local Playwright browser is missing, install the current test browser once:
 
@@ -136,8 +138,11 @@ Current harness scripts:
 | Script | Purpose | Run When |
 |---|---|---|
 | `npm run setup:e2e` | Install the current Playwright Chromium browser. | Once per local machine, or when Playwright asks for browser installation. |
+| `npm run db:up` | Start local Postgres through Docker Compose. | Before local backend DB development or manual migration checks. |
+| `npm run db:migrate` | Apply pending Postgres migrations to `DATABASE_URL`, defaulting to local compose Postgres. | Schema changes, local DB setup, or backend service development. |
 | `npm run check:repo` | Required source-of-truth paths and local Markdown links. | Docs, assets, agent context, or product spec changes. |
 | `npm run check:backend:standalone` | Standalone backend HTTP and WebSocket smoke tests. | Backend server composition, local backend entrypoint, or server lifecycle changes. |
+| `npm run check:db` | Starts local Postgres, runs migration integration tests against a temporary database, and drops it. | Database schema, migration runner, Docker Compose, or Postgres dependency changes. |
 | `npm run check:backend` | Focused local backend store, control channel, HTTP API, and collector POST / WebSocket harness. | Runtime snapshot API, Vite API middleware, collector posting, device WebSocket, inventory + work-state refresh command lifecycle, or backend persistence changes. |
 | `npm run check:runtime` | Focused Runtime / Device Registration and work-state unit/script harness. | Runtime inventory model, work-state model, collector, installer, fixture, probe adapter, or query changes. |
 | `npm run check:quick` | TypeScript typecheck plus Vitest unit/component tests. | Catalog model, Runtime Fleet query logic, React behavior, labels, or seed data changes. |
@@ -156,6 +161,8 @@ npm run dev
 Local backend development:
 
 ```sh
+npm run db:up
+npm run db:migrate
 npm run dev:backend
 ```
 
