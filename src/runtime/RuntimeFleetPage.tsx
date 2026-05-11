@@ -30,7 +30,7 @@ import type { RuntimeWorkStateSnapshot } from "./runtime-work-state";
 import { isFixtureFallbackAllowed } from "./runtime-data-source";
 import {
   createWorkItemsQueryUrl,
-  runtimeWorkStateSnapshotFromQueryResponse,
+  runtimeWorkItemsQueryPageFromResponse,
 } from "./runtime-work-query-api";
 
 const fixtureRuntimeSnapshot = fixtureSnapshot as RuntimeInventorySnapshot;
@@ -79,9 +79,18 @@ export function RuntimeFleetPage() {
   }
 
   async function fetchLatestWorkStateSnapshot(): Promise<RuntimeWorkStateSnapshot | null> {
-    const response = await fetch(createWorkItemsQueryUrl(window.location.origin, undefined));
-    if (!response.ok) throw new Error(`runtime work item query failed: ${response.status}`);
-    return runtimeWorkStateSnapshotFromQueryResponse(await response.json());
+    let cursor: string | undefined;
+    let snapshot: RuntimeWorkStateSnapshot | null = null;
+    for (let page = 0; page < 20; page += 1) {
+      const response = await fetch(createWorkItemsQueryUrl(window.location.origin, undefined, { cursor }));
+      if (!response.ok) throw new Error(`runtime work item query failed: ${response.status}`);
+      const queryPage = runtimeWorkItemsQueryPageFromResponse(await response.json());
+      if (!queryPage) throw new Error("runtime work item query returned an invalid payload");
+      snapshot = snapshot ? mergeWorkStateSnapshots(snapshot, queryPage.snapshot) : queryPage.snapshot;
+      cursor = queryPage.nextCursor;
+      if (!cursor) return snapshot;
+    }
+    throw new Error("runtime work item query returned too many pages");
   }
 
   function applySnapshot(latestSnapshot: RuntimeInventorySnapshot, latestWorkState: RuntimeWorkStateSnapshot | null) {
@@ -355,6 +364,33 @@ function isRuntimeFleetQueryResponse(value: unknown): value is RuntimeFleetQuery
   if (!value || typeof value !== "object") return false;
   const candidate = value as Partial<RuntimeFleetQueryResponse>;
   return Array.isArray(candidate.devices) && Array.isArray(candidate.runtimes) && Array.isArray(candidate.agents);
+}
+
+function mergeWorkStateSnapshots(
+  current: RuntimeWorkStateSnapshot,
+  next: RuntimeWorkStateSnapshot,
+): RuntimeWorkStateSnapshot {
+  return {
+    observedAt: next.observedAt > current.observedAt ? next.observedAt : current.observedAt,
+    deviceId: next.deviceId || current.deviceId,
+    workItems: mergeById(current.workItems, next.workItems),
+    conversations: mergeById(current.conversations, next.conversations),
+    executions: mergeById(current.executions, next.executions),
+    capabilities: mergeBySource(current.capabilities, next.capabilities),
+    warnings: [...(current.warnings ?? []), ...(next.warnings ?? [])],
+  };
+}
+
+function mergeById<T extends { id: string }>(current: T[], next: T[]): T[] {
+  const byId = new Map(current.map((item) => [item.id, item]));
+  for (const item of next) byId.set(item.id, item);
+  return Array.from(byId.values());
+}
+
+function mergeBySource<T extends { source: string }>(current: T[], next: T[]): T[] {
+  const bySource = new Map(current.map((item) => [item.source, item]));
+  for (const item of next) bySource.set(item.source, item);
+  return Array.from(bySource.values());
 }
 
 function Metric({ label, value, tone }: { label: string; value: number; tone: string }) {

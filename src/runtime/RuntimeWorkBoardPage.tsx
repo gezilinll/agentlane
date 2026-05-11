@@ -488,6 +488,11 @@ export function RuntimeWorkBoardPage() {
         <div className="workBoardMain">
           <div className="boardResultMeta">
             <span>已显示 {displayedItems} / {totalMatchingItems}</span>
+            {nextCursor ? (
+              <button className="loadMoreButton" type="button" disabled={loadingMore} onClick={() => void loadMoreWorkItems()}>
+                {loadingMore ? "加载中" : "加载更多"}
+              </button>
+            ) : null}
           </div>
           <div className="workBoardLanes" aria-label="工作态泳道">
             {board.lanes.map((lane) => (
@@ -532,11 +537,6 @@ export function RuntimeWorkBoardPage() {
               </section>
             ))}
           </div>
-          {nextCursor ? (
-            <button className="loadMoreButton" type="button" disabled={loadingMore} onClick={() => void loadMoreWorkItems()}>
-              {loadingMore ? "加载中" : "加载更多"}
-            </button>
-          ) : null}
         </div>
         <WorkItemDetail item={selectedItem} />
       </section>

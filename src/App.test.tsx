@@ -339,6 +339,7 @@ describe("Catalog page", () => {
 
     expect(await screen.findByRole("button", { name: /First backend card/ })).toBeInTheDocument();
     expect(screen.getByText("已显示 1 / 2")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "加载更多" }).closest(".boardResultMeta")).not.toBeNull();
     await user.click(screen.getByRole("button", { name: "加载更多" }));
 
     expect(await screen.findByRole("button", { name: /Second backend card/ })).toBeInTheDocument();
@@ -396,6 +397,60 @@ describe("Catalog page", () => {
 
     expect((await screen.findAllByText("Backend DB Mac")).length).toBeGreaterThan(0);
     expect(screen.getByText(/当前数据源：后端查询/)).toBeInTheDocument();
+  });
+
+  it("loads every backend work-item page before deriving Runtime Fleet operating status", async () => {
+    const user = userEvent.setup();
+    const backendSnapshot = fixtureSnapshot as RuntimeInventorySnapshot;
+    const slockRuntime = backendSnapshot.runtimes.find((runtime) => runtime.kind === "slock");
+    if (!slockRuntime) throw new Error("missing Slock runtime fixture");
+    const secondPage: RuntimeWorkStateSnapshot = {
+      observedAt: "2026-05-09T08:00:00.000Z",
+      deviceId: backendSnapshot.device.id,
+      workItems: [{
+        id: "second-page-slock-processing",
+        source: "slock",
+        externalId: "second-page-slock-processing",
+        title: "Slock work only visible on page two",
+        status: "in_progress",
+        runtimeId: slockRuntime.id,
+        agentId: "fixture-mac:slock:slock-daemon:agent:tester",
+        lastSeenAt: "2026-05-09T08:00:00.000Z",
+      }],
+      conversations: [],
+      executions: [],
+      capabilities: [],
+    };
+    const requests: string[] = [];
+    globalThis.fetch = vi.fn(async (input) => {
+      const url = input.toString();
+      requests.push(url);
+      if (url.includes("/api/runtime-fleet")) {
+        return new Response(JSON.stringify(runtimeFleetQueryResponse(backendSnapshot, "Backend DB Mac")), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/api/runtime-work-items") && !url.includes("cursor=work-page-2")) {
+        return new Response(JSON.stringify({ items: [], total: 501, nextCursor: "work-page-2" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/api/runtime-work-items") && url.includes("cursor=work-page-2")) {
+        return new Response(JSON.stringify({ ...workStateQueryResponse(secondPage), total: 501 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "unexpected request" }), { status: 500 });
+    }) as unknown as typeof fetch;
+
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Runtime Fleet" }));
+
+    expect(await screen.findByRole("row", { name: /Slock daemon.*工作中/ })).toBeInTheDocument();
+    expect(requests.some((url) => url.includes("cursor=work-page-2"))).toBe(true);
   });
 
   it("does not fall back to the legacy latest inventory API when Runtime Fleet query fails", async () => {

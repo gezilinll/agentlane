@@ -500,8 +500,12 @@ h1 {
 }
 
 .boardResultMeta {
+  align-items: center;
   color: #61718a;
+  display: flex;
   font-size: 13px;
+  gap: 12px;
+  justify-content: space-between;
   min-width: 0;
 }
 
@@ -608,7 +612,6 @@ h1 {
 }
 
 .loadMoreButton {
-  justify-self: center;
   background: #ffffff;
   border: 1px solid #c9d8ea;
   border-radius: 6px;

@@ -34,7 +34,7 @@ Runtime Fleet 必须区分“数据从哪里采集”和“产品上归属哪一
 
 ## 数据源
 
-页面使用 `GET /api/runtime-fleet` 读取正式后端查询结果，并用 `GET /api/runtime-work-items` 的标准化工作项辅助推导 Runtime 运行状态和 Agent 展示状态。没有后端数据或本地 backend 不可用时，页面只在非 production 模式允许使用明确标识的 `fixtures/runtime/collector-snapshot.sample.json` 做开发期离线预览；production 构建必须展示明确错误和空状态，不回退 fixture，不读取兼容期 latest API。组件不直接理解 OpenClaw、Slock 或 Multica 的内部结构，只消费标准化后的 Runtime Fleet view model。
+页面使用 `GET /api/runtime-fleet` 读取正式后端查询结果，并用 `GET /api/runtime-work-items` 的标准化工作项辅助推导 Runtime 运行状态和 Agent 展示状态。Runtime Fleet 做状态推导时必须读取完整 work-item 分页，不能只用第一页 500 条推断 Runtime / Agent 忙闲。没有后端数据或本地 backend 不可用时，页面只在非 production 模式允许使用明确标识的 `fixtures/runtime/collector-snapshot.sample.json` 做开发期离线预览；production 构建必须展示明确错误和空状态，不回退 fixture，不读取兼容期 latest API。组件不直接理解 OpenClaw、Slock 或 Multica 的内部结构，只消费标准化后的 Runtime Fleet view model。
 
 页面挂载后每 30 秒读取一次后端查询结果，并显示页面自己的上次刷新时间。自动刷新只读取后端已有数据，不自动下发远端 `inventory.refresh` 命令；远端采集仍由 collector 定时上报或用户手动点击刷新触发。
 
@@ -115,6 +115,7 @@ Agent：
 - 当旧 snapshot 缺少 Agent 级最近同步时间时，Agent 列表和详情使用归属 Runtime 或 snapshot 时间回退，不展示未知。
 - 用户可以点击 Runtime 行并在详情面板看到所属设备、Agent 数量、可用性和运行状态，不出现运行入口或任务/会话统计区块。
 - 当后端工作项查询中 Slock Runtime 关联的 Agent 有 `in_progress` 工作项时，Runtime 运行状态显示为 `工作中`。
+- 当 Runtime 相关工作项落在后端查询第二页或更后面时，Runtime Fleet 仍能读取后续 cursor 页面并正确推导运行状态。
 - 当后端工作项查询中 Slock task board 的 assignee 指向某个 Agent 且任务为 `in_progress` 时，该 Agent 状态显示为 `活跃`；已可观测但无处理中任务时显示为空闲。
 - 用户可以点击 Device 卡片并在详情面板看到身份信息、连接状态和已注册 Runtime。
 - 当后端已有最新 snapshot 时，页面展示后端设备名称而不是 fixture 设备名称。
