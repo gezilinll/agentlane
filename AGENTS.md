@@ -4,7 +4,7 @@ Root guide for coding agents working in this repository. This file is operationa
 
 ## Project State
 
-Agentlane is currently in product definition and early engineering setup. The repository is becoming the control plane for operating an Agent Network. It now has a Chinese-first Catalog page, a Runtime Fleet page, a read-only Runs / Work Board page, collector-backed runtime inventory and work-state models, and a standalone backend with Postgres-backed query APIs, production-like Docker / Nginx deployment files, an initial ECS deployment at `agentlane.gezilinll.com`, plus an outbound WebSocket device control channel. It does not yet have a production auth system, multi-device orchestration, or runtime execution control system.
+Agentlane is currently in product definition and early engineering setup. The repository is becoming the control plane for operating an Agent Network. It now has a Chinese-first Catalog page, a Runtime Fleet page, a read-only Runs / Work Board page, collector-backed runtime inventory and work-state models, and a standalone backend with Postgres-backed query APIs, production-like Docker / Nginx deployment files, an initial ECS deployment at `agentlane.gezilinll.com`, plus an outbound WebSocket device control channel. The next durable layer is organization-based auth/access and a tokenized Cream Arcade visual system. It does not yet have multi-device orchestration or runtime execution control.
 
 Current source of truth:
 
@@ -16,6 +16,7 @@ Current source of truth:
 - `docs/product/runtime-work-state-probe.md`: platform probe matrix for work items, conversations, and runtime executions.
 - `docs/product/runtime-listening-acceptance-spec.md`: TinySpec for whether OpenClaw, Multica, and Slock listening is sufficient for Runs and future task management.
 - `docs/product/backend-service-spec.md`: TinySpec for the local-first formal backend service, Postgres persistence, collector ingestion, and backend query APIs.
+- `docs/product/auth-and-access-spec.md`: TinySpec for organization-based auth/access, email-code login, invitations, sessions, and device tokens.
 - `src/catalog/catalog-object.ts`: initial TypeScript source of truth for Catalog Object shape.
 - `src/catalog/catalog-seed.ts`: first reviewable seed data for the Catalog page.
 - `src/runtime/runtime-normalize.ts`: TypeScript source of truth for v1 runtime inventory normalization.
@@ -57,7 +58,9 @@ Current source of truth:
 - Use semantic filenames for durable assets. Avoid leaving uploaded image names with spaces or copy suffixes when the asset becomes part of product documentation.
 - When code directories appear, add scoped `AGENTS.md` files only where local commands, boundaries, or ownership differ from this root guide.
 - Treat the device WebSocket as a control plane only. Do not use it for chat, arbitrary command execution, external platform protocol emulation, or task scheduling until a spec and harness explicitly introduce those behaviors.
-- Keep runtime/device secrets out of logs, fixtures, tests, docs, and UI screenshots. `deviceToken`, Slock keys, bearer tokens, and platform API keys may be passed through local config, but v1 does not implement full auth or secret management.
+- Keep runtime/device/auth secrets out of logs, fixtures, tests, docs, and UI screenshots. `deviceToken`, Slock keys, bearer tokens, platform API keys, login codes, session tokens, invitation tokens, and email provider keys may be passed through local config, but they must not be committed or displayed.
+- Auth/access rules belong in `docs/product/auth-and-access-spec.md` and backend auth modules. Do not implement permission decisions as ad hoc React conditionals.
+- Cream Arcade visual rules belong in `docs/product/ui-design.md` and shared UI tokens. Do not scatter one-off color, border, shadow, or font decisions across product components.
 - Runtime adapters must translate platform-specific fields into Agentlane-owned semantics before UI consumption. Do not make React components infer whether OpenClaw sessions, Multica tasks, or Slock workspaces mean `active`, `idle`, `lastSeenAt`, or runtime statistics.
 - Keep Runtime and Channel separate in UI and query models. OpenClaw, Multica, Slock, Codex, and Claude Code are Runtime / platform sources; Runs Channel filters are only user-facing touchpoints such as DingTalk, Telegram, Slack, or future detected message channels.
 - Runs / Work Board must stay task-context first: do not render unlinked runtime executions, listening status, capability gaps, adapter evidence, raw limitations, command names, or debugging notes as user-facing task cards. If a platform cannot provide creator, assignee, group/channel, message excerpt, or execution state for a real work item, show a concise unsupported/unknown/user-facing fallback and keep details in logs/spec/harness. Do not display raw DingTalk `cid...`, phone numbers, open conversation ids, or other opaque external ids as conversation names. For DingTalk direct chats without a readable person name, show `DingTalk 私聊`; for groups without a readable name, show `DingTalk 群聊`. A real work item with no linked execution should say `未关联执行`, not `不支持采集`.
@@ -93,8 +96,10 @@ Current spec and harness mapping:
 | Runtime Fleet page | `docs/product/runtime-fleet-page-spec.md`, `src/runtime/runtime-inventory-query.ts`, `src/runtime/runtime-collection-health.ts`, `src/runtime/RuntimeFleetPage.tsx` | `src/runtime/runtime-inventory-query.test.ts`, `src/runtime/runtime-collection-health.test.ts`, `src/App.test.tsx`, `e2e/runtime-fleet.spec.ts`, `npm run check:quick`, `npm run check:e2e` |
 | Runtime snapshot and control backend | `docs/product/runtime-device-registration-spec.md`, `src/runtime/runtime-collection-health.ts`, `src/server/runtime-inventory-store.ts`, `src/server/runtime-control-channel.ts`, `src/server/runtime-http-api.ts`, `src/backend/backend-server.ts` | `src/runtime/runtime-collection-health.test.ts`, `src/server/runtime-inventory-store.test.ts`, `src/server/runtime-control-channel.test.ts`, `src/server/runtime-http-api.test.ts`, `src/runtime/device-collector-script.test.ts`, `npm run check:backend` |
 | Backend service formalization | `docs/product/backend-service-spec.md`, `src/backend/backend-server.ts`, `src/server/postgres-store.ts`, `db/migrations/`, `scripts/db-migrate.mjs`, `scripts/dev-e2e.ts`, `scripts/smoke-production.mjs`, `vite.backend.config.ts`, `Dockerfile.backend`, `Dockerfile.frontend`, `nginx.agentlane.conf`, `docker-compose.prod-like.yml` | `src/backend/backend-server.test.ts`, `src/backend/dev-e2e-config.test.ts`, `src/server/db-migrate.test.ts`, `src/server/postgres-store.test.ts`, `src/server/runtime-http-api-postgres.test.ts`, `scripts/check-deploy-config.mjs`, `npm run check:backend:standalone`, `npm run check:db`, `npm run check:backend`, `npm run check:deploy`, `npm run smoke:production` |
+| Auth and access | `docs/product/auth-and-access-spec.md`, `src/auth/`, `db/migrations/` | `src/auth/auth-crypto.test.ts`, `src/auth/auth-store.test.ts`, `src/auth/auth-http-api.test.ts`, `src/server/runtime-http-api.test.ts`, `npm run check:backend`, `npm run check:db`, `npm run check:quick` |
+| Cream Arcade UI tokens | `docs/product/ui-design.md`, `src/ui/tokens.css`, `src/ui/` | `src/ui/ui-tokens.test.tsx`, `src/App.test.tsx`, `e2e/runtime-fleet.spec.ts`, `e2e/runtime-work-board.spec.ts`, `npm run check:quick`, `npm run check:e2e` |
 | Commit message convention | `.githooks/commit-msg`, `scripts/check-commit-message.mjs`, `scripts/check-commit-message.test.mjs` | `npm run check:commit-message`, `npm run setup:git-hooks` |
-| Repo context and docs | `AGENTS.md`, `README.md`, `docs/product/ui-design.md` | `npm run check:repo` |
+| Repo context and docs | `AGENTS.md`, `README.md`, `docs/product/ui-design.md`, `docs/product/auth-and-access-spec.md` | `npm run check:repo` |
 
 When a user points out a missed behavior or review gap, decide whether it should become:
 
