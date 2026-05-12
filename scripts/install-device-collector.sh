@@ -12,7 +12,7 @@ Options:
   --ws-url <url>          Optional Agentlane device control WebSocket URL
   --device-id <id>        Device id to register
   --device-name <name>    Human-readable device name
-  --device-token <token>  Optional future auth token; stored but not enforced in v1
+  --device-token <token>  Agentlane device token for ingestion and control
   --slock-server-url <url> Optional Slock server URL for task-board discovery
   --interval-ms <ms>      Collector interval for service mode (default: 60000)
   --once                  Run a one-time collection after install

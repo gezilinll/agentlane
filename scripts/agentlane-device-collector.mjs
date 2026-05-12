@@ -21,6 +21,7 @@ function parseArgs(argv) {
     wsUrl: "",
     deviceId: "",
     deviceName: "",
+    deviceToken: "",
     intervalMs: DEFAULT_INTERVAL_MS,
   };
 
@@ -41,6 +42,7 @@ function parseArgs(argv) {
     else if (arg === "--ws-url") args.wsUrl = next();
     else if (arg === "--device-id") args.deviceId = next();
     else if (arg === "--device-name") args.deviceName = next();
+    else if (arg === "--device-token") args.deviceToken = next();
     else if (arg === "--interval-ms") args.intervalMs = Number(next());
     else if (arg === "--help" || arg === "-h") {
       printHelp();
@@ -66,6 +68,7 @@ Options:
   --ws-url <url>         Agentlane device control WebSocket URL
   --device-id <id>       Override device id
   --device-name <name>   Override device name
+  --device-token <token> Agentlane device token for ingestion and control
   --interval-ms <ms>     Collection interval when not using --once
 `);
 }
@@ -551,24 +554,30 @@ function collectSnapshot(config, args) {
   };
 }
 
-async function postSnapshot(serverUrl, snapshot) {
+function resolveDeviceToken(config, args) {
+  return String(args.deviceToken || config.deviceToken || "").trim();
+}
+
+async function postSnapshot(serverUrl, snapshot, deviceToken = "") {
   const url = new URL("/api/device-snapshots", serverUrl);
-  await postJsonWithRetry(url, snapshot, "Snapshot");
+  await postJsonWithRetry(url, snapshot, "Snapshot", deviceToken);
 }
 
-async function postWorkStateSnapshot(serverUrl, snapshot) {
+async function postWorkStateSnapshot(serverUrl, snapshot, deviceToken = "") {
   const url = new URL("/api/runtime-work-state-snapshots", serverUrl);
-  await postJsonWithRetry(url, snapshot, "Work state snapshot");
+  await postJsonWithRetry(url, snapshot, "Work state snapshot", deviceToken);
 }
 
-async function postJsonWithRetry(url, payload, label) {
+async function postJsonWithRetry(url, payload, label, deviceToken = "") {
   let lastError;
   for (const [attempt, delayMs] of POST_RETRY_DELAYS_MS.entries()) {
     if (delayMs > 0) await sleep(delayMs);
     try {
+      const headers = { "content-type": "application/json" };
+      if (deviceToken) headers.authorization = `Bearer ${deviceToken}`;
       const response = await fetch(url, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers,
         body: JSON.stringify(payload),
       });
       if (response.ok) return;
@@ -591,7 +600,7 @@ function sleep(milliseconds) {
 async function runOnce(config, args) {
   const snapshot = collectSnapshot(config, args);
   const serverUrl = args.serverUrl || config.serverUrl || "";
-  if (serverUrl && !args.printOnly) await postSnapshot(serverUrl, snapshot);
+  if (serverUrl && !args.printOnly) await postSnapshot(serverUrl, snapshot, resolveDeviceToken(config, args));
   if (args.printOnly || !serverUrl) console.log(JSON.stringify(snapshot, null, 2));
   return snapshot;
 }
@@ -2130,7 +2139,9 @@ async function collectWorkStateSnapshot(config, args) {
 async function runWorkStateOnce(config, args) {
   const snapshot = await collectWorkStateSnapshot(config, args);
   const serverUrl = args.serverUrl || config.serverUrl || "";
-  if (serverUrl && !args.printOnly) await postWorkStateSnapshot(serverUrl, snapshot);
+  if (serverUrl && !args.printOnly) {
+    await postWorkStateSnapshot(serverUrl, snapshot, resolveDeviceToken(config, args));
+  }
   if (args.printOnly || !serverUrl) console.log(JSON.stringify(snapshot, null, 2));
   return snapshot;
 }
@@ -2285,6 +2296,7 @@ function startControlChannel(config, args, refresh) {
         type: "hello",
         deviceId: device.id,
         deviceName: device.name,
+        ...(resolveDeviceToken(config, args) ? { deviceToken: resolveDeviceToken(config, args) } : {}),
         hostname: device.hostname,
         collectorVersion: COLLECTOR_VERSION,
       });

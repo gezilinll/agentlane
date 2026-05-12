@@ -8,6 +8,11 @@ const maxJsonBodyChars = 10_000_000;
 
 /** Dependencies for the Runtime Fleet local HTTP API. */
 export interface RuntimeHttpApiHandlerOptions {
+  /** Optional auth guards for user reads and device ingestion. */
+  auth?: {
+    requireDeviceToken?: (request: IncomingMessage) => Promise<unknown | null>;
+    requireUserSession?: (request: IncomingMessage) => Promise<unknown | null>;
+  };
   /** Snapshot, connection, and command state store. */
   store: RuntimeInventoryStore;
   /** Device control channel for refresh dispatch. */
@@ -57,6 +62,7 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
     }
 
     if (request.method === "GET" && requestUrl.pathname === "/api/runtime-fleet") {
+      if (!(await authorizeUserRead(options, request, response))) return;
       if (!options.postgresStore) {
         sendJson(response, 503, { error: "postgres_store_unavailable" });
         return;
@@ -66,6 +72,7 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
     }
 
     if (request.method === "GET" && requestUrl.pathname === "/api/runtime-work-items") {
+      if (!(await authorizeUserRead(options, request, response))) return;
       if (!options.postgresStore) {
         sendJson(response, 503, { error: "postgres_store_unavailable" });
         return;
@@ -85,6 +92,7 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
 
     const workItemMatch = requestUrl.pathname.match(/^\/api\/runtime-work-items\/([^/]+)$/);
     if (request.method === "GET" && workItemMatch) {
+      if (!(await authorizeUserRead(options, request, response))) return;
       if (!options.postgresStore) {
         sendJson(response, 503, { error: "postgres_store_unavailable" });
         return;
@@ -100,6 +108,7 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
     }
 
     if (request.method === "POST" && requestUrl.pathname === "/api/device-snapshots") {
+      if (!(await authorizeDeviceWrite(options, request, response))) return;
       let body: unknown = undefined;
       try {
         body = await readJsonBody(request);
@@ -120,6 +129,7 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
     }
 
     if (request.method === "POST" && requestUrl.pathname === "/api/runtime-work-state-snapshots") {
+      if (!(await authorizeDeviceWrite(options, request, response))) return;
       if (!options.workStateStore) {
         sendJson(response, 503, { error: "work_state_store_unavailable" });
         return;
@@ -145,6 +155,7 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
 
     const refreshMatch = requestUrl.pathname.match(/^\/api\/devices\/([^/]+)\/refresh$/);
     if (request.method === "POST" && refreshMatch) {
+      if (!(await authorizeUserRead(options, request, response))) return;
       const deviceId = decodeURIComponent(refreshMatch[1] ?? "");
       try {
         const command = options.controlChannel.requestInventoryRefresh(deviceId);
@@ -166,6 +177,7 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
 
     const commandMatch = requestUrl.pathname.match(/^\/api\/devices\/([^/]+)\/commands\/([^/]+)$/);
     if (request.method === "GET" && commandMatch) {
+      if (!(await authorizeUserRead(options, request, response))) return;
       const deviceId = decodeURIComponent(commandMatch[1] ?? "");
       const commandId = decodeURIComponent(commandMatch[2] ?? "");
       const command = options.store.readRuntimeCommand(commandId);
@@ -179,6 +191,7 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
 
     const ingestionMatch = requestUrl.pathname.match(/^\/api\/devices\/([^/]+)\/ingestions$/);
     if (request.method === "GET" && ingestionMatch) {
+      if (!(await authorizeUserRead(options, request, response))) return;
       if (!options.postgresStore) {
         sendJson(response, 503, { error: "postgres_store_unavailable" });
         return;
@@ -193,6 +206,7 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
 
     const collectionHealthMatch = requestUrl.pathname.match(/^\/api\/devices\/([^/]+)\/collection-health$/);
     if (request.method === "GET" && collectionHealthMatch) {
+      if (!(await authorizeUserRead(options, request, response))) return;
       if (!options.postgresStore) {
         sendJson(response, 503, { error: "postgres_store_unavailable" });
         return;
@@ -204,6 +218,30 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
 
     next();
   };
+}
+
+async function authorizeUserRead(
+  options: RuntimeHttpApiHandlerOptions,
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<boolean> {
+  if (!options.auth?.requireUserSession) return true;
+  const session = await options.auth.requireUserSession(request);
+  if (session) return true;
+  sendJson(response, 401, { error: "unauthorized" });
+  return false;
+}
+
+async function authorizeDeviceWrite(
+  options: RuntimeHttpApiHandlerOptions,
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<boolean> {
+  if (!options.auth?.requireDeviceToken) return true;
+  const deviceToken = await options.auth.requireDeviceToken(request);
+  if (deviceToken) return true;
+  sendJson(response, 401, { error: "invalid_device_token" });
+  return false;
 }
 
 async function recordFailedCollectorIngestion(

@@ -147,6 +147,35 @@ describe("device collector scripts", () => {
     }
   });
 
+  it("posts inventory snapshots with the configured Agentlane device token", async () => {
+    const configDir = mkdtempSync(path.join(tmpdir(), "agentlane-token-config-"));
+    const configPath = path.join(configDir, "config.json");
+    const { server, receivedSnapshot, baseUrl } = await startSnapshotServer({
+      expectedAuthorization: "Bearer device-token-test",
+    });
+    writeFileSync(configPath, JSON.stringify({
+      serverUrl: baseUrl,
+      deviceToken: "device-token-test",
+    }));
+
+    try {
+      const output = await runNodeScript([
+        collectorScript,
+        "--once",
+        "--fixture",
+        fixturePath,
+        "--config",
+        configPath,
+      ]);
+      const snapshot = await receivedSnapshot;
+
+      expect(output).toBe("");
+      expect((snapshot.device as { id: string }).id).toBe("fixture-mac");
+    } finally {
+      server.close();
+    }
+  });
+
   it("retries transient backend failures when posting inventory snapshots", async () => {
     const { server, receivedSnapshot, baseUrl, requestCount } = await startFlakySnapshotServer(
       "/api/device-snapshots",
@@ -1339,6 +1368,36 @@ describe("device collector scripts", () => {
     }
   });
 
+  it("posts runtime work-state snapshots with the configured Agentlane device token", async () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-work-state-token-home-"));
+    const configDir = mkdtempSync(path.join(tmpdir(), "agentlane-work-state-token-config-"));
+    const configPath = path.join(configDir, "config.json");
+    const { server, receivedSnapshot, baseUrl } = await startWorkStateServer({
+      expectedAuthorization: "Bearer device-token-test",
+    });
+    writeFileSync(configPath, JSON.stringify({
+      serverUrl: baseUrl,
+      deviceToken: "device-token-test",
+    }));
+
+    try {
+      const output = await runNodeScript([
+        collectorScript,
+        "--work-state-once",
+        "--device-id",
+        "fixture-device",
+        "--config",
+        configPath,
+      ], { env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" } });
+      const snapshot = await receivedSnapshot;
+
+      expect(output).toBe("");
+      expect(snapshot.deviceId).toBe("fixture-device");
+    } finally {
+      server.close();
+    }
+  });
+
   it("connects to the control channel and refreshes inventory plus work-state in daemon mode", async () => {
     const controlServer = await startControlServer();
     const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-control-home-"));
@@ -1373,6 +1432,43 @@ describe("device collector scripts", () => {
           workStateObservedAt: expect.any(String),
         },
       });
+      expect(result.snapshots.map((snapshot) => (snapshot.device as { id: string }).id)).toEqual(["fixture-mac"]);
+      expect(result.workStateSnapshots.map((snapshot) => snapshot.deviceId)).toEqual(["fixture-mac"]);
+    } finally {
+      child.kill();
+      controlServer.close();
+    }
+  });
+
+  it("uses the configured Agentlane device token for control refreshes", async () => {
+    const controlServer = await startControlServer({
+      expectedHelloDeviceToken: "device-token-test",
+    });
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-control-token-home-"));
+    const configDir = mkdtempSync(path.join(tmpdir(), "agentlane-control-token-config-"));
+    const configPath = path.join(configDir, "config.json");
+    writeFileSync(configPath, JSON.stringify({
+      serverUrl: controlServer.baseUrl,
+      deviceToken: "device-token-test",
+      intervalMs: 100000,
+    }));
+    const child = spawn(process.execPath, [
+      collectorScript,
+      "--fixture",
+      fixturePath,
+      "--config",
+      configPath,
+      "--interval-ms",
+      "100000",
+    ], {
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
+    });
+
+    try {
+      const result = await controlServer.refreshResult;
+
+      expect(result.hello.deviceId).toBe("fixture-mac");
       expect(result.snapshots.map((snapshot) => (snapshot.device as { id: string }).id)).toEqual(["fixture-mac"]);
       expect(result.workStateSnapshots.map((snapshot) => snapshot.deviceId)).toEqual(["fixture-mac"]);
     } finally {
@@ -1831,7 +1927,9 @@ function runCommand(command: string, args: string[], options: { env?: NodeJS.Pro
   });
 }
 
-async function startSnapshotServer(): Promise<{
+async function startSnapshotServer(options: {
+  expectedAuthorization?: string;
+} = {}): Promise<{
   server: Server;
   receivedSnapshot: Promise<Record<string, unknown>>;
   baseUrl: string;
@@ -1841,6 +1939,9 @@ async function startSnapshotServer(): Promise<{
     server = createServer((request, response) => {
       expect(request.method).toBe("POST");
       expect(request.url).toBe("/api/device-snapshots");
+      if (options.expectedAuthorization) {
+        expect(request.headers.authorization).toBe(options.expectedAuthorization);
+      }
 
       let body = "";
       request.setEncoding("utf8");
@@ -1869,7 +1970,9 @@ async function startSnapshotServer(): Promise<{
   };
 }
 
-async function startWorkStateServer(): Promise<{
+async function startWorkStateServer(options: {
+  expectedAuthorization?: string;
+} = {}): Promise<{
   server: Server;
   receivedSnapshot: Promise<Record<string, unknown>>;
   baseUrl: string;
@@ -1879,6 +1982,9 @@ async function startWorkStateServer(): Promise<{
     server = createServer((request, response) => {
       expect(request.method).toBe("POST");
       expect(request.url).toBe("/api/runtime-work-state-snapshots");
+      if (options.expectedAuthorization) {
+        expect(request.headers.authorization).toBe(options.expectedAuthorization);
+      }
 
       let body = "";
       request.setEncoding("utf8");
@@ -2005,7 +2111,9 @@ async function startSlockInternalApiServer(): Promise<{
   return { server, baseUrl: `http://127.0.0.1:${address.port}` };
 }
 
-async function startControlServer(): Promise<{
+async function startControlServer(options: {
+  expectedHelloDeviceToken?: string;
+} = {}): Promise<{
   baseUrl: string;
   close: () => void;
   refreshResult: Promise<{
@@ -2052,7 +2160,8 @@ async function startControlServer(): Promise<{
 
     webSocketServer = new WebSocketServer({ noServer: true });
     server.on("upgrade", (request, socket, head) => {
-      if (request.url !== "/api/device-control/ws") {
+      const url = new URL(request.url ?? "/", "http://127.0.0.1");
+      if (url.pathname !== "/api/device-control/ws") {
         socket.destroy();
         return;
       }
@@ -2064,6 +2173,10 @@ async function startControlServer(): Promise<{
       webSocket.on("message", (data) => {
         const message = JSON.parse(data.toString()) as Record<string, unknown>;
         if (message.type === "hello") {
+          if (options.expectedHelloDeviceToken) {
+            expect(message.deviceToken).toBe(options.expectedHelloDeviceToken);
+            delete message.deviceToken;
+          }
           helloMessage = message;
           webSocket.send(JSON.stringify({
             type: "inventory.refresh",

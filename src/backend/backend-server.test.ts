@@ -4,6 +4,8 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import fixtureSnapshot from "../../fixtures/runtime/collector-snapshot.sample.json";
+import { hashSecret } from "../auth/auth-crypto";
+import type { AuthStore } from "../auth/auth-store";
 import type { RuntimeInventorySnapshot, RuntimeWorkStateSnapshot } from "../runtime";
 import { createTemporaryPostgresDatabase, runMigrationsScript, shouldRunPostgresTests } from "../test/postgres";
 import { createAgentlaneBackendServer, type AgentlaneBackendServer } from "./backend-server";
@@ -50,6 +52,47 @@ describe("standalone Agentlane backend server", () => {
 
     socket.close();
   });
+
+  it("authenticates device control websocket with the hello device token", async () => {
+    const backend = await startBackend({
+      authPepper: "test-pepper",
+      authStore: createDeviceTokenAuthStore("device-token-ok"),
+      deviceTokenRequired: true,
+    });
+    const socket = new WebSocket(`${backend.wsUrl}/api/device-control/ws`);
+    await waitForOpen(socket);
+
+    const helloAckPromise = waitForMessage(socket);
+    socket.send(JSON.stringify({
+      type: "hello",
+      deviceId: "secured-device",
+      deviceToken: "device-token-ok",
+    }));
+    const helloAck = await helloAckPromise;
+
+    expect(helloAck).toMatchObject({ type: "hello.ack", deviceId: "secured-device" });
+
+    socket.close();
+  });
+
+  it("closes device control websocket when the hello device token is invalid", async () => {
+    const backend = await startBackend({
+      authPepper: "test-pepper",
+      authStore: createDeviceTokenAuthStore("device-token-ok"),
+      deviceTokenRequired: true,
+    });
+    const socket = new WebSocket(`${backend.wsUrl}/api/device-control/ws`);
+    await waitForOpen(socket);
+
+    const closePromise = waitForClose(socket);
+    socket.send(JSON.stringify({
+      type: "hello",
+      deviceId: "secured-device",
+      deviceToken: "wrong-token",
+    }));
+
+    await expect(closePromise).resolves.toBe(1008);
+  });
 });
 
 describeDb("standalone Agentlane backend server with Postgres", () => {
@@ -89,11 +132,20 @@ describeDb("standalone Agentlane backend server with Postgres", () => {
   });
 });
 
-async function startBackend(options: { createCommandId?: () => string; databaseUrl?: string } = {}) {
+async function startBackend(options: {
+  authPepper?: string;
+  authStore?: AuthStore;
+  createCommandId?: () => string;
+  databaseUrl?: string;
+  deviceTokenRequired?: boolean;
+} = {}) {
   const dataDir = mkdtempSync(path.join(tmpdir(), "agentlane-standalone-backend-"));
   const backend = createAgentlaneBackendServer({
     createCommandId: options.createCommandId,
     databaseUrl: options.databaseUrl,
+    authPepper: options.authPepper,
+    authStore: options.authStore,
+    deviceTokenRequired: options.deviceTokenRequired,
     host: "127.0.0.1",
     inventorySnapshotPath: path.join(dataDir, "runtime-inventory.json"),
     port: 0,
@@ -102,6 +154,17 @@ async function startBackend(options: { createCommandId?: () => string; databaseU
   backends.push(backend);
   await backend.listen();
   return backend;
+}
+
+function createDeviceTokenAuthStore(validToken: string): AuthStore {
+  const validHash = hashSecret(validToken, "device-token", "test-pepper");
+  return {
+    verifyDeviceToken: async (tokenHash: string) => (
+      tokenHash === validHash
+        ? { id: "devtok_1", organizationId: "org_1", tokenPrefix: "agt_device_" }
+        : null
+    ),
+  } as unknown as AuthStore;
 }
 
 async function closeRegisteredBackend(backend: AgentlaneBackendServer): Promise<void> {
@@ -193,5 +256,11 @@ function waitForMessage(socket: WebSocket): Promise<Record<string, unknown>> {
       }
     });
     socket.once("error", reject);
+  });
+}
+
+function waitForClose(socket: WebSocket): Promise<number> {
+  return new Promise((resolve) => {
+    socket.once("close", (code) => resolve(code));
   });
 }

@@ -30,14 +30,21 @@ describeDb("database migrations", () => {
           "agents",
           "channel_bindings",
           "collector_ingestions",
+          "device_tokens",
           "devices",
+          "email_login_codes",
+          "organization_invitations",
+          "organization_members",
+          "organizations",
           "runtimes",
           "schema_migrations",
+          "sessions",
+          "users",
           "work_conversations",
           "work_executions",
           "work_items",
         ]);
-        expect(await listMigrationVersions(client)).toEqual(["0001_backend_core"]);
+        expect(await listMigrationVersions(client)).toEqual(["0001_backend_core", "0002_auth_access"]);
       } finally {
         await client.end();
       }

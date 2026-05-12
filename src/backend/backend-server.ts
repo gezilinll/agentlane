@@ -1,6 +1,12 @@
 import { createServer, type Server } from "node:http";
 import { fileURLToPath } from "node:url";
 import WebSocket, { WebSocketServer } from "ws";
+import {
+  createAuthHttpApiHandler,
+  createAuthRuntimeGuards,
+  type AuthEmailProvider,
+} from "../auth/auth-http-api";
+import { createPostgresAuthStore, type AuthStore } from "../auth/auth-store";
 import { createRuntimeControlChannel, type RuntimeControlSocket } from "../server/runtime-control-channel";
 import { createRuntimeHttpApiHandler } from "../server/runtime-http-api";
 import { createRuntimeInventoryStore } from "../server/runtime-inventory-store";
@@ -25,6 +31,16 @@ export interface AgentlaneBackendServerOptions {
   databaseUrl?: string;
   /** Optional repository injection for tests. */
   postgresStore?: PostgresStore;
+  /** Optional auth repository injection for tests. */
+  authStore?: AuthStore;
+  /** Optional email provider injection for tests. */
+  emailProvider?: AuthEmailProvider;
+  /** Whether Runtime Fleet / Runs read APIs require a valid user session. */
+  authRequired?: boolean;
+  /** Whether collector ingestion and device WebSocket require a valid device token. */
+  deviceTokenRequired?: boolean;
+  /** Auth HMAC pepper override for tests. */
+  authPepper?: string;
 }
 
 /** Running standalone backend handle used by tests and local dev. */
@@ -60,7 +76,25 @@ export function createAgentlaneBackendServer(
     ? null
     : createPostgresStore({ connectionString: options.databaseUrl });
   const postgresStore = options.postgresStore ?? ownedPostgresStore;
+  const ownedAuthStore = options.authStore
+    ? null
+    : createPostgresAuthStore({ connectionString: options.databaseUrl });
+  const authStore = options.authStore ?? ownedAuthStore;
+  const authGuards = authStore ? createAuthRuntimeGuards(authStore, { pepper: options.authPepper }) : undefined;
+  const authRequired = options.authRequired ?? process.env.AGENTLANE_AUTH_REQUIRED === "1";
+  const deviceTokenRequired = options.deviceTokenRequired ?? process.env.AGENTLANE_DEVICE_TOKEN_REQUIRED === "1";
+  const authHandler = authStore
+    ? createAuthHttpApiHandler({
+      emailProvider: options.emailProvider ?? createBackendEmailProvider(),
+      pepper: options.authPepper,
+      store: authStore,
+    })
+    : undefined;
   const httpHandler = createRuntimeHttpApiHandler({
+    auth: {
+      requireDeviceToken: deviceTokenRequired ? authGuards?.requireDeviceToken : undefined,
+      requireUserSession: authRequired ? authGuards?.requireUserSession : undefined,
+    },
     store,
     controlChannel,
     workStateStore,
@@ -68,47 +102,43 @@ export function createAgentlaneBackendServer(
   });
   const webSocketServer = new WebSocketServer({ noServer: true });
   const server = createServer((request, response) => {
-    void httpHandler(request, response, () => {
+    const notFound = () => {
       response.statusCode = 404;
       response.setHeader("content-type", "text/plain; charset=utf-8");
       response.end("not found");
-    });
+    };
+    const runRuntimeHandler = () => {
+      void httpHandler(request, response, notFound);
+    };
+    if (authHandler) {
+      void authHandler(request, response, runRuntimeHandler);
+    } else {
+      runRuntimeHandler();
+    }
   });
   let baseUrl = "";
   let listening = false;
   let postgresClosed = false;
+  let authClosed = false;
 
   server.on("upgrade", (request, socket, head) => {
-    const requestUrl = new URL(request.url || "/", "http://agentlane.local");
-    if (requestUrl.pathname !== "/api/device-control/ws") {
-      socket.destroy();
-      return;
-    }
+    void (async () => {
+      const requestUrl = new URL(request.url || "/", "http://agentlane.local");
+      if (requestUrl.pathname !== "/api/device-control/ws") {
+        socket.destroy();
+        return;
+      }
 
-    webSocketServer.handleUpgrade(request, socket, head, (webSocket) => {
-      const controlSocket: RuntimeControlSocket = {
-        send(data) {
-          if (webSocket.readyState === WebSocket.OPEN) webSocket.send(data);
-        },
-      };
-      controlChannel.attach(controlSocket);
-      webSocket.on("message", (message) => {
-        try {
-          controlChannel.receive(controlSocket, message.toString());
-        } catch (error) {
-          controlSocket.send(JSON.stringify({
-            type: "error",
-            error: error instanceof Error ? error.message : "invalid control message",
-          }));
-        }
+      webSocketServer.handleUpgrade(request, socket, head, (webSocket) => {
+        attachDeviceControlWebSocket(webSocket, {
+          authGuards,
+          controlChannel,
+          deviceTokenRequired,
+        });
+        webSocketServer.emit("connection", webSocket, request);
       });
-      webSocket.on("close", () => {
-        controlChannel.detach(controlSocket, "socket closed");
-      });
-      webSocket.on("error", () => {
-        controlChannel.detach(controlSocket, "socket error");
-      });
-      webSocketServer.emit("connection", webSocket, request);
+    })().catch(() => {
+      socket.destroy();
     });
   });
 
@@ -151,6 +181,98 @@ export function createAgentlaneBackendServer(
         postgresClosed = true;
         await ownedPostgresStore.close();
       }
+      if (ownedAuthStore && !authClosed) {
+        authClosed = true;
+        await ownedAuthStore.close();
+      }
+    },
+  };
+}
+
+function attachDeviceControlWebSocket(
+  webSocket: WebSocket,
+  options: {
+    authGuards?: ReturnType<typeof createAuthRuntimeGuards>;
+    controlChannel: ReturnType<typeof createRuntimeControlChannel>;
+    deviceTokenRequired: boolean;
+  },
+): void {
+  let controlSocket: RuntimeControlSocket | undefined;
+  let authenticated = !options.deviceTokenRequired;
+
+  const ensureControlSocket = () => {
+    if (controlSocket) return controlSocket;
+    controlSocket = {
+      send(data) {
+        if (webSocket.readyState === WebSocket.OPEN) webSocket.send(data);
+      },
+    };
+    options.controlChannel.attach(controlSocket);
+    return controlSocket;
+  };
+
+  if (!options.deviceTokenRequired) ensureControlSocket();
+
+  webSocket.on("message", (message) => {
+    void (async () => {
+      if (!authenticated) {
+        const hello = parseControlHello(message.toString());
+        if (!hello || !hello.deviceToken || !(await options.authGuards?.verifyDeviceTokenValue(hello.deviceToken))) {
+          webSocket.close(1008, "invalid device token");
+          return;
+        }
+        authenticated = true;
+        const socket = ensureControlSocket();
+        delete hello.deviceToken;
+        receiveControlMessage(options.controlChannel, socket, JSON.stringify(hello));
+        return;
+      }
+
+      receiveControlMessage(options.controlChannel, ensureControlSocket(), message.toString());
+    })().catch(() => {
+      webSocket.close(1008, "invalid control message");
+    });
+  });
+
+  webSocket.on("close", () => {
+    if (controlSocket) options.controlChannel.detach(controlSocket, "socket closed");
+  });
+  webSocket.on("error", () => {
+    if (controlSocket) options.controlChannel.detach(controlSocket, "socket error");
+  });
+}
+
+function receiveControlMessage(
+  controlChannel: ReturnType<typeof createRuntimeControlChannel>,
+  controlSocket: RuntimeControlSocket,
+  data: string,
+): void {
+  try {
+    controlChannel.receive(controlSocket, data);
+  } catch (error) {
+    controlSocket.send(JSON.stringify({
+      type: "error",
+      error: error instanceof Error ? error.message : "invalid control message",
+    }));
+  }
+}
+
+function parseControlHello(rawMessage: string): ({ deviceToken?: string } & Record<string, unknown>) | null {
+  const message = JSON.parse(rawMessage) as unknown;
+  if (!message || typeof message !== "object") return null;
+  const record = message as Record<string, unknown>;
+  if (record.type !== "hello" || typeof record.deviceToken !== "string") return null;
+  return record as { deviceToken?: string } & Record<string, unknown>;
+}
+
+function createBackendEmailProvider(): AuthEmailProvider {
+  return {
+    async sendLoginCode({ code, email }) {
+      if (process.env.AGENTLANE_AUTH_DEBUG_CODES === "1") {
+        process.stdout.write(`Agentlane login code for ${email}: ${code}\n`);
+        return;
+      }
+      throw new Error("email_provider_not_configured");
     },
   };
 }

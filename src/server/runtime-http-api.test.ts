@@ -128,6 +128,38 @@ describe("runtime HTTP API", () => {
     expect(workStateStore.readLatestSnapshot()).toEqual(snapshot);
   });
 
+  it("rejects runtime read APIs when the configured session guard fails", async () => {
+    const { baseUrl } = await startRuntimeApi({
+      auth: {
+        requireDeviceToken: async () => true,
+        requireUserSession: async () => null,
+      },
+    });
+
+    const response = await fetch(`${baseUrl}/api/runtime-fleet`);
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: "unauthorized" });
+  });
+
+  it("rejects collector ingestion when the configured device-token guard fails", async () => {
+    const { baseUrl } = await startRuntimeApi({
+      auth: {
+        requireDeviceToken: async () => null,
+        requireUserSession: async () => ({ userId: "user-1" }),
+      },
+    });
+
+    const response = await fetch(`${baseUrl}/api/device-snapshots`, {
+      body: JSON.stringify(fixtureSnapshot),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: "invalid_device_token" });
+  });
+
   it("accepts real-sized runtime work state snapshots from remote collectors", async () => {
     const { baseUrl, workStateStore } = await startRuntimeApi();
     const snapshot = {
@@ -157,7 +189,10 @@ describe("runtime HTTP API", () => {
   });
 });
 
-async function startRuntimeApi(options: { createCommandId?: () => string } = {}) {
+async function startRuntimeApi(options: {
+  auth?: Parameters<typeof createRuntimeHttpApiHandler>[0]["auth"];
+  createCommandId?: () => string;
+} = {}) {
   const dataDir = mkdtempSync(path.join(tmpdir(), "agentlane-runtime-api-"));
   const store = createRuntimeInventoryStore({
     snapshotPath: path.join(dataDir, "latest.json"),
@@ -171,7 +206,7 @@ async function startRuntimeApi(options: { createCommandId?: () => string } = {})
     createCommandId: options.createCommandId,
     now: () => new Date("2026-05-08T08:00:00.000Z"),
   });
-  const handler = createRuntimeHttpApiHandler({ store, controlChannel: channel, workStateStore });
+  const handler = createRuntimeHttpApiHandler({ auth: options.auth, store, controlChannel: channel, workStateStore });
   const server = createServer((request, response) => {
     void handler(request, response, () => {
       response.statusCode = 404;
