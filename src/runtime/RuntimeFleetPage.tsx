@@ -32,6 +32,11 @@ import {
   createWorkItemsQueryUrl,
   runtimeWorkItemsQueryPageFromResponse,
 } from "./runtime-work-query-api";
+import {
+  collectionHealthStatusLabels,
+  type CollectionHealthCheck,
+  type DeviceCollectionHealth,
+} from "./runtime-collection-health";
 
 const fixtureRuntimeSnapshot = fixtureSnapshot as RuntimeInventorySnapshot;
 const autoRefreshIntervalMs = 30_000;
@@ -57,6 +62,7 @@ export function RuntimeFleetPage() {
     allowFixtureFallback ? fixtureRuntimeSnapshot : createEmptyRuntimeInventorySnapshot(),
   );
   const [workStateSnapshot, setWorkStateSnapshot] = useState<RuntimeWorkStateSnapshot | null>(null);
+  const [collectionHealth, setCollectionHealth] = useState<DeviceCollectionHealth | null>(null);
   const [dataSource, setDataSource] = useState<"fixture" | "backend">(
     allowFixtureFallback ? "fixture" : "backend",
   );
@@ -80,6 +86,12 @@ export function RuntimeFleetPage() {
     return querySnapshot;
   }
 
+  async function fetchCollectionHealth(deviceId: string): Promise<DeviceCollectionHealth | null> {
+    const response = await fetch(`/api/devices/${encodeURIComponent(deviceId)}/collection-health`);
+    if (!response.ok) return null;
+    return deviceCollectionHealthFromResponse(await response.json());
+  }
+
   async function fetchLatestWorkStateSnapshot(): Promise<RuntimeWorkStateSnapshot | null> {
     let cursor: string | undefined;
     let snapshot: RuntimeWorkStateSnapshot | null = null;
@@ -95,20 +107,27 @@ export function RuntimeFleetPage() {
     throw new Error("runtime work item query returned too many pages");
   }
 
-  function applySnapshot(latestSnapshot: RuntimeInventorySnapshot, latestWorkState: RuntimeWorkStateSnapshot | null) {
+  function applySnapshot(
+    latestSnapshot: RuntimeInventorySnapshot,
+    latestWorkState: RuntimeWorkStateSnapshot | null,
+    latestCollectionHealth: DeviceCollectionHealth | null,
+  ) {
     setSnapshot(latestSnapshot);
     setWorkStateSnapshot(latestWorkState);
+    setCollectionHealth(latestCollectionHealth);
     setDataSource("backend");
     setLastLoadedAt(new Date().toISOString());
   }
 
   async function loadLatestSnapshot(options: { silent?: boolean } = {}): Promise<RuntimeInventorySnapshot | null> {
     try {
-      const [latestSnapshot, latestWorkState] = await Promise.all([
-        fetchLatestSnapshot(),
+      const latestSnapshot = await fetchLatestSnapshot();
+      if (!latestSnapshot) return null;
+      const [latestWorkState, latestCollectionHealth] = await Promise.all([
         fetchLatestWorkStateSnapshot(),
+        fetchCollectionHealth(latestSnapshot.device.id).catch(() => null),
       ]);
-      if (latestSnapshot) applySnapshot(latestSnapshot, latestWorkState);
+      applySnapshot(latestSnapshot, latestWorkState, latestCollectionHealth);
       return latestSnapshot;
     } catch (error) {
       if (!options.silent) {
@@ -126,11 +145,13 @@ export function RuntimeFleetPage() {
 
     async function loadInitialSnapshot() {
       try {
-        const [latestSnapshot, latestWorkState] = await Promise.all([
-          fetchLatestSnapshot(),
+        const latestSnapshot = await fetchLatestSnapshot();
+        if (!latestSnapshot) return;
+        const [latestWorkState, latestCollectionHealth] = await Promise.all([
           fetchLatestWorkStateSnapshot(),
+          fetchCollectionHealth(latestSnapshot.device.id).catch(() => null),
         ]);
-        if (!cancelled && latestSnapshot) applySnapshot(latestSnapshot, latestWorkState);
+        if (!cancelled) applySnapshot(latestSnapshot, latestWorkState, latestCollectionHealth);
       } catch {
         if (!allowFixtureFallback && !cancelled) {
           setRefreshState({ status: "error", message: "后端查询失败，无法读取正式运行资产" });
@@ -296,6 +317,8 @@ export function RuntimeFleetPage() {
         <Metric label="异常" value={summary.issues} tone="orange" />
       </section>
 
+      <CollectionHealthPanel health={collectionHealth} />
+
       <section className="runtimeFleetGrid">
         <div className="runtimeStack">
           <DevicePanel snapshot={snapshot} onSelect={() => setSelection({ kind: "device", id: result.device.id })} />
@@ -382,6 +405,47 @@ function isRuntimeFleetQueryResponse(value: unknown): value is RuntimeFleetQuery
   return Array.isArray(candidate.devices) && Array.isArray(candidate.runtimes) && Array.isArray(candidate.agents);
 }
 
+function deviceCollectionHealthFromResponse(value: unknown): DeviceCollectionHealth | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<DeviceCollectionHealth>;
+  if (
+    typeof candidate.deviceId !== "string"
+    || !isCollectionHealthStatus(candidate.status)
+    || typeof candidate.summary !== "string"
+    || !Array.isArray(candidate.checks)
+  ) {
+    return null;
+  }
+  const checks = candidate.checks.filter(isCollectionHealthCheck);
+  if (checks.length === 0) return null;
+  return {
+    checks,
+    deviceId: candidate.deviceId,
+    lastObservedAt: typeof candidate.lastObservedAt === "string" ? candidate.lastObservedAt : undefined,
+    lastReceivedAt: typeof candidate.lastReceivedAt === "string" ? candidate.lastReceivedAt : undefined,
+    status: candidate.status,
+    summary: candidate.summary,
+  };
+}
+
+function isCollectionHealthCheck(value: unknown): value is CollectionHealthCheck {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<CollectionHealthCheck>;
+  return (
+    (candidate.id === "inventory" || candidate.id === "work_state")
+    && typeof candidate.label === "string"
+    && isCollectionHealthStatus(candidate.status)
+    && typeof candidate.message === "string"
+    && Array.isArray(candidate.warnings)
+    && typeof candidate.counts === "object"
+    && Boolean(candidate.counts)
+  );
+}
+
+function isCollectionHealthStatus(value: unknown): value is DeviceCollectionHealth["status"] {
+  return value === "healthy" || value === "warning" || value === "stale" || value === "failed" || value === "unknown";
+}
+
 function mergeWorkStateSnapshots(
   current: RuntimeWorkStateSnapshot,
   next: RuntimeWorkStateSnapshot,
@@ -409,12 +473,51 @@ function mergeBySource<T extends { source: string }>(current: T[], next: T[]): T
   return Array.from(bySource.values());
 }
 
+function formatCollectionCounts(check: CollectionHealthCheck): string {
+  if (check.id === "inventory") {
+    return `设备 ${check.counts.devices ?? 0} · Runtime ${check.counts.runtimes ?? 0} · Agent ${check.counts.agents ?? 0}`;
+  }
+  return `工作项 ${check.counts.workItems ?? 0} · 会话 ${check.counts.conversations ?? 0} · 执行 ${check.counts.executions ?? 0}`;
+}
+
 function Metric({ label, value, tone }: { label: string; value: number; tone: string }) {
   return (
     <div className={`metricCard metric${tone}`}>
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
+  );
+}
+
+function CollectionHealthPanel({ health }: { health: DeviceCollectionHealth | null }) {
+  if (!health) return null;
+  return (
+    <section className="collectionHealthPanel" aria-label="采集健康">
+      <div className="collectionHealthSummary">
+        <div>
+          <h2>采集健康</h2>
+          <p>{health.summary}</p>
+        </div>
+        <StatusBadge label={collectionHealthStatusLabels[health.status]} status={health.status} />
+      </div>
+      <div className="collectionHealthChecks">
+        {health.checks.map((check) => (
+          <article className="collectionHealthCheck" key={check.id}>
+            <div className="collectionHealthCheckHeader">
+              <strong>{check.label}</strong>
+              <StatusBadge label={collectionHealthStatusLabels[check.status]} status={check.status} />
+            </div>
+            <p>{check.message}</p>
+            <small>最近收到 {formatRuntimeTimestamp(check.lastReceivedAt)}</small>
+            <small>{formatCollectionCounts(check)}</small>
+            {check.error ? <small className="healthIssueText">错误：{check.error}</small> : null}
+            {check.warnings.length > 0 ? (
+              <small className="healthIssueText">最近警告：{check.warnings[0]}</small>
+            ) : null}
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 

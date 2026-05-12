@@ -34,7 +34,7 @@ Runtime Fleet 必须区分“数据从哪里采集”和“产品上归属哪一
 
 ## 数据源
 
-页面使用 `GET /api/runtime-fleet` 读取正式后端查询结果，并用 `GET /api/runtime-work-items` 的标准化工作项辅助推导 Runtime 运行状态和 Agent 展示状态。Runtime Fleet 做状态推导时必须读取完整 work-item 分页，不能只用第一页 500 条推断 Runtime / Agent 忙闲。没有后端数据或本地 backend 不可用时，页面只在非 production 模式允许使用明确标识的 `fixtures/runtime/collector-snapshot.sample.json` 做开发期离线预览；production 构建必须展示明确错误和空状态，不回退 fixture，不读取兼容期 latest API。组件不直接理解 OpenClaw、Slock 或 Multica 的内部结构，只消费标准化后的 Runtime Fleet view model。
+页面使用 `GET /api/runtime-fleet` 读取正式后端查询结果，并用 `GET /api/runtime-work-items` 的标准化工作项辅助推导 Runtime 运行状态和 Agent 展示状态，同时读取 `GET /api/devices/:deviceId/collection-health` 展示设备采集健康。Runtime Fleet 做状态推导时必须读取完整 work-item 分页，不能只用第一页 500 条推断 Runtime / Agent 忙闲。没有后端数据或本地 backend 不可用时，页面只在非 production 模式允许使用明确标识的 `fixtures/runtime/collector-snapshot.sample.json` 做开发期离线预览；production 构建必须展示明确错误和空状态，不回退 fixture，不读取兼容期 latest API。组件不直接理解 OpenClaw、Slock 或 Multica 的内部结构，只消费标准化后的 Runtime Fleet view model。
 
 页面挂载后每 30 秒读取一次后端查询结果，并显示页面自己的上次刷新时间。自动刷新只读取后端已有数据，不自动下发远端 `inventory.refresh` 命令；远端采集仍由 collector 定时上报或用户手动点击刷新触发。
 
@@ -87,6 +87,7 @@ Device：
 - 详情展示 `身份信息`、`连接状态`、`已注册 Runtime`。
 - 详情中的最近同步只在概览中展示一次，连接状态不重复展示同一时间。
 - 不在主界面展示 channel、sourceRefs、所有 IP、所有 MAC。
+- 页面可以在设备上方展示采集健康区块，用于说明 inventory 与 work-state 最近是否成功、是否延迟、是否有 adapter warnings。该区块只展示产品级诊断摘要，不展示原始 payload、密钥或调试-only 字段。
 
 Runtime：
 
@@ -107,6 +108,7 @@ Agent：
 
 - 主导航可以进入 Runtime Fleet 页面。
 - 页面顶部显示设备、在线 Runtime、Agent、异常数量。
+- 页面显示采集健康区块，至少区分设备资产采集和工作态采集，并能展示成功、警告、延迟、失败或未知状态。
 - Runtime 和可用性筛选项来自当前 snapshot；fixture 只有 OpenClaw、Slock 且二者在线时，筛选项只显示 `全部 / OpenClaw / Slock` 和 `全部 / 在线`。
 - 用户可以搜索 `tester` 并只看到相关 Agent。
 - Runtime Fleet 工具栏不展示 Channel 筛选；用户需要收敛某个 Agent 时使用搜索、Runtime 或可用性筛选。

@@ -470,6 +470,77 @@ h1 {
   border-left-color: #7c58d3;
 }
 
+.collectionHealthPanel {
+  background: #ffffff;
+  border: 1px solid #d9e4f2;
+  border-radius: 8px;
+  box-shadow: 0 12px 30px rgba(17, 42, 81, 0.06);
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.collectionHealthSummary {
+  align-items: start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.collectionHealthSummary h2 {
+  color: #071943;
+  font-size: 16px;
+  line-height: 1.2;
+  margin: 0 0 4px;
+}
+
+.collectionHealthSummary p {
+  color: #52617a;
+  font-size: 13px;
+  margin: 0;
+}
+
+.collectionHealthChecks {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.collectionHealthCheck {
+  background: #f8fbff;
+  border: 1px solid #e0eaf6;
+  border-radius: 8px;
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 10px;
+}
+
+.collectionHealthCheckHeader {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.collectionHealthCheck strong {
+  color: #071943;
+  font-size: 13px;
+}
+
+.collectionHealthCheck p,
+.collectionHealthCheck small {
+  color: #52617a;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.collectionHealthCheck .healthIssueText {
+  color: #ba6b00;
+}
+
 .contentGrid {
   align-items: start;
   display: grid;
@@ -949,11 +1020,14 @@ button.tableRow:hover,
 }
 
 .status-degraded,
+.status-warning,
+.status-stale,
 .status-unknown {
   background: #fff7e8;
   color: #ba6b00;
 }
 
+.status-failed,
 .status-offline,
 .status-inactive {
   background: #f2f4f7;
@@ -1088,6 +1162,10 @@ button.tableRow:hover,
 
   .metricGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .collectionHealthChecks {
+    grid-template-columns: 1fr;
   }
 
   .contentGrid {

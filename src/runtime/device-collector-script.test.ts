@@ -147,6 +147,30 @@ describe("device collector scripts", () => {
     }
   });
 
+  it("retries transient backend failures when posting inventory snapshots", async () => {
+    const { server, receivedSnapshot, baseUrl, requestCount } = await startFlakySnapshotServer(
+      "/api/device-snapshots",
+    );
+
+    try {
+      const output = await runNodeScript([
+        collectorScript,
+        "--once",
+        "--fixture",
+        fixturePath,
+        "--server-url",
+        baseUrl,
+      ]);
+      const snapshot = await receivedSnapshot;
+
+      expect(output).toBe("");
+      expect(requestCount()).toBe(2);
+      expect((snapshot.device as { id: string }).id).toBe("fixture-mac");
+    } finally {
+      server.close();
+    }
+  });
+
   it("does not fabricate runtime work-state when live probes are unavailable", () => {
     const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-work-state-empty-home-"));
 
@@ -1880,6 +1904,53 @@ async function startWorkStateServer(): Promise<{
     server,
     receivedSnapshot,
     baseUrl: `http://127.0.0.1:${address.port}`,
+  };
+}
+
+async function startFlakySnapshotServer(expectedPath: string): Promise<{
+  server: Server;
+  receivedSnapshot: Promise<Record<string, unknown>>;
+  baseUrl: string;
+  requestCount: () => number;
+}> {
+  let server: Server | undefined;
+  let count = 0;
+  const receivedSnapshot = new Promise<Record<string, unknown>>((resolve) => {
+    server = createServer((request, response) => {
+      expect(request.method).toBe("POST");
+      expect(request.url).toBe(expectedPath);
+      count += 1;
+
+      let body = "";
+      request.setEncoding("utf8");
+      request.on("data", (chunk) => {
+        body += chunk;
+      });
+      request.on("end", () => {
+        if (count === 1) {
+          response.writeHead(503, { "content-type": "application/json" });
+          response.end(JSON.stringify({ error: "temporary unavailable" }));
+          return;
+        }
+        response.writeHead(201, { "content-type": "application/json" });
+        response.end(JSON.stringify({ ok: true }));
+        resolve(JSON.parse(body));
+      });
+    });
+  });
+
+  if (!server) throw new Error("failed to create flaky snapshot server");
+  await new Promise<void>((resolve) => {
+    server?.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("missing test server address");
+
+  return {
+    server,
+    receivedSnapshot,
+    baseUrl: `http://127.0.0.1:${address.port}`,
+    requestCount: () => count,
   };
 }
 

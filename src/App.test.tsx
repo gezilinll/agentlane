@@ -54,6 +54,40 @@ function emptyWorkStateQueryResponse() {
   return { items: [], total: 0 };
 }
 
+function collectionHealthResponse(snapshot: RuntimeInventorySnapshot) {
+  return {
+    deviceId: snapshot.device.id,
+    status: "warning",
+    summary: "工作态采集有警告",
+    lastObservedAt: "2026-05-10T10:00:00.000Z",
+    lastReceivedAt: "2026-05-10T10:00:01.000Z",
+    checks: [
+      {
+        id: "inventory",
+        label: "设备资产",
+        status: "healthy",
+        lastObservedAt: "2026-05-10T09:59:00.000Z",
+        lastReceivedAt: "2026-05-10T09:59:01.000Z",
+        counts: { agents: snapshot.agents.length, channelBindings: 2, devices: 1, runtimes: snapshot.runtimes.length },
+        warnings: [],
+        error: null,
+        message: "采集正常",
+      },
+      {
+        id: "work_state",
+        label: "工作态",
+        status: "warning",
+        lastObservedAt: "2026-05-10T10:00:00.000Z",
+        lastReceivedAt: "2026-05-10T10:00:01.000Z",
+        counts: { conversations: 4, executions: 2, workItems: 8 },
+        warnings: ["Slock task board probe warning"],
+        error: null,
+        message: "采集成功，但有 1 条警告",
+      },
+    ],
+  };
+}
+
 function stageFromWorkItemStatus(status: RuntimeWorkStateSnapshot["workItems"][number]["status"]): string {
   if (status === "todo") return "pending";
   if (status === "in_progress") return "processing";
@@ -489,6 +523,12 @@ describe("Catalog page", () => {
           headers: { "content-type": "application/json" },
         });
       }
+      if (url.includes("/api/devices/fixture-mac/collection-health")) {
+        return new Response(JSON.stringify(collectionHealthResponse(backendSnapshot)), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
       return new Response(JSON.stringify({ error: "unexpected request" }), { status: 500 });
     }) as unknown as typeof fetch;
 
@@ -497,6 +537,10 @@ describe("Catalog page", () => {
 
     expect((await screen.findAllByText("Backend DB Mac")).length).toBeGreaterThan(0);
     expect(screen.getByText(/当前数据源：后端查询/)).toBeInTheDocument();
+    const healthPanel = screen.getByLabelText("采集健康");
+    expect(within(healthPanel).getByText("工作态采集有警告")).toBeInTheDocument();
+    expect(within(healthPanel).getByText("采集成功，但有 1 条警告")).toBeInTheDocument();
+    expect(within(healthPanel).getByText("工作项 8 · 会话 4 · 执行 2")).toBeInTheDocument();
   });
 
   it("loads every backend work-item page before deriving Runtime Fleet operating status", async () => {

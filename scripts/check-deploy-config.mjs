@@ -12,6 +12,7 @@ const requiredFiles = [
   "Dockerfile.frontend",
   "docker-compose.prod-like.yml",
   "nginx.agentlane.conf",
+  "scripts/smoke-production.mjs",
 ];
 
 for (const file of requiredFiles) {
@@ -33,6 +34,9 @@ assert(composeFile.includes("Dockerfile.frontend"), "prod-like compose must buil
 assert(composeFile.includes("AGENTLANE_POSTGRES_PASSWORD"), "prod-like compose must allow overriding the Postgres password");
 assert(composeFile.includes("AGENTLANE_BACKEND_PUBLISH"), "prod-like compose must allow backend host port binding override");
 assert(composeFile.includes("AGENTLANE_FRONTEND_PUBLISH"), "prod-like compose must allow frontend host port binding override");
+
+const packageJson = JSON.parse(read("package.json"));
+assert(packageJson.scripts?.["smoke:production"] === "node scripts/smoke-production.mjs", "package must expose production smoke script");
 
 process.stdout.write("check:deploy: ok\n");
 

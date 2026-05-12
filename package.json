@@ -26,6 +26,7 @@
     "check:quick": "npm run typecheck && npm run test:run",
     "check:build": "npm run build",
     "check:deploy": "npm run build:backend && node scripts/check-deploy-config.mjs",
+    "smoke:production": "node scripts/smoke-production.mjs",
     "check:e2e": "npm run test:e2e",
     "harness": "npm run check:full",
     "typecheck": "tsc -b --pretty false",

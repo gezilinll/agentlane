@@ -56,6 +56,24 @@ describeDb("Postgres runtime store", () => {
             status: "succeeded",
           }),
         ]);
+        expect(await store.readDeviceCollectionHealth("fixture-mac")).toMatchObject({
+          deviceId: "fixture-mac",
+          status: "warning",
+          summary: "工作态采集有警告",
+          checks: [
+            expect.objectContaining({
+              id: "inventory",
+              status: "healthy",
+              message: "采集正常",
+            }),
+            expect.objectContaining({
+              id: "work_state",
+              status: "warning",
+              message: "采集成功，但有 1 条警告",
+              warnings: ["fixture warning"],
+            }),
+          ],
+        });
       } finally {
         await store.close();
       }

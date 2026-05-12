@@ -11,6 +11,10 @@ import type {
   RuntimeDevice,
   RuntimeInventorySnapshot,
 } from "../runtime/runtime-normalize";
+import {
+  deriveDeviceCollectionHealth,
+  type DeviceCollectionHealth,
+} from "../runtime/runtime-collection-health";
 
 const { Pool } = pg;
 
@@ -133,6 +137,8 @@ export interface PostgresStore {
   readWorkItem: (id: string) => Promise<PostgresWorkItemRow | null>;
   /** List collector ingestion metadata for a device. */
   listCollectorIngestions: (deviceId: string) => Promise<PostgresCollectorIngestion[]>;
+  /** Read product-level collection health for one device. */
+  readDeviceCollectionHealth: (deviceId: string) => Promise<DeviceCollectionHealth>;
   /** Close owned Postgres connections. */
   close: () => Promise<void>;
 }
@@ -156,6 +162,24 @@ export function createPostgresStore(options: PostgresStoreOptions = {}): Postgre
   const pool = new Pool({
     connectionString: options.connectionString ?? process.env.DATABASE_URL ?? "postgres://agentlane:agentlane@127.0.0.1:54329/agentlane",
   });
+
+  async function listCollectorIngestions(deviceId: string): Promise<PostgresCollectorIngestion[]> {
+    const result = await pool.query<PostgresCollectorIngestion>(`
+      SELECT
+        device_id AS "deviceId",
+        snapshot_type AS "snapshotType",
+        status,
+        observed_at AS "observedAt",
+        received_at AS "receivedAt",
+        counts,
+        warnings,
+        error
+      FROM collector_ingestions
+      WHERE device_id = $1
+      ORDER BY id DESC
+    `, [deviceId]);
+    return result.rows;
+  }
 
   return {
     upsertInventorySnapshot(snapshot) {
@@ -379,22 +403,9 @@ export function createPostgresStore(options: PostgresStoreOptions = {}): Postgre
       `, [id]);
       return result.rows[0] ?? null;
     },
-    async listCollectorIngestions(deviceId) {
-      const result = await pool.query<PostgresCollectorIngestion>(`
-        SELECT
-          device_id AS "deviceId",
-          snapshot_type AS "snapshotType",
-          status,
-          observed_at AS "observedAt",
-          received_at AS "receivedAt",
-          counts,
-          warnings,
-          error
-        FROM collector_ingestions
-        WHERE device_id = $1
-        ORDER BY id DESC
-      `, [deviceId]);
-      return result.rows;
+    listCollectorIngestions,
+    async readDeviceCollectionHealth(deviceId) {
+      return deriveDeviceCollectionHealth(deviceId, await listCollectorIngestions(deviceId));
     },
     close() {
       return pool.end();

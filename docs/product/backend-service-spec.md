@@ -10,7 +10,7 @@ Agentlane backend 是独立于 Vite 的正式服务入口，用于承接 collect
 - 使用 Postgres 持久化设备、Runtime、Agent、Channel binding、工作项、会话、执行记录和采集记录。
 - 保留设备侧主动连接后端的模型：collector 通过 outbound WebSocket 建立控制面，通过 HTTP POST 上报采集结果。
 - 将 Runs / Runtime Fleet 的正式数据读取固定为“后端查询、前端展示”，不再使用前端拉 latest snapshot 后本地筛选作为正式路径。
-- 每次 collector 上报都记录 ingestion 结果，支持排查某个平台为什么缺数据、什么时候缺数据、缺了哪些能力。
+- 每次 collector 上报都记录 ingestion 结果，并由后端生成设备采集健康结论，支持排查某个平台为什么缺数据、什么时候缺数据、缺了哪些能力。
 - 提供 production-like 本地部署配置：后端 bundle、前端静态构建、Nginx 反代和 Postgres compose。
 - 保持当前功能和测试质量，不为尚未上线的旧实现背兼容包袱。
 
@@ -76,6 +76,8 @@ Collector 保持主动上报：
 - Work state 里的 `workItemId`、`conversationId` 等可选关联必须以当前快照中真实存在的对象为准。缺失的可选关联写成 `NULL`，不能因为单个平台的关联证据不完整而拒绝整批工作态上报。
 - Work state 里的 `runtimeId`、`agentId` 也必须按当前设备已注册对象校验。会话和工作项的陈旧 `runtimeId` / `agentId` 降级为 `NULL`；执行记录的 `runtimeId` 是必填外键，若 runtime 不存在则跳过该 execution，并在本次 ingestion 数量中反映实际写入数量。
 - 每次上报必须写 `collector_ingestions`，记录设备、类型、状态、对象数量、warnings、错误摘要和接收时间。
+- Collector 上报 inventory / work-state 时遇到网络错误或后端 `5xx` 可以做有限重试；`4xx` 代表 payload 或权限问题，不应通过重试掩盖。
+- 设备 WebSocket 在线只表示控制面可达，不等于 inventory / work-state 采集健康。采集健康必须从 `collector_ingestions` 中最近一次 inventory 与 work-state 记录独立判断。
 - 后续 collector 可演进为增量采集，但第一版可以先复用现有采集结果，由后端通过 upsert 去重。
 
 建议节奏：
@@ -110,6 +112,14 @@ Collector 保持主动上报：
   - 返回工作项详情。
 - `GET /api/devices/:deviceId/ingestions`
   - 返回最近采集记录，用于解释数据新鲜度和缺口；记录必须包含 `observedAt` 和 `receivedAt`，方便区分设备观测时间与后端接收时间。
+- `GET /api/devices/:deviceId/collection-health`
+  - 返回设备级采集健康摘要和 inventory / work-state 两个检查项。
+  - `healthy`：最近一次上报成功、未超时、无 warnings。
+  - `warning`：最近一次上报成功，但 adapter 有 warnings，例如某平台部分 probe 不可用。
+  - `stale`：最近一次上报超过健康阈值。
+  - `failed`：最近一次上报失败。
+  - `unknown`：尚未收到该 snapshot type 的采集记录。
+  - 该接口面向产品诊断，不返回外部平台密钥、原始 payload 或调试-only 字段。
 
 前端缓存策略：
 
@@ -155,5 +165,6 @@ ECS 部署形态：
 - control channel harness：WebSocket hello、heartbeat、refresh command lifecycle 继续可用。
 - collector contract harness：现有 collector 上报 payload 仍可被后端接收。
 - deploy config harness：backend bundle、Dockerfile、Nginx、production-like compose 必须和当前服务入口一致。
+- production smoke harness：`npm run smoke:production` 检查 `/healthz`、`/readyz`、Runtime Fleet、Work Items 和设备采集健康查询。
 - Playwright harness：Runtime Fleet 和 Runs 页面继续通过，且不依赖手动 dev 数据。
 - `./scripts/verify.sh` 必须包含新增 backend 检查。

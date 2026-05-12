@@ -8,6 +8,7 @@ const COLLECTOR_VERSION = "0.1.0";
 const DEFAULT_INTERVAL_MS = 60_000;
 const DEFAULT_SLOCK_SERVER_URL = process.env.SLOCK_DEFAULT_SERVER_URL || "https://api.slock.ai";
 const DEFAULT_PROBE_MAX_BUFFER_BYTES = 20 * 1024 * 1024;
+const POST_RETRY_DELAYS_MS = [0, 500, 1500];
 
 function parseArgs(argv) {
   const args = {
@@ -552,22 +553,39 @@ function collectSnapshot(config, args) {
 
 async function postSnapshot(serverUrl, snapshot) {
   const url = new URL("/api/device-snapshots", serverUrl);
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(snapshot),
-  });
-  if (!response.ok) throw new Error(`Snapshot post failed: HTTP ${response.status}`);
+  await postJsonWithRetry(url, snapshot, "Snapshot");
 }
 
 async function postWorkStateSnapshot(serverUrl, snapshot) {
   const url = new URL("/api/runtime-work-state-snapshots", serverUrl);
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(snapshot),
+  await postJsonWithRetry(url, snapshot, "Work state snapshot");
+}
+
+async function postJsonWithRetry(url, payload, label) {
+  let lastError;
+  for (const [attempt, delayMs] of POST_RETRY_DELAYS_MS.entries()) {
+    if (delayMs > 0) await sleep(delayMs);
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (response.ok) return;
+      lastError = new Error(`${label} post failed: HTTP ${response.status}`);
+      if (response.status < 500 || attempt === POST_RETRY_DELAYS_MS.length - 1) break;
+    } catch (error) {
+      lastError = error;
+      if (attempt === POST_RETRY_DELAYS_MS.length - 1) break;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(`${label} post failed`);
+}
+
+function sleep(milliseconds) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
   });
-  if (!response.ok) throw new Error(`Work state snapshot post failed: HTTP ${response.status}`);
 }
 
 async function runOnce(config, args) {

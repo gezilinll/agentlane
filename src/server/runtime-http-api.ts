@@ -191,6 +191,17 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
       return;
     }
 
+    const collectionHealthMatch = requestUrl.pathname.match(/^\/api\/devices\/([^/]+)\/collection-health$/);
+    if (request.method === "GET" && collectionHealthMatch) {
+      if (!options.postgresStore) {
+        sendJson(response, 503, { error: "postgres_store_unavailable" });
+        return;
+      }
+      const deviceId = decodeURIComponent(collectionHealthMatch[1] ?? "");
+      sendJson(response, 200, await options.postgresStore.readDeviceCollectionHealth(deviceId));
+      return;
+    }
+
     next();
   };
 }

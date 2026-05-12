@@ -57,6 +57,7 @@ describeDb("runtime HTTP API with Postgres store", () => {
         const workItemsResponse = await fetch(`${baseUrl}/api/runtime-work-items?source=slock&stage=processing`);
         const workItemDetailResponse = await fetch(`${baseUrl}/api/runtime-work-items/${encodeURIComponent(workStateSnapshot.workItems[0].id)}`);
         const ingestionsResponse = await fetch(`${baseUrl}/api/devices/fixture-mac/ingestions`);
+        const healthResponse = await fetch(`${baseUrl}/api/devices/fixture-mac/collection-health`);
 
         expect(inventoryResponse.status).toBe(201);
         expect(workStateResponse.status).toBe(201);
@@ -91,6 +92,15 @@ describeDb("runtime HTTP API with Postgres store", () => {
               receivedAt: expect.any(String),
               snapshotType: "inventory",
             }),
+          ],
+        });
+        await expect(healthResponse.json()).resolves.toMatchObject({
+          deviceId: "fixture-mac",
+          status: "warning",
+          summary: "工作态采集有警告",
+          checks: [
+            expect.objectContaining({ id: "inventory", status: "healthy" }),
+            expect.objectContaining({ id: "work_state", status: "warning" }),
           ],
         });
       } finally {
@@ -236,5 +246,6 @@ function createWorkStateSnapshot(snapshot: RuntimeInventorySnapshot): RuntimeWor
       sourceRefs: [{ source: "slock", externalId: "run-1" }],
     }],
     capabilities: [],
+    warnings: ["fixture warning"],
   };
 }
