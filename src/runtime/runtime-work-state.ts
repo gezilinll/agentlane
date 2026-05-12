@@ -113,6 +113,8 @@ export interface RuntimeWorkItem {
   description?: string;
   /** Business lifecycle status after adapter normalization. */
   status: RuntimeWorkItemStatus;
+  /** Optional materialized Agentlane stage when a trusted backend query has already derived it. */
+  stage?: RuntimeWorkStageId;
   /** Channel, board, project, or platform surface where this work item is visible. */
   channel?: ChannelBinding;
   /** Current assignee when the source platform exposes one. */

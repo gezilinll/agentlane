@@ -786,11 +786,11 @@ function shouldPreferOpenClawConversationEvidence(
 }
 
 function isGeneratedOpenClawDingTalkFallback(label: string | undefined): boolean {
-  return /^DingTalk\s+(群聊|私聊)\s+.+$/i.test(label?.trim() ?? "");
+  return /^DingTalk\s+(群聊|私聊)(?:\s+.+)?$/i.test(label?.trim() ?? "");
 }
 
 function isGeneratedOpenClawDingTalkDirect(label: string | undefined): boolean {
-  return /^DingTalk\s+私聊\s+.+$/i.test(label?.trim() ?? "");
+  return /^DingTalk\s+私聊(?:\s+.+)?$/i.test(label?.trim() ?? "");
 }
 
 function findOpenClawTarget(
@@ -823,13 +823,7 @@ function formatOpenClawDingTalkLabel(
   if (rawLabel && rawLabel.toLowerCase() !== conversationId?.toLowerCase()) return rawLabel;
   if (!conversationId) return "DingTalk";
   const prefix = (target?.kind ?? fallbackKind) === "direct" ? "DingTalk 私聊" : "DingTalk 群聊";
-  return `${prefix} ${compactExternalId(conversationId)}`;
-}
-
-function compactExternalId(value: string): string {
-  const normalized = value.trim();
-  if (normalized.length <= 12) return normalized;
-  return `${normalized.slice(0, 6)}...${normalized.slice(-4)}`;
+  return prefix;
 }
 
 function parseOpenClawDingTalkSession(sessionKey: string | undefined): { kind: "group" | "direct"; conversationId: string } | null {

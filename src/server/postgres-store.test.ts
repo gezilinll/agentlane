@@ -41,6 +41,8 @@ describeDb("Postgres runtime store", () => {
           expect.objectContaining({
             counts: { conversations: 1, executions: 1, workItems: 1 },
             deviceId: "fixture-mac",
+            observedAt: expect.any(Date),
+            receivedAt: expect.any(Date),
             snapshotType: "work_state",
             status: "succeeded",
             warnings: ["fixture warning"],
@@ -48,6 +50,8 @@ describeDb("Postgres runtime store", () => {
           expect.objectContaining({
             counts: { agents: 2, channelBindings: 2, devices: 1, runtimes: 2 },
             deviceId: "fixture-mac",
+            observedAt: expect.any(Date),
+            receivedAt: expect.any(Date),
             snapshotType: "inventory",
             status: "succeeded",
           }),
@@ -132,6 +136,78 @@ describeDb("Postgres runtime store", () => {
           workExecutions: 2,
           workItems: 1,
         });
+      } finally {
+        await store.close();
+      }
+    } finally {
+      await database.drop();
+    }
+  });
+
+  it("records work-state snapshots with stale runtime and agent references without failing ingestion", async () => {
+    const database = await createTemporaryPostgresDatabase();
+    try {
+      runMigrationsScript(database.url);
+      const store = createPostgresStore({ connectionString: database.url });
+      try {
+        const inventorySnapshot = fixtureSnapshot as RuntimeInventorySnapshot;
+        const workStateSnapshot = createWorkStateSnapshot(inventorySnapshot);
+        const staleRuntimeId = `${inventorySnapshot.device.id}:runtime:stale`;
+        const staleAgentId = `${inventorySnapshot.device.id}:agent:stale`;
+        const staleConversation = {
+          ...workStateSnapshot.conversations[0],
+          id: `${workStateSnapshot.conversations[0].id}:stale-runtime`,
+          runtimeId: staleRuntimeId,
+          agentId: staleAgentId,
+          workItemId: undefined,
+        };
+        const staleWorkItem = {
+          ...workStateSnapshot.workItems[0],
+          id: `${workStateSnapshot.workItems[0].id}:stale-runtime`,
+          runtimeId: staleRuntimeId,
+          agentId: staleAgentId,
+          conversationId: staleConversation.id,
+        };
+        const staleExecution = {
+          ...workStateSnapshot.executions[0],
+          id: `${workStateSnapshot.executions[0].id}:stale-runtime`,
+          runtimeId: staleRuntimeId,
+          agentId: staleAgentId,
+          workItemId: staleWorkItem.id,
+          conversationId: staleConversation.id,
+        };
+
+        await store.upsertInventorySnapshot(inventorySnapshot);
+        const result = await store.upsertWorkStateSnapshot({
+          ...workStateSnapshot,
+          conversations: [staleConversation],
+          executions: [staleExecution],
+          workItems: [staleWorkItem],
+        });
+
+        expect(result.counts).toEqual({ conversations: 1, executions: 0, workItems: 1 });
+        await expect(store.readWorkItem(staleWorkItem.id)).resolves.toMatchObject({
+          id: staleWorkItem.id,
+          runtimeId: null,
+          agentId: null,
+          conversationId: staleConversation.id,
+        });
+        await expect(store.readEntityCounts()).resolves.toMatchObject({
+          workConversations: 1,
+          workExecutions: 0,
+          workItems: 1,
+        });
+        await expect(store.listCollectorIngestions(inventorySnapshot.device.id)).resolves.toEqual([
+          expect.objectContaining({
+            counts: { conversations: 1, executions: 0, workItems: 1 },
+            snapshotType: "work_state",
+            status: "succeeded",
+          }),
+          expect.objectContaining({
+            snapshotType: "inventory",
+            status: "succeeded",
+          }),
+        ]);
       } finally {
         await store.close();
       }

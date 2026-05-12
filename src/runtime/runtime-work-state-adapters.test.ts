@@ -163,16 +163,16 @@ describe("runtime work state adapters", () => {
       source: "openclaw",
       channel: {
         kind: "dingtalk",
-        label: "DingTalk 私聊 040308...5013",
+        label: "DingTalk 私聊",
         externalId: "0403085742945013",
       },
     });
     const conversation = result.conversations.find((item) => item.externalId === "agent:main:dingtalk:direct:0403085742945013");
     expect(conversation).toMatchObject({
-      title: "DingTalk 私聊 040308...5013",
+      title: "DingTalk 私聊",
       channel: {
         kind: "dingtalk",
-        label: "DingTalk 私聊 040308...5013",
+        label: "DingTalk 私聊",
       },
     });
   });
@@ -216,7 +216,7 @@ describe("runtime work state adapters", () => {
       creator: { kind: "human", label: "林奈", externalId: "0403085742945013" },
       channel: {
         kind: "dingtalk",
-        label: "DingTalk 私聊 040308...5013",
+        label: "DingTalk 私聊",
         externalId: "0403085742945013",
       },
       conversationId: "fixture-device:openclaw:gateway:conversation:agent-main-dingtalk-direct-0403085742945013",
@@ -266,7 +266,7 @@ describe("runtime work state adapters", () => {
       creator: { kind: "human", label: "林奈", externalId: "0403085742945013" },
       channel: {
         kind: "dingtalk",
-        label: "DingTalk 私聊 040308...5013",
+        label: "DingTalk 私聊",
         externalId: "0403085742945013",
       },
       conversationId: "fixture-device:openclaw:gateway:conversation:agent-main-dingtalk-direct-0403085742945013",

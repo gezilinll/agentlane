@@ -620,6 +620,81 @@ describe("Catalog page", () => {
     expect(screen.getByText(/当前数据源：后端查询/)).toBeInTheDocument();
   });
 
+  it("keeps current Runs filters when automatic refresh reloads backend query data", async () => {
+    vi.useFakeTimers();
+    const requests: string[] = [];
+    const allWorkItems: RuntimeWorkStateSnapshot = {
+      observedAt: "2026-05-09T08:00:00.000Z",
+      deviceId: "fixture-device",
+      workItems: [
+        {
+          id: "fixture-openclaw-card",
+          source: "openclaw",
+          externalId: "fixture-openclaw-card",
+          title: "OpenClaw unfiltered card",
+          status: "todo",
+          lastSeenAt: "2026-05-09T08:00:00.000Z",
+        },
+        {
+          id: "fixture-slock-card",
+          source: "slock",
+          externalId: "fixture-slock-card",
+          title: "Slock filtered card",
+          status: "in_progress",
+          lastSeenAt: "2026-05-09T08:00:00.000Z",
+        },
+      ],
+      conversations: [],
+      executions: [],
+      capabilities: [],
+    };
+    globalThis.fetch = vi.fn(async (input) => {
+      const url = input.toString();
+      requests.push(url);
+      if (url.includes("/api/runtime-work-items") && url.includes("source=slock")) {
+        return new Response(JSON.stringify(workStateQueryResponse({
+          ...allWorkItems,
+          workItems: [allWorkItems.workItems[1]],
+        })), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/api/runtime-work-items")) {
+        return new Response(JSON.stringify(workStateQueryResponse(allWorkItems)), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "unexpected request" }), { status: 500 });
+    }) as unknown as typeof fetch;
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Runs" }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByRole("button", { name: /OpenClaw unfiltered card/ })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("来源 Runtime"), { target: { value: "slock" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+      await Promise.resolve();
+    });
+    expect(screen.queryByRole("button", { name: /OpenClaw unfiltered card/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Slock filtered card/ })).toBeInTheDocument();
+
+    requests.length = 0;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+      await Promise.resolve();
+    });
+
+    expect(requests.at(-1)).toContain("source=slock");
+  });
+
   it("does not fall back to the legacy latest work-state API when Runs query fails", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn(async (input) => {

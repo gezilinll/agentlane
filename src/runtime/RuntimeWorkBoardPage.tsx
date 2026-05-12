@@ -146,6 +146,18 @@ export function RuntimeWorkBoardPage() {
     setLastLoadedAt(new Date().toISOString());
   }
 
+  const filters: RuntimeWorkBoardFilters = useMemo(
+    () => ({
+      channelKind,
+      search,
+      source,
+      stage,
+      timeRange: createTimeRangeFilter(timeStart, timeEnd),
+    }),
+    [channelKind, search, source, stage, timeEnd, timeStart],
+  );
+  const filtersKey = useMemo(() => createRuntimeWorkFiltersKey(filters), [filters]);
+
   async function loadLatestSnapshot(options: { silent?: boolean } = {}) {
     try {
       const latestSnapshot = await fetchLatestSnapshot(filters);
@@ -167,13 +179,14 @@ export function RuntimeWorkBoardPage() {
 
   useEffect(() => {
     let cancelled = false;
+    let refreshTimer: number | undefined;
 
-    async function loadInitialSnapshot() {
+    async function loadSnapshotForFilters() {
       try {
-        const latestSnapshot = await fetchLatestSnapshot();
+        const latestSnapshot = await fetchLatestSnapshot(filters);
         if (!cancelled) {
           applySnapshot(latestSnapshot.snapshot, latestSnapshot.source, {
-            filtersKey: defaultFiltersKey,
+            filtersKey,
             nextCursor: latestSnapshot.nextCursor,
             total: latestSnapshot.total,
           });
@@ -185,15 +198,18 @@ export function RuntimeWorkBoardPage() {
       }
     }
 
-    void loadInitialSnapshot();
-    const refreshTimer = window.setInterval(() => {
-      void loadInitialSnapshot();
-    }, autoRefreshIntervalMs);
+    const debounceTimer = window.setTimeout(() => {
+      void loadSnapshotForFilters();
+      refreshTimer = window.setInterval(() => {
+        void loadSnapshotForFilters();
+      }, autoRefreshIntervalMs);
+    }, 250);
     return () => {
       cancelled = true;
-      window.clearInterval(refreshTimer);
+      window.clearTimeout(debounceTimer);
+      if (refreshTimer !== undefined) window.clearInterval(refreshTimer);
     };
-  }, [allowFixtureFallback]);
+  }, [allowFixtureFallback, filters, filtersKey]);
 
   const channelOptions = useMemo(() => listRuntimeWorkChannelOptions(snapshot), [snapshot]);
   useEffect(() => {
@@ -201,43 +217,6 @@ export function RuntimeWorkBoardPage() {
       setChannelKind("all");
     }
   }, [channelKind, channelOptions]);
-
-  const filters: RuntimeWorkBoardFilters = useMemo(
-    () => ({
-      channelKind,
-      search,
-      source,
-      stage,
-      timeRange: createTimeRangeFilter(timeStart, timeEnd),
-    }),
-    [channelKind, search, source, stage, timeEnd, timeStart],
-  );
-  const filtersKey = useMemo(() => createRuntimeWorkFiltersKey(filters), [filters]);
-
-  useEffect(() => {
-    if (dataSource === "fixture") return undefined;
-    let cancelled = false;
-    const timer = window.setTimeout(() => {
-      void (async () => {
-        try {
-          const latestSnapshot = await fetchLatestSnapshot(filters);
-          if (!cancelled) {
-            applySnapshot(latestSnapshot.snapshot, latestSnapshot.source, {
-              filtersKey,
-              nextCursor: latestSnapshot.nextCursor,
-              total: latestSnapshot.total,
-            });
-          }
-        } catch {
-          // Keep the current visible snapshot when a filtered backend refresh fails.
-        }
-      })();
-    }, 250);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [dataSource, filters]);
 
   const board = useMemo(() => createRuntimeWorkBoard(snapshot, filters), [filters, snapshot]);
   const selectedItem = selectedId ? board.visibleItems.find((item) => item.id === selectedId) ?? null : board.visibleItems[0] ?? null;

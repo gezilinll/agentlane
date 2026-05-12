@@ -74,6 +74,7 @@ Collector 保持主动上报：
 - Inventory 快照可以全量上报，因为设备、Runtime、Agent 数量较小。
 - Inventory 和 Work state 上报代表该设备的最新观测快照。后端按稳定 ID upsert 当前对象，并删除同一设备在新快照中已经消失的 Runtime、Agent、工作项、会话和执行记录；历史只保留在 `collector_ingestions` 中。
 - Work state 里的 `workItemId`、`conversationId` 等可选关联必须以当前快照中真实存在的对象为准。缺失的可选关联写成 `NULL`，不能因为单个平台的关联证据不完整而拒绝整批工作态上报。
+- Work state 里的 `runtimeId`、`agentId` 也必须按当前设备已注册对象校验。会话和工作项的陈旧 `runtimeId` / `agentId` 降级为 `NULL`；执行记录的 `runtimeId` 是必填外键，若 runtime 不存在则跳过该 execution，并在本次 ingestion 数量中反映实际写入数量。
 - 每次上报必须写 `collector_ingestions`，记录设备、类型、状态、对象数量、warnings、错误摘要和接收时间。
 - 后续 collector 可演进为增量采集，但第一版可以先复用现有采集结果，由后端通过 upsert 去重。
 
@@ -104,10 +105,11 @@ Collector 保持主动上报：
 - `GET /api/runtime-work-items`
   - 参数：`search`、`source`、`channelKind`、`stage`、`startAt`、`endAt`、`limit`、`cursor`。
   - 后端负责筛选、时间范围、稳定 cursor 分页和排序，返回 `total` 与 `nextCursor`。
+  - 返回行中的 `stage` 是后端已物化的 Agentlane WorkStage；前端可以用它筛选和分栏，不能再按 `status` 覆盖成另一套阶段。
 - `GET /api/runtime-work-items/:id`
   - 返回工作项详情。
 - `GET /api/devices/:deviceId/ingestions`
-  - 返回最近采集记录，用于解释数据新鲜度和缺口。
+  - 返回最近采集记录，用于解释数据新鲜度和缺口；记录必须包含 `observedAt` 和 `receivedAt`，方便区分设备观测时间与后端接收时间。
 
 前端缓存策略：
 

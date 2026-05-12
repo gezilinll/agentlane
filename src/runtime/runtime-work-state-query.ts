@@ -218,6 +218,7 @@ function createWorkItemBoardItem(workItem: RuntimeWorkItem, execution?: RuntimeE
     workItemStatus: workItem.status,
     executionStatus: execution?.status,
   });
+  const stage = normalizeMaterializedStage(workItem.stage) ?? derivation.stage;
   const channelKind = normalizeWorkChannelKind(workItem.channel?.kind);
 
   return {
@@ -225,9 +226,9 @@ function createWorkItemBoardItem(workItem: RuntimeWorkItem, execution?: RuntimeE
     title: workItem.title,
     source: workItem.source,
     runtimeLabel: sourceLabel(workItem.source),
-    stage: derivation.stage,
-    confidence: derivation.confidence,
-    reasons: derivation.reasons,
+    stage,
+    confidence: workItem.stage ? "direct" : derivation.confidence,
+    reasons: workItem.stage ? ["Backend query returned the materialized Agentlane work stage."] : derivation.reasons,
     kind: "work_item",
     workItemStatus: workItem.status,
     executionStatus: execution?.status,
@@ -243,6 +244,10 @@ function createWorkItemBoardItem(workItem: RuntimeWorkItem, execution?: RuntimeE
     workItem,
     execution,
   };
+}
+
+function normalizeMaterializedStage(stage: RuntimeWorkItem["stage"]): RuntimeWorkStageId | undefined {
+  return stage && WORK_STAGE_IDS.includes(stage) ? stage : undefined;
 }
 
 function createSummary(

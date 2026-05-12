@@ -4,8 +4,10 @@ import type {
   RuntimeWorkItem,
   RuntimeWorkItemStatus,
   RuntimeWorkParticipant,
+  RuntimeWorkStageId,
   RuntimeWorkStateSnapshot,
 } from "./runtime-work-state";
+import { WORK_STAGE_IDS } from "./runtime-work-state";
 import type { RuntimeWorkBoardFilters } from "./runtime-work-state-query";
 
 /** Backend query response for normalized Runtime work items. */
@@ -115,6 +117,7 @@ function runtimeWorkItemFromQueryRow(row: RuntimeWorkItemQueryRow): RuntimeWorkI
     title: row.title,
     description: row.description ?? undefined,
     status: normalizeWorkItemStatus(row.status),
+    stage: normalizeWorkStage(row.stage),
     channel: row.channelKind || row.channelLabel
       ? {
           kind: normalizeChannelKind(row.channelKind),
@@ -187,6 +190,10 @@ function normalizeWorkItemStatus(value: string): RuntimeWorkItemStatus {
     return value;
   }
   return "unknown";
+}
+
+function normalizeWorkStage(value: string): RuntimeWorkStageId | undefined {
+  return WORK_STAGE_IDS.includes(value as RuntimeWorkStageId) ? value as RuntimeWorkStageId : undefined;
 }
 
 function normalizeChannelKind(value: string | null): ChannelKind {

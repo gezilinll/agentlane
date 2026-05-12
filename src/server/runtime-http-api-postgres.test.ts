@@ -55,6 +55,7 @@ describeDb("runtime HTTP API with Postgres store", () => {
         const workStateResponse = await postJson(`${baseUrl}/api/runtime-work-state-snapshots`, workStateSnapshot);
         const fleetResponse = await fetch(`${baseUrl}/api/runtime-fleet`);
         const workItemsResponse = await fetch(`${baseUrl}/api/runtime-work-items?source=slock&stage=processing`);
+        const workItemDetailResponse = await fetch(`${baseUrl}/api/runtime-work-items/${encodeURIComponent(workStateSnapshot.workItems[0].id)}`);
         const ingestionsResponse = await fetch(`${baseUrl}/api/devices/fixture-mac/ingestions`);
 
         expect(inventoryResponse.status).toBe(201);
@@ -72,10 +73,24 @@ describeDb("runtime HTTP API with Postgres store", () => {
           })],
           total: 1,
         });
+        expect(workItemDetailResponse.status).toBe(200);
+        await expect(workItemDetailResponse.json()).resolves.toMatchObject({
+          id: workStateSnapshot.workItems[0].id,
+          source: "slock",
+          stage: "processing",
+        });
         await expect(ingestionsResponse.json()).resolves.toMatchObject({
           ingestions: [
-            expect.objectContaining({ snapshotType: "work_state" }),
-            expect.objectContaining({ snapshotType: "inventory" }),
+            expect.objectContaining({
+              observedAt: expect.any(String),
+              receivedAt: expect.any(String),
+              snapshotType: "work_state",
+            }),
+            expect.objectContaining({
+              observedAt: expect.any(String),
+              receivedAt: expect.any(String),
+              snapshotType: "inventory",
+            }),
           ],
         });
       } finally {
@@ -110,12 +125,16 @@ describeDb("runtime HTTP API with Postgres store", () => {
           ingestions: [
             expect.objectContaining({
               deviceId: "broken-device",
+              observedAt: expect.any(String),
+              receivedAt: expect.any(String),
               snapshotType: "work_state",
               status: "failed",
               error: "invalid runtime work state snapshot",
             }),
             expect.objectContaining({
               deviceId: "broken-device",
+              observedAt: expect.any(String),
+              receivedAt: expect.any(String),
               snapshotType: "inventory",
               status: "failed",
               error: "invalid runtime inventory snapshot",

@@ -106,7 +106,7 @@ Multica 特别规则：
 
 - `tasks list` 可返回上千个历史和当前 task。
 - 状态包括 `succeeded`、`lost`、`timed_out`、`failed`、`cancelled`。
-- 2026-05-10 在 `gezilinll-claw` 上复核：`tasks list` 中 DingTalk task 有 72 条；trajectory 文件必须按 `runId` 分组，因为同一个 trajectory 文件可能包含多次 run。按当前用户任务卡规则分组并过滤 heartbeat、async approval followup 和 system recovery 后，collector 可生成 257 个 OpenClaw 工作项，其中 `done=221`、`blocked=33`、`in_progress=3`。这批数据包含历史执行账本，不等于“当前活跃任务”。
+- `tasks list` 与 trajectory 扫描都会包含历史和当前记录；trajectory 文件必须按 `runId` 分组，因为同一个 trajectory 文件可能包含多次 run。collector 必须按当前用户任务卡规则分组，并过滤 heartbeat、async approval followup、system recovery 等内部任务。这批数据包含历史执行账本，不等于“当前活跃任务”。
 - `health` 返回 main agent 的 session count 和 recent session keys。
 - DingTalk channel 当前可观测连接态和最近事件时间。
 - 本地 DingTalk message context 能定位群组、发起人和消息摘要；task 的 requester origin / message id 可把 execution 关联回消息。
@@ -189,8 +189,7 @@ Multica 特别规则：
 
 探测样本摘要：
 
-- 样例 channel A 的 task board 返回 55 个任务：`in_progress=39`、`in_review=6`、`done=10`。
-- 样例 channel B 的 task board 返回 41 个任务：`in_progress=7`、`in_review=19`、`done=15`。
+- Slock task board 按 server / channel 返回任务列表和平台阶段；collector 必须把这些阶段转成 Agentlane WorkStage，不把 Slock 自身 UI 状态直接暴露给 Runs 页面。
 - task API 的完整列表需要不带 `status=all`；状态过滤使用 `status=in_progress`、`status=in_review`、`status=done` 等。
 - `/server` 可返回 joined channel 列表，collector 应排除 archived/deleted/unjoined channel，再用 `#频道名` 拉 task board，避免要求用户手工维护 channel 配置。
 - channel/thread history 能返回消息结构；DM history 是否可读依赖当前 agent context。
@@ -251,6 +250,7 @@ Harness：
 Runs / Work Board 第一版是只读 Agent 工作视图，用于验证统一工作态模型是否能被用户理解和验收。
 
 - 页面读取 `GET /api/runtime-work-items`，由后端执行搜索、来源 Runtime、Channel、阶段、时间范围、排序和 cursor 分页；正式查询不可用时保留当前页面状态并展示错误，生产构建不得回退 fixture，开发期离线预览只使用明确标识的 fixture，不再读取 latest snapshot API。
+- 后端返回的 `stage` 是已经物化的 Agentlane WorkStage，前端以它作为分栏和阶段筛选依据；前端不得在查询结果路径里再按 `status` 覆盖成另一套阶段。
 - 后端搜索语义必须覆盖用户在 Runs 页面看到的主要识别信息：任务标题、消息摘要、发起人、承接 Agent、Runtime、Channel、会话/群组。前端不再本地重放一套不同的搜索规则。
 - 页面以 `total` 和 `nextCursor` 展示已加载数量，并通过 `加载更多` 继续请求后端下一页；加载更多只能追加当前筛选条件下的同一查询结果。筛选条件变化后，旧查询的 cursor 不能继续用于新筛选条件；结果摘要不能出现 `已显示` 大于 `total` 的状态。`加载更多` 必须和已显示数量放在同一结果摘要区域，不能藏在数百张卡片之后。
 - 页面只消费 `runtime-work-state-query.ts` 生成的 lane、summary 和 detail。

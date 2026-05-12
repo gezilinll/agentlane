@@ -1260,13 +1260,7 @@ function formatOpenClawDingTalkLabel(conversationId, target, fallbackKind) {
   if (rawLabel && rawLabel.toLowerCase() !== String(conversationId || "").toLowerCase()) return rawLabel;
   if (!conversationId) return "DingTalk";
   const prefix = (target?.kind || fallbackKind) === "direct" ? "DingTalk 私聊" : "DingTalk 群聊";
-  return `${prefix} ${compactExternalId(conversationId)}`;
-}
-
-function compactExternalId(value) {
-  const normalized = String(value || "").trim();
-  if (normalized.length <= 12) return normalized;
-  return `${normalized.slice(0, 6)}...${normalized.slice(-4)}`;
+  return prefix;
 }
 
 function createOpenClawTaskWorkItem({ task, origin, runtimeId, agentId, sessionKey, executionStatus, observedAt, dingtalkState }) {
@@ -1373,11 +1367,11 @@ function shouldPreferOpenClawConversationEvidence(current, candidate) {
 }
 
 function isGeneratedOpenClawDingTalkFallback(label) {
-  return /^DingTalk\s+(群聊|私聊)\s+.+$/i.test(String(label || "").trim());
+  return /^DingTalk\s+(群聊|私聊)(?:\s+.+)?$/i.test(String(label || "").trim());
 }
 
 function isGeneratedOpenClawDingTalkDirect(label) {
-  return /^DingTalk\s+私聊\s+.+$/i.test(String(label || "").trim());
+  return /^DingTalk\s+私聊(?:\s+.+)?$/i.test(String(label || "").trim());
 }
 
 function collectOpenClawWorkState(deviceId, observedAt) {

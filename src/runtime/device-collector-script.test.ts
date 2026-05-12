@@ -397,16 +397,16 @@ describe("device collector scripts", () => {
       source: "openclaw",
       channel: {
         kind: "dingtalk",
-        label: "DingTalk 私聊 040308...5013",
+        label: "DingTalk 私聊",
         externalId: "0403085742945013",
       },
     });
     expect(snapshot.conversations).toContainEqual(expect.objectContaining({
       externalId: "agent:main:dingtalk:direct:0403085742945013",
-      title: "DingTalk 私聊 040308...5013",
+      title: "DingTalk 私聊",
       channel: expect.objectContaining({
         kind: "dingtalk",
-        label: "DingTalk 私聊 040308...5013",
+        label: "DingTalk 私聊",
       }),
     }));
   });
@@ -711,7 +711,7 @@ describe("device collector scripts", () => {
       creator: { kind: "human", label: "林奈", externalId: directConversationId },
       channel: {
         kind: "dingtalk",
-        label: "DingTalk 私聊 040308...5013",
+        label: "DingTalk 私聊",
         externalId: directConversationId,
       },
       conversationId: "openclaw-trajectory-direct-link-device:openclaw:gateway-ws-127.0.0.1-18789:conversation:agent-main-dingtalk-direct-0403085742945013",
@@ -784,7 +784,7 @@ describe("device collector scripts", () => {
       creator: { kind: "human", label: "林奈", externalId: directConversationId },
       channel: {
         kind: "dingtalk",
-        label: "DingTalk 私聊 040308...5013",
+        label: "DingTalk 私聊",
         externalId: directConversationId,
       },
       conversationId: "openclaw-trajectory-direct-sender-link-device:openclaw:gateway-ws-127.0.0.1-18789:conversation:agent-main-dingtalk-direct-0403085742945013",

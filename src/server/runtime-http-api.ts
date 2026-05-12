@@ -83,6 +83,22 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
       return;
     }
 
+    const workItemMatch = requestUrl.pathname.match(/^\/api\/runtime-work-items\/([^/]+)$/);
+    if (request.method === "GET" && workItemMatch) {
+      if (!options.postgresStore) {
+        sendJson(response, 503, { error: "postgres_store_unavailable" });
+        return;
+      }
+      const workItemId = decodeURIComponent(workItemMatch[1] ?? "");
+      const workItem = await options.postgresStore.readWorkItem(workItemId);
+      if (!workItem) {
+        sendJson(response, 404, { error: "work_item_not_found", id: workItemId });
+        return;
+      }
+      sendJson(response, 200, workItem);
+      return;
+    }
+
     if (request.method === "POST" && requestUrl.pathname === "/api/device-snapshots") {
       let body: unknown = undefined;
       try {

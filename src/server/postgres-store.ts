@@ -47,6 +47,8 @@ export interface PostgresCollectorIngestion {
   deviceId: string;
   snapshotType: "inventory" | "work_state";
   status: "succeeded" | "failed";
+  observedAt: string | Date | null;
+  receivedAt: string | Date;
   counts: Record<string, number>;
   warnings: string[];
   error?: string | null;
@@ -190,29 +192,42 @@ export function createPostgresStore(options: PostgresStoreOptions = {}): Postgre
     upsertWorkStateSnapshot(snapshot) {
       return withTransaction(pool, async (client) => {
         await deleteExistingWorkStateForDevice(client, snapshot.deviceId);
+        const runtimeIds = await readRuntimeIdsForDevice(client, snapshot.deviceId);
+        const agentIds = await readAgentIdsForDevice(client, snapshot.deviceId);
         const workItemIds = new Set(snapshot.workItems.map((workItem) => workItem.id));
         const conversationIds = new Set(snapshot.conversations.map((conversation) => conversation.id));
+        let conversations = 0;
         for (const conversation of snapshot.conversations) {
-          await upsertWorkConversation(client, snapshot.deviceId, conversation);
+          if (await upsertWorkConversation(client, snapshot.deviceId, conversation, runtimeIds, agentIds)) {
+            conversations += 1;
+          }
         }
         const latestExecutionsByWorkItemId = createLatestExecutionsByWorkItemId(snapshot.executions);
+        let workItems = 0;
         for (const workItem of snapshot.workItems) {
-          await upsertWorkItem(
+          if (await upsertWorkItem(
             client,
             snapshot.deviceId,
             workItem,
             latestExecutionsByWorkItemId.get(workItem.id),
             conversationIds,
-          );
+            runtimeIds,
+            agentIds,
+          )) {
+            workItems += 1;
+          }
         }
+        let executions = 0;
         for (const execution of snapshot.executions) {
-          await upsertWorkExecution(client, snapshot.deviceId, execution, workItemIds, conversationIds);
+          if (await upsertWorkExecution(client, snapshot.deviceId, execution, workItemIds, conversationIds, runtimeIds, agentIds)) {
+            executions += 1;
+          }
         }
 
         const counts = {
-          conversations: snapshot.conversations.length,
-          executions: snapshot.executions.length,
-          workItems: snapshot.workItems.length,
+          conversations,
+          executions,
+          workItems,
         };
         await insertCollectorIngestion(client, {
           counts,
@@ -370,6 +385,8 @@ export function createPostgresStore(options: PostgresStoreOptions = {}): Postgre
           device_id AS "deviceId",
           snapshot_type AS "snapshotType",
           status,
+          observed_at AS "observedAt",
+          received_at AS "receivedAt",
           counts,
           warnings,
           error
@@ -508,6 +525,21 @@ async function deleteExistingWorkStateForDevice(client: pg.PoolClient, deviceId:
   await client.query("DELETE FROM work_conversations WHERE device_id = $1", [deviceId]);
 }
 
+async function readRuntimeIdsForDevice(client: pg.PoolClient, deviceId: string): Promise<Set<string>> {
+  const result = await client.query<{ id: string }>("SELECT id FROM runtimes WHERE device_id = $1", [deviceId]);
+  return new Set(result.rows.map((row) => row.id));
+}
+
+async function readAgentIdsForDevice(client: pg.PoolClient, deviceId: string): Promise<Set<string>> {
+  const result = await client.query<{ id: string }>(`
+    SELECT a.id
+    FROM agents a
+    INNER JOIN runtimes r ON r.id = a.runtime_id
+    WHERE r.device_id = $1
+  `, [deviceId]);
+  return new Set(result.rows.map((row) => row.id));
+}
+
 async function upsertChannelBinding(
   client: pg.PoolClient,
   agentId: string,
@@ -540,7 +572,9 @@ async function upsertWorkConversation(
   client: pg.PoolClient,
   deviceId: string,
   conversation: RuntimeWorkStateSnapshot["conversations"][number],
-): Promise<void> {
+  runtimeIds: Set<string> = new Set(),
+  agentIds: Set<string> = new Set(),
+): Promise<boolean> {
   await client.query(`
     INSERT INTO work_conversations (
       id, device_id, runtime_id, agent_id, source, external_id, status, channel_kind, channel_label, title,
@@ -568,8 +602,8 @@ async function upsertWorkConversation(
   `, [
     conversation.id,
     deviceId,
-    conversation.runtimeId ?? null,
-    conversation.agentId ?? null,
+    knownOptionalRef(conversation.runtimeId, runtimeIds),
+    knownOptionalRef(conversation.agentId, agentIds),
     conversation.source,
     conversation.externalId,
     conversation.status,
@@ -584,6 +618,7 @@ async function upsertWorkConversation(
     toJson(conversation.sourceRefs ?? []),
     toJson(conversation),
   ]);
+  return true;
 }
 
 async function upsertWorkItem(
@@ -592,7 +627,9 @@ async function upsertWorkItem(
   workItem: RuntimeWorkItem,
   execution?: RuntimeExecution,
   conversationIds: Set<string> = new Set(),
-): Promise<void> {
+  runtimeIds: Set<string> = new Set(),
+  agentIds: Set<string> = new Set(),
+): Promise<boolean> {
   const stage = deriveRuntimeWorkStage({
     executionStatus: execution?.status,
     source: workItem.source,
@@ -634,8 +671,8 @@ async function upsertWorkItem(
   `, [
     workItem.id,
     deviceId,
-    workItem.runtimeId ?? null,
-    workItem.agentId ?? null,
+    knownOptionalRef(workItem.runtimeId, runtimeIds),
+    knownOptionalRef(workItem.agentId, agentIds),
     knownOptionalRef(workItem.conversationId, conversationIds),
     workItem.source,
     workItem.externalId,
@@ -653,6 +690,7 @@ async function upsertWorkItem(
     toJson(workItem.sourceRefs ?? []),
     toJson(workItem),
   ]);
+  return true;
 }
 
 async function upsertWorkExecution(
@@ -661,7 +699,10 @@ async function upsertWorkExecution(
   execution: RuntimeExecution,
   workItemIds: Set<string> = new Set(),
   conversationIds: Set<string> = new Set(),
-): Promise<void> {
+  runtimeIds: Set<string> = new Set(),
+  agentIds: Set<string> = new Set(),
+): Promise<boolean> {
+  if (!runtimeIds.has(execution.runtimeId)) return false;
   await client.query(`
     INSERT INTO work_executions (
       id, device_id, runtime_id, agent_id, work_item_id, conversation_id, source, external_id, status,
@@ -689,7 +730,7 @@ async function upsertWorkExecution(
     execution.id,
     deviceId,
     execution.runtimeId,
-    execution.agentId ?? null,
+    knownOptionalRef(execution.agentId, agentIds),
     knownOptionalRef(execution.workItemId, workItemIds),
     knownOptionalRef(execution.conversationId, conversationIds),
     execution.source,
@@ -703,6 +744,7 @@ async function upsertWorkExecution(
     toJson(execution.sourceRefs ?? []),
     toJson(execution),
   ]);
+  return true;
 }
 
 function knownOptionalRef(value: string | undefined, knownIds: Set<string>): string | null {
