@@ -78,6 +78,22 @@ button {
   font-weight: 700;
 }
 
+.navFooter {
+  border-top: 1px solid #d8e2f0;
+  color: #5a6a85;
+  display: grid;
+  font-size: 12px;
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 14px;
+  word-break: break-all;
+}
+
+.navItemCompact {
+  height: 32px;
+  justify-content: center;
+}
+
 .workspace {
   display: grid;
   gap: 14px;

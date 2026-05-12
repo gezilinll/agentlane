@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useMemo, useState } from "react";
+import { AuthProvider, useOptionalAuthSession } from "./auth/AuthProvider";
 import {
   CATALOG_LIFECYCLES,
   CATALOG_OBJECT_TYPES,
@@ -45,7 +46,14 @@ const navItems: Array<{ label: string; icon: LucideIcon; page?: PageKey }> = [
   { label: "Governance", icon: ShieldCheck },
 ] as const;
 
-export function App() {
+export type AppAuthMode = "disabled" | "required";
+
+export function App({ authMode = "disabled" }: { authMode?: AppAuthMode }) {
+  const consoleApp = <ConsoleApp />;
+  return authMode === "required" ? <AuthProvider>{consoleApp}</AuthProvider> : consoleApp;
+}
+
+function ConsoleApp() {
   const [activePage, setActivePage] = useState<PageKey>("catalog");
 
   return (
@@ -74,10 +82,25 @@ export function App() {
             );
           })}
         </nav>
+        <AuthSessionActions />
       </aside>
 
       {activePage === "runtime" ? <RuntimeFleetPage /> : activePage === "work" ? <RuntimeWorkBoardPage /> : <CatalogPage />}
     </main>
+  );
+}
+
+function AuthSessionActions() {
+  const auth = useOptionalAuthSession();
+  if (!auth) return null;
+
+  return (
+    <div className="navFooter">
+      <span>{auth.session.user.email}</span>
+      <button type="button" className="navItem navItemCompact" onClick={() => void auth.logout()}>
+        退出登录
+      </button>
+    </div>
   );
 }
 

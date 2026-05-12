@@ -1,0 +1,81 @@
+import type { AuthOrganizationMembership, AuthSessionContext } from "./auth-store";
+
+/** Browser auth API client for email-code login, organization setup, invitations, and logout. */
+export interface AuthClient {
+  acceptInvitation: (token: string) => Promise<{ organization: AuthOrganizationMembership }>;
+  createOrganization: (input: { name: string; slug: string }) => Promise<{ organizations: AuthOrganizationMembership[] }>;
+  getMe: () => Promise<AuthSessionContext | null>;
+  loginWithCode: (input: { code: string; email: string }) => Promise<AuthSessionContext>;
+  logout: () => Promise<void>;
+  requestEmailCode: (email: string) => Promise<{ email: string; ok: boolean }>;
+}
+
+/** Create the default browser auth client backed by Agentlane HTTP APIs. */
+export function createAuthClient(): AuthClient {
+  return {
+    acceptInvitation(token) {
+      return requestJson(`/api/invitations/${encodeURIComponent(token)}/accept`, {
+        method: "POST",
+      });
+    },
+    createOrganization(input) {
+      return requestJson("/api/organizations", {
+        body: JSON.stringify({ name: input.name.trim(), slug: input.slug.trim() }),
+        method: "POST",
+      });
+    },
+    async getMe() {
+      const response = await fetch("/api/me", { credentials: "include" });
+      if (response.status === 401) return null;
+      if (!response.ok) throw new Error(await readErrorMessage(response));
+      return response.json() as Promise<AuthSessionContext>;
+    },
+    loginWithCode(input) {
+      return requestJson("/api/auth/login", {
+        body: JSON.stringify({ code: input.code.trim(), email: normalizeEmail(input.email) }),
+        method: "POST",
+      });
+    },
+    async logout() {
+      const response = await fetch("/api/auth/logout", {
+        credentials: "include",
+        method: "POST",
+      });
+      if (!response.ok && response.status !== 204) throw new Error(await readErrorMessage(response));
+    },
+    requestEmailCode(email) {
+      return requestJson("/api/auth/email-code", {
+        body: JSON.stringify({ email: normalizeEmail(email) }),
+        method: "POST",
+      });
+    },
+  };
+}
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+async function requestJson<T>(url: string, init: RequestInit): Promise<T> {
+  const response = await fetch(url, {
+    ...init,
+    credentials: "include",
+    headers: {
+      "content-type": "application/json",
+      ...init.headers,
+    },
+  });
+  if (!response.ok) throw new Error(await readErrorMessage(response));
+  return response.json() as Promise<T>;
+}
+
+async function readErrorMessage(response: Response): Promise<string> {
+  try {
+    const body = await response.json();
+    if (body && typeof body.message === "string") return body.message;
+    if (body && typeof body.error === "string") return body.error;
+  } catch {
+    // Fall through to the status text.
+  }
+  return response.statusText || "request_failed";
+}

@@ -29,7 +29,7 @@ describe("Cream Arcade UI primitives", () => {
     expect(screen.getByRole("group", { name: "登录" })).toHaveClass("pixel-panel");
     expect(screen.getByLabelText("邮箱")).toHaveAttribute("name", "email");
     expect(screen.getByRole("button", { name: "发送验证码" })).toHaveClass("pixel-button");
-    expect(screen.getByTestId("pixel-button-icon")).toHaveTextContent("➤");
+    expect(screen.getByTestId("pixel-button-icon").querySelector("svg")).toHaveClass("pixel-button__svg");
     expect(screen.getByText("在线")).toHaveClass("pixel-badge--success");
   });
 

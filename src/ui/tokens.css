@@ -145,8 +145,17 @@
 }
 
 .pixel-button__icon {
-  font-family: var(--agentlane-font-body);
+  display: inline-flex;
   line-height: 1;
+}
+
+.pixel-button__svg {
+  width: 20px;
+  height: 20px;
+  fill: #fff;
+  stroke: var(--agentlane-color-ink);
+  stroke-linejoin: round;
+  stroke-width: 1.8px;
 }
 
 .pixel-badge {
@@ -203,6 +212,8 @@
   min-height: 100vh;
   box-sizing: border-box;
   background:
+    linear-gradient(90deg, rgba(246, 111, 167, 0.16) 1px, transparent 1px) 70px 150px / 18px 18px no-repeat,
+    linear-gradient(rgba(34, 191, 232, 0.18) 1px, transparent 1px) calc(100% - 180px) 220px / 16px 16px no-repeat,
     radial-gradient(circle at 6% 78%, var(--agentlane-color-yellow) 0 8px, transparent 9px),
     radial-gradient(circle at 92% 18%, #ffc6d8 0 7px, transparent 8px),
     linear-gradient(180deg, var(--agentlane-color-paper), var(--agentlane-color-cream));
@@ -257,6 +268,73 @@
 
 .auth-layout__preview {
   min-height: 420px;
+}
+
+.auth-form {
+  display: grid;
+  gap: var(--agentlane-space-5);
+}
+
+.auth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--agentlane-space-4);
+}
+
+.auth-copy {
+  color: var(--agentlane-color-muted);
+  line-height: 1.7;
+  margin: 0;
+}
+
+.auth-error {
+  border: var(--agentlane-border-thin);
+  background: #fff0f0;
+  color: var(--agentlane-color-red);
+  font-weight: 700;
+  margin: 0;
+  padding: var(--agentlane-space-3) var(--agentlane-space-4);
+}
+
+.auth-preview {
+  display: grid;
+  gap: var(--agentlane-space-5);
+}
+
+.auth-preview__header {
+  align-items: center;
+  border-bottom: 2px dashed #e5c87b;
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: var(--agentlane-space-4);
+}
+
+.auth-preview__prompt,
+.auth-preview h2 {
+  font-family: var(--agentlane-font-pixel);
+}
+
+.auth-preview__row {
+  align-items: center;
+  border-bottom: 2px dashed #e5c87b;
+  display: flex;
+  gap: var(--agentlane-space-5);
+  justify-content: space-between;
+  padding-bottom: var(--agentlane-space-5);
+}
+
+.auth-preview__row h2 {
+  margin: 0 0 var(--agentlane-space-1);
+}
+
+.auth-preview__row p {
+  color: var(--agentlane-color-muted);
+  margin: 0;
+}
+
+.auth-preview__command {
+  font-family: var(--agentlane-font-mono);
+  font-size: 13px;
 }
 
 .auth-layout__notice {

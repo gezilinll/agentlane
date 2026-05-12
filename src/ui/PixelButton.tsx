@@ -8,10 +8,6 @@ interface PixelButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children: ReactNode;
 }
 
-const ICONS = {
-  "paper-plane": "➤",
-} as const;
-
 export function PixelButton({ children, className = "", icon, variant = "primary", ...props }: PixelButtonProps) {
   const variantClass = variant === "primary" ? "" : ` pixel-button--${variant}`;
 
@@ -19,10 +15,19 @@ export function PixelButton({ children, className = "", icon, variant = "primary
     <button className={`pixel-button${variantClass}${className ? ` ${className}` : ""}`} {...props}>
       {icon ? (
         <span className="pixel-button__icon" data-testid="pixel-button-icon" aria-hidden="true">
-          {ICONS[icon]}
+          <PaperPlaneIcon />
         </span>
       ) : null}
       <span>{children}</span>
     </button>
+  );
+}
+
+function PaperPlaneIcon() {
+  return (
+    <svg className="pixel-button__svg" viewBox="0 0 24 24" focusable="false">
+      <path d="M3 11.5 21 3l-5.8 18-3.4-7.4L3 11.5Z" />
+      <path d="m11.8 13.6 4.8-5.1" />
+    </svg>
   );
 }
