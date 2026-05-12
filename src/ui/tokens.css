@@ -19,15 +19,24 @@
 
   --agentlane-color-cream: #fff7df;
   --agentlane-color-paper: #fffdf4;
+  --agentlane-color-field: #ffffff;
+  --agentlane-color-surface: rgba(255, 253, 244, 0.94);
+  --agentlane-color-surface-hover: #fff5d1;
+  --agentlane-color-surface-active: #fff9e8;
   --agentlane-color-ink: #121212;
   --agentlane-color-muted: #6f6a5f;
   --agentlane-color-line: #121212;
+  --agentlane-color-line-soft: rgba(18, 18, 18, 0.18);
+  --agentlane-color-line-subtle: rgba(18, 18, 18, 0.16);
+  --agentlane-color-line-dashed: rgba(18, 18, 18, 0.22);
+  --agentlane-color-link: #0067c7;
   --agentlane-color-blue: #22bfe8;
   --agentlane-color-yellow: #ffd83d;
   --agentlane-color-pink: #f66fa7;
   --agentlane-color-green: #1f9b4f;
   --agentlane-color-orange: #f28a17;
   --agentlane-color-red: #e83434;
+  --agentlane-color-disabled: #e6dfc9;
 
   --agentlane-radius-none: 0;
   --agentlane-radius-sm: 2px;

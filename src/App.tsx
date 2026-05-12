@@ -2,7 +2,6 @@ import {
   Activity,
   Blocks,
   Bot,
-  BrainCircuit,
   GitBranch,
   Library,
   PlayCircle,
@@ -29,6 +28,7 @@ import {
 } from "./catalog";
 import { RuntimeFleetPage } from "./runtime/RuntimeFleetPage";
 import { RuntimeWorkBoardPage } from "./runtime/RuntimeWorkBoardPage";
+import { PixelLogo } from "./ui/PixelLogo";
 
 type PageKey = "catalog" | "runtime" | "work";
 
@@ -60,8 +60,7 @@ function ConsoleApp() {
     <main className="appShell">
       <aside className="sideNav" aria-label="主导航">
         <div className="brandMark">
-          <BrainCircuit size={22} aria-hidden="true" />
-          <span>Agentlane</span>
+          <PixelLogo />
         </div>
         <nav className="navList">
           {navItems.map((item) => {

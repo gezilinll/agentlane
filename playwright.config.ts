@@ -19,6 +19,7 @@ export default defineConfig({
       AGENTLANE_BACKEND_PORT: "4174",
       AGENTLANE_E2E_FRONTEND_PORT: "4175",
       DATABASE_URL: "postgres://agentlane:agentlane@127.0.0.1:54329/agentlane_e2e",
+      VITE_AGENTLANE_AUTH_MODE: "disabled",
     },
     reuseExistingServer: false,
     timeout: 120_000,

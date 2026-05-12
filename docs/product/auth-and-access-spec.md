@@ -165,6 +165,7 @@ Runtime / Runs 读取 API：
 
 - 登录页、验证码页、创建组织页和邀请加入页必须有组件测试。
 - Console 必须被 `/api/me` gate 保护。
+- Playwright Console harness 可以通过 `VITE_AGENTLANE_AUTH_MODE=disabled` 进入已验收页面，专注验证 Catalog、Runtime Fleet 和 Runs 的布局与交互；Auth 流程由独立组件 harness 覆盖。
 - 已验收的 Runtime Fleet 和 Runs 交互不得因 auth 和视觉改造回退。
 
 ## 验收标准

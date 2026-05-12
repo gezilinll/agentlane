@@ -116,6 +116,7 @@ Keep the test layout simple and tied to what each harness can prove:
 - Keep shared Vitest / Testing Library setup in `src/test/setup.ts`.
 - Put real-browser Playwright specs in `e2e/`. Use this for user workflows, responsive layout, browser rendering, and behavior jsdom cannot prove.
 - Keep Playwright server state isolated from manual dev/acceptance state. The default e2e web server uses `scripts/dev-e2e.ts`, an isolated `agentlane_e2e` Postgres database, the standalone backend, and a Vite proxy so test fixture posts do not overwrite manual review data.
+- Keep auth harnesses and Console harnesses separated. `check:e2e` sets `VITE_AGENTLANE_AUTH_MODE=disabled` so Catalog, Runtime Fleet, and Runs browser tests validate the Console directly; auth entry, email-code login, organization creation, and invitation flows are covered by `src/auth/*` component/API/backend tests.
 - Prefer adding the smallest focused test that captures the important behavior. Do not create broad `tests/`, `specs/`, or `harnesses/` directories until the project has enough surfaces to justify them.
 
 ## Agent-Ready Growth
