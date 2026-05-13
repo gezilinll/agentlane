@@ -13,6 +13,7 @@ describe("Cream Arcade UI primitives", () => {
 
     expect(screen.getByLabelText("Agentlane")).toBeInTheDocument();
     expect(screen.getByText("Agentlane")).toHaveClass("pixel-logo__wordmark");
+    expect(screen.getByTestId("pixel-logo-mark").querySelector("svg")).toHaveClass("pixel-logo__svg");
   });
 
   it("renders buttons, badges, panels, and fields with token classes", () => {
@@ -46,6 +47,7 @@ describe("Cream Arcade UI primitives", () => {
     );
 
     expect(screen.getByRole("banner")).toContainElement(screen.getByLabelText("Agentlane"));
+    expect(screen.getByTestId("auth-pixel-decorations")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "登录 Agentlane" })).toBeInTheDocument();
     expect(screen.getByText("Runtime Fleet")).toBeInTheDocument();
     expect(screen.getByText(/Device、Runtime、Agent/)).toBeInTheDocument();

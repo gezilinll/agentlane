@@ -4,7 +4,7 @@ Root guide for coding agents working in this repository. This file is operationa
 
 ## Project State
 
-Agentlane is currently in product definition and early engineering setup. The repository is becoming the control plane for operating an Agent Network. It now has a Chinese-first Catalog page, a Runtime Fleet page, a read-only Runs / Work Board page, collector-backed runtime inventory and work-state models, and a standalone backend with Postgres-backed query APIs, production-like Docker / Nginx deployment files, an initial ECS deployment at `agentlane.gezilinll.com`, plus an outbound WebSocket device control channel. The next durable layer is organization-based auth/access and a tokenized Cream Arcade visual system. It does not yet have multi-device orchestration or runtime execution control.
+Agentlane is currently in product definition and early engineering setup. The repository is becoming the control plane for operating an Agent Network. It now has a Chinese-first Catalog page, a Runtime Fleet page, a read-only Runs / Work Board page, collector-backed runtime inventory and work-state models, organization-based auth/access, a tokenized Cream Arcade UI system, and a standalone backend with Postgres-backed query APIs, production-like Docker / Nginx deployment files, an initial ECS deployment at `agentlane.gezilinll.com`, plus an outbound WebSocket device control channel. It does not yet have multi-device orchestration or runtime execution control.
 
 Current source of truth:
 

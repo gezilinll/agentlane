@@ -28,6 +28,7 @@ import {
 } from "./catalog";
 import { RuntimeFleetPage } from "./runtime/RuntimeFleetPage";
 import { RuntimeWorkBoardPage } from "./runtime/RuntimeWorkBoardPage";
+import { PixelDecorations } from "./ui/PixelDecorations";
 import { PixelLogo } from "./ui/PixelLogo";
 
 type PageKey = "catalog" | "runtime" | "work";
@@ -58,6 +59,7 @@ function ConsoleApp() {
 
   return (
     <main className="appShell">
+      <PixelDecorations variant="console" />
       <aside className="sideNav" aria-label="主导航">
         <div className="brandMark">
           <PixelLogo />
@@ -75,7 +77,9 @@ function ConsoleApp() {
                   if (item.page) setActivePage(item.page);
                 }}
               >
-                <Icon size={17} aria-hidden="true" />
+                <span className="navIconFrame">
+                  <Icon size={15} aria-hidden="true" />
+                </span>
                 <span>{item.label}</span>
               </button>
             );

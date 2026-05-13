@@ -28,6 +28,37 @@ describe("auth pages", () => {
     expect(screen.queryByRole("heading", { name: "对象目录" })).not.toBeInTheDocument();
   });
 
+  it("does not surface anonymous session probe errors on the login page", async () => {
+    globalThis.fetch = vi.fn(async (input) => {
+      const url = input.toString();
+      if (url.endsWith("/api/me")) {
+        return jsonResponse({ error: "Not Found" }, 404);
+      }
+      return jsonResponse({ error: "unexpected request" }, 500);
+    }) as unknown as typeof fetch;
+
+    render(<App authMode="required" />);
+
+    expect(await screen.findByRole("heading", { name: "登录 Agentlane" })).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByText("Not Found")).not.toBeInTheDocument();
+  });
+
+  it("surfaces unexpected session probe errors instead of hiding backend failures", async () => {
+    globalThis.fetch = vi.fn(async (input) => {
+      const url = input.toString();
+      if (url.endsWith("/api/me")) {
+        return jsonResponse({ error: "backend unavailable" }, 503);
+      }
+      return jsonResponse({ error: "unexpected request" }, 500);
+    }) as unknown as typeof fetch;
+
+    render(<App authMode="required" />);
+
+    expect(await screen.findByRole("heading", { name: "登录 Agentlane" })).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("backend unavailable");
+  });
+
   it("requests an email code and signs in with the verification code", async () => {
     const user = userEvent.setup();
     const requests: Array<{ body: unknown; url: string }> = [];

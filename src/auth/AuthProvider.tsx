@@ -36,7 +36,9 @@ export function AuthProvider({ children, client }: AuthProviderProps) {
         if (isMounted) setSession(nextSession);
       })
       .catch((nextError: unknown) => {
-        if (isMounted) setError(formatAuthError(nextError));
+        if (isMounted) {
+          setError(formatAuthError(nextError));
+        }
       })
       .finally(() => {
         if (isMounted) setIsLoading(false);

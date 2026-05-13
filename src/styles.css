@@ -29,10 +29,11 @@ button {
   display: grid;
   grid-template-columns: 244px 1fr;
   min-height: 100vh;
+  overflow: hidden;
+  position: relative;
   background:
-    linear-gradient(90deg, rgba(246, 111, 167, 0.12) 1px, transparent 1px) calc(100% - 180px) 140px / 18px 18px no-repeat,
-    radial-gradient(circle at 92% 78%, rgba(246, 111, 167, 0.48) 0 8px, transparent 9px),
-    radial-gradient(circle at 94% 18%, rgba(34, 191, 232, 0.36) 0 6px, transparent 7px),
+    radial-gradient(circle at 92% 78%, rgba(246, 111, 167, 0.4) 0 8px, transparent 9px),
+    radial-gradient(circle at 94% 18%, rgba(34, 191, 232, 0.3) 0 6px, transparent 7px),
     linear-gradient(180deg, var(--agentlane-color-paper), var(--agentlane-color-cream));
 }
 
@@ -40,6 +41,8 @@ button {
   border-right: var(--agentlane-border);
   background: var(--agentlane-color-yellow);
   padding: 18px 14px;
+  position: relative;
+  z-index: 2;
 }
 
 .brandMark {
@@ -52,11 +55,10 @@ button {
 .brandMark .pixel-logo__mark {
   width: 36px;
   height: 36px;
-  box-shadow: 3px 3px 0 var(--agentlane-color-blue);
 }
 
 .brandMark .pixel-logo__wordmark {
-  font-size: 22px;
+  font-size: 24px;
 }
 
 .navList {
@@ -71,10 +73,20 @@ button {
   border-radius: var(--agentlane-radius-none);
   color: var(--agentlane-color-ink);
   display: flex;
+  font-family: var(--agentlane-font-pixel);
   gap: 10px;
   height: 38px;
   padding: 0 10px;
   text-align: left;
+}
+
+.navIconFrame {
+  align-items: center;
+  border: 2px solid transparent;
+  display: inline-flex;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
 }
 
 .navItemActive {
@@ -83,6 +95,11 @@ button {
   box-shadow: 4px 4px 0 rgba(18, 18, 18, 0.24);
   color: var(--agentlane-color-ink);
   font-weight: 700;
+}
+
+.navItemActive .navIconFrame {
+  background: var(--agentlane-color-blue);
+  border-color: var(--agentlane-color-line);
 }
 
 .navFooter {
@@ -106,6 +123,8 @@ button {
   gap: 16px;
   min-width: 0;
   padding: 24px;
+  position: relative;
+  z-index: 2;
 }
 
 .pageHeader,
@@ -124,6 +143,7 @@ button {
 
 .eyebrow {
   color: var(--agentlane-color-green);
+  font-family: var(--agentlane-font-pixel);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0;
@@ -148,6 +168,7 @@ h1 {
 
 .pageSubtitle {
   color: var(--agentlane-color-muted);
+  font-size: 15px;
   margin-bottom: 0;
 }
 
@@ -165,6 +186,7 @@ h1 {
   box-shadow: var(--agentlane-shadow-small);
   color: var(--agentlane-color-ink);
   display: flex;
+  font-family: var(--agentlane-font-pixel);
   gap: 8px;
   height: 38px;
   padding: 0 14px;
@@ -230,6 +252,7 @@ h1 {
 
 .controlLabel {
   color: var(--agentlane-color-muted);
+  font-family: var(--agentlane-font-pixel);
   font-size: 12px;
   font-weight: 700;
   line-height: 1;
@@ -250,6 +273,7 @@ h1 {
 .searchBox input {
   border: 0;
   color: var(--agentlane-color-ink);
+  font-family: var(--agentlane-font-body);
   outline: 0;
   width: 100%;
 }
@@ -260,6 +284,7 @@ h1 {
   border-radius: var(--agentlane-radius-none);
   color: var(--agentlane-color-ink);
   height: 42px;
+  font-family: var(--agentlane-font-pixel);
   padding: 0 10px;
   width: 100%;
 }
@@ -276,6 +301,7 @@ h1 {
   border-radius: var(--agentlane-radius-none);
   color: var(--agentlane-color-ink);
   display: grid;
+  font-family: var(--agentlane-font-body);
   gap: 10px;
   grid-template-columns: auto minmax(0, 1fr) auto;
   height: 42px;
@@ -296,6 +322,7 @@ h1 {
   border: 1px solid var(--agentlane-color-line-dashed);
   border-radius: var(--agentlane-radius-none);
   color: var(--agentlane-color-ink);
+  font-family: var(--agentlane-font-pixel);
   font-weight: 700;
   min-width: 48px;
   padding: 5px 8px;
@@ -330,6 +357,7 @@ h1 {
 
 .timeRangePopoverHeader strong {
   color: var(--agentlane-color-ink);
+  font-family: var(--agentlane-font-pixel);
   font-size: 18px;
 }
 
@@ -404,6 +432,7 @@ h1 {
   border: var(--agentlane-border-thin);
   border-radius: var(--agentlane-radius-none);
   color: var(--agentlane-color-ink);
+  font-family: var(--agentlane-font-pixel);
   font-weight: 700;
   height: 42px;
   padding: 0 12px;
@@ -414,6 +443,7 @@ h1 {
   border: var(--agentlane-border-thin);
   border-radius: var(--agentlane-radius-none);
   color: var(--agentlane-color-ink);
+  font-family: var(--agentlane-font-pixel);
   font-weight: 700;
   height: 42px;
   padding: 0 18px;
@@ -448,6 +478,7 @@ h1 {
   border: 0;
   border-radius: var(--agentlane-radius-none);
   color: var(--agentlane-color-muted);
+  font-family: var(--agentlane-font-pixel);
   flex: 1 1 0;
   height: 34px;
   min-width: 0;
@@ -479,6 +510,7 @@ h1 {
 
 .metricCard span {
   color: var(--agentlane-color-muted);
+  font-family: var(--agentlane-font-pixel);
   font-size: 13px;
 }
 
@@ -519,6 +551,7 @@ h1 {
 
 .collectionHealthSummary h2 {
   color: var(--agentlane-color-ink);
+  font-family: var(--agentlane-font-pixel);
   font-size: 16px;
   line-height: 1.2;
   margin: 0 0 4px;
@@ -637,6 +670,7 @@ h1 {
 
 .workLaneHeader h2 {
   color: var(--agentlane-color-ink);
+  font-family: var(--agentlane-font-pixel);
   font-size: 15px;
   margin: 0;
 }
@@ -646,6 +680,7 @@ h1 {
   border: 2px solid var(--agentlane-color-line);
   border-radius: var(--agentlane-radius-none);
   color: var(--agentlane-color-ink);
+  font-family: var(--agentlane-font-pixel);
   font-size: 12px;
   font-weight: 800;
   min-width: 24px;
@@ -701,6 +736,12 @@ h1 {
   white-space: nowrap;
 }
 
+.workCard strong {
+  font-family: var(--agentlane-font-pixel);
+  font-size: 17px;
+  line-height: 1.25;
+}
+
 .workCard small,
 .workCardMeta {
   color: var(--agentlane-color-muted);
@@ -719,6 +760,7 @@ h1 {
   border: var(--agentlane-border-thin);
   border-radius: var(--agentlane-radius-none);
   color: var(--agentlane-color-ink);
+  font-family: var(--agentlane-font-pixel);
   font-weight: 700;
   height: 40px;
   min-width: 112px;
@@ -829,6 +871,7 @@ h1 {
 .tableSummary {
   border-bottom: var(--agentlane-border-thin);
   color: var(--agentlane-color-muted);
+  font-family: var(--agentlane-font-pixel);
   font-size: 13px;
   padding: 10px 14px;
 }
@@ -860,6 +903,7 @@ h1 {
 .tableHeader {
   background: var(--agentlane-color-surface-hover);
   color: var(--agentlane-color-muted);
+  font-family: var(--agentlane-font-pixel);
   font-size: 12px;
   font-weight: 800;
   min-height: 40px;
@@ -891,6 +935,7 @@ button.tableRow:hover,
 .assetHeader {
   background: var(--agentlane-color-surface-hover);
   color: var(--agentlane-color-muted);
+  font-family: var(--agentlane-font-pixel);
   font-size: 12px;
   font-weight: 800;
   min-height: 38px;
@@ -937,6 +982,7 @@ button.tableRow:hover,
   border: var(--agentlane-border-thin);
   border-radius: var(--agentlane-radius-none);
   display: inline-flex;
+  font-family: var(--agentlane-font-pixel);
   font-size: 12px;
   font-weight: 700;
   min-height: 24px;
@@ -1015,6 +1061,7 @@ button.tableRow:hover,
 
 .detailBlock h3 {
   color: var(--agentlane-color-ink);
+  font-family: var(--agentlane-font-pixel);
   font-size: 13px;
   margin-bottom: 6px;
 }
@@ -1051,6 +1098,7 @@ button.tableRow:hover,
   border-radius: var(--agentlane-radius-none);
   color: var(--agentlane-color-green);
   display: inline-flex;
+  font-family: var(--agentlane-font-pixel);
   font-size: 12px;
   font-weight: 700;
   min-height: 24px;

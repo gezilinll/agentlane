@@ -26,7 +26,7 @@ export function createAuthClient(): AuthClient {
     },
     async getMe() {
       const response = await fetch("/api/me", { credentials: "include" });
-      if (response.status === 401) return null;
+      if (response.status === 401 || response.status === 404) return null;
       if (!response.ok) throw new Error(await readErrorMessage(response));
       return response.json() as Promise<AuthSessionContext>;
     },
