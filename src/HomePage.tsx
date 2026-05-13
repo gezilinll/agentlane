@@ -7,7 +7,7 @@ const platformTags = ["OpenClaw", "Multica", "Slock", "Codex", "DingTalk"];
 export function HomePage() {
   return (
     <main className="homePage">
-      <PixelDecorations variant="auth" />
+      <PixelDecorations variant="home" testId="home-pixel-decorations" />
       <header className="homeHeader">
         <PixelLogo />
         <nav aria-label="首页导航" className="homeNav">
@@ -51,7 +51,7 @@ export function HomePage() {
           </div>
           <div className="homeConsole__body">
             <nav className="homeConsole__menu" aria-label="预览导航">
-              <span>总览</span>
+              <span>对象目录</span>
               <strong>Runtime</strong>
               <span>Runs</span>
             </nav>

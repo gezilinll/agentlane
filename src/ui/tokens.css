@@ -270,7 +270,7 @@
     linear-gradient(180deg, var(--agentlane-color-paper), var(--agentlane-color-cream));
   box-sizing: border-box;
   color: var(--agentlane-color-ink);
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-sans);
   min-height: 100vh;
   overflow: hidden;
   padding: var(--agentlane-space-4);
@@ -330,7 +330,7 @@
 }
 
 .auth-layout__title {
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-pixel);
   font-size: clamp(42px, 5vw, 64px);
   letter-spacing: 0;
   line-height: 1;
@@ -369,7 +369,7 @@
 
 .auth-copy {
   color: var(--agentlane-color-muted);
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-sans);
   line-height: 1.7;
   margin: 0;
 }
@@ -427,14 +427,14 @@
 }
 
 .auth-preview__command {
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-mono);
   font-size: 13px;
 }
 
 .auth-preview__metric {
   align-items: center;
   display: flex;
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-mono);
   flex-wrap: wrap;
   gap: 8px 16px;
 }
@@ -709,6 +709,19 @@
 .pixel-decorations--console .pixel-deco--sprite,
 .pixel-decorations--console .pixel-deco--heart {
   display: none;
+}
+
+.pixel-decorations--home .pixel-deco--sprite,
+.pixel-decorations--home .pixel-deco--heart {
+  display: none;
+}
+
+.pixel-decorations--home .pixel-deco--dots {
+  opacity: 0.26;
+}
+
+.pixel-decorations--home .pixel-deco--plus {
+  opacity: 0.72;
 }
 
 @media (max-width: 920px) {

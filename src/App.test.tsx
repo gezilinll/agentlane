@@ -108,8 +108,21 @@ describe("Catalog page", () => {
 
     expect(screen.getByRole("heading", { name: /把分散的 Agent 变成可运营的工作网络/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "登录" })).toHaveAttribute("href", "/login");
+    expect(screen.getByTestId("home-pixel-decorations")).toHaveClass("pixel-decorations--home");
     expect(screen.queryByRole("button", { name: "Agent Studio" })).not.toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("keeps the public home preview scoped to implemented pages", () => {
+    window.history.pushState({}, "", "/");
+
+    render(<App authMode="required" />);
+
+    const previewNav = screen.getByRole("navigation", { name: "预览导航" });
+    expect(within(previewNav).getByText("对象目录")).toBeInTheDocument();
+    expect(within(previewNav).getByText("Runtime")).toBeInTheDocument();
+    expect(within(previewNav).getByText("Runs")).toBeInTheDocument();
+    expect(within(previewNav).queryByText("总览")).not.toBeInTheDocument();
   });
 
   it("uses URL routes for implemented console pages and hides unavailable nav entries", async () => {

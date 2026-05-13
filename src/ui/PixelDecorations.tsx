@@ -2,7 +2,7 @@ import { PixelIcon } from "./PixelIcon";
 
 interface PixelDecorationsProps {
   testId?: string;
-  variant?: "auth" | "console";
+  variant?: "auth" | "console" | "home";
 }
 
 /** Decorative pixel layer. It carries atmosphere only; no product meaning. */

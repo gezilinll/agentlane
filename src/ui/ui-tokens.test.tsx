@@ -39,6 +39,10 @@ describe("Cream Arcade UI primitives", () => {
     expect(tokens).toContain("JetBrains Mono");
     expect(tokens).toMatch(/\.pixel-button\s*{[^}]*font-family:\s*var\(--font-sans\)/s);
     expect(tokens).toMatch(/\.pixel-logo__wordmark\s*{[^}]*font-family:\s*var\(--font-pixel\)/s);
+    expect(tokens).toMatch(/\.auth-layout\s*{[^}]*font-family:\s*var\(--font-sans\)/s);
+    expect(tokens).toMatch(/\.auth-layout__title\s*{[^}]*font-family:\s*var\(--font-pixel\)/s);
+    expect(tokens).toMatch(/\.auth-copy\s*{[^}]*font-family:\s*var\(--font-sans\)/s);
+    expect(tokens).toMatch(/\.auth-preview__metric\s*{[^}]*font-family:\s*var\(--font-mono\)/s);
   });
 
   it("renders buttons, badges, panels, and fields with token classes", () => {

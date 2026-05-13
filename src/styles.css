@@ -111,19 +111,20 @@ button {
 
 .homeTitle {
   font-family: var(--agentlane-font-pixel);
-  font-size: clamp(52px, 5.4vw, 94px);
+  font-size: clamp(48px, 4.8vw, 78px);
   letter-spacing: 0;
-  line-height: 1.04;
+  line-height: 1.08;
   margin: 0;
   max-width: 100%;
 }
 
 .homeLead {
   color: var(--agentlane-color-muted);
-  font-size: clamp(17px, 1.2vw, 22px);
-  line-height: 1.7;
-  margin: 28px 0 0;
-  max-width: 680px;
+  font-family: var(--font-sans);
+  font-size: clamp(16px, 1vw, 19px);
+  line-height: 1.72;
+  margin: 24px 0 0;
+  max-width: 640px;
 }
 
 .homeActions {
@@ -139,8 +140,8 @@ button {
   box-shadow: 5px 5px 0 var(--agentlane-color-line);
   color: var(--agentlane-color-ink);
   display: inline-flex;
-  font-family: var(--agentlane-font-pixel);
-  font-size: 22px;
+  font-family: var(--font-sans);
+  font-size: 20px;
   font-weight: 700;
   gap: 10px;
   justify-content: center;
@@ -170,7 +171,7 @@ button {
   background: rgba(255, 253, 244, 0.72);
   border: 2px solid rgba(18, 18, 18, 0.26);
   color: var(--agentlane-color-muted);
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-mono);
   padding: 8px 14px;
 }
 
@@ -272,20 +273,25 @@ button {
 }
 
 .homeLane article {
-  align-items: start;
+  align-items: center;
   background: var(--agentlane-color-field);
   border: var(--agentlane-border-thin);
   display: grid;
   gap: 8px;
   grid-template-columns: 20px minmax(0, 1fr);
+  min-height: 72px;
   min-width: 0;
   padding: 12px;
 }
 
 .homeLane article span {
+  display: -webkit-box;
+  line-height: 1.35;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .appShell {
