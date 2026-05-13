@@ -40,6 +40,16 @@ UI 工作完成前必须同时做视觉 Review、CSS/token Review 和相关 harn
 - 布局、响应式、看板、筛选、登录/邀请可视路径变化运行对应 Playwright harness。
 - 全量交付前运行 `npm run verify`。
 
+当前视觉 harness 锚点：
+
+- `src/ui/ui-tokens.test.tsx` 锁定 Logo / favicon 同源、PixelButton 图标、Pixel / Sans / Mono 字体角色、登录布局和运营概览 icon。
+- `src/App.test.tsx` 锁定首页入口、已实现 Console 导航、不可用入口隐藏、Catalog / Runtime Fleet / Runs 的核心交互和文案边界。
+- `e2e/catalog-layout.spec.ts` 锁定 Catalog 宽屏、移动端和筛选区布局。
+- `e2e/runtime-fleet.spec.ts` 锁定 Runtime Fleet 的动态筛选、详情面板、响应式和无 Channel 筛选。
+- `e2e/runtime-work-board.spec.ts` 锁定 Runs 的 Runtime / Channel / 阶段 / 时间筛选、长文本不横滚、卡片不显示调试内容、监听缺口不变成任务卡。
+
+视觉变更不一定都需要新增截图回归工具，但必须能被以上至少一种 harness 或一次明确截图 Review 覆盖。
+
 ## Issue Classification
 
 发现问题后判断应沉淀到哪里：

@@ -59,6 +59,16 @@ Mono 不用于长中文句子。
 - Console 页面标题小于 Brand 页面标题。
 - 卡片标题必须和卡片宽度匹配，长文本使用截断或多行 clamp，不制造横向滚动。
 
+## Implementation Mapping
+
+当前代码中的字体职责必须保持一致：
+
+- Brand / Identity 的 Logo、Hero 标题、登录标题、模拟窗口标题可以使用 `--font-pixel`。
+- Console 的页面标题可以使用 `--font-pixel`，但导航、筛选、按钮、表格、看板卡片和详情正文不得大面积使用 Pixel。
+- `PixelButton`、`.primaryButton`、`.secondaryButton`、`.quickRangeButton`、`.toolbarField select`、`.workCard strong`、`.detailHeader h2`、`.detailBlock p` 和 `.detailBlock li` 使用 `--font-sans`。
+- `.navItem`、`.metricCard strong`、`.tableSummary`、`.tableHeader`、`.assetHeader`、`.badge`、`.lifecycleBadge`、`.refPill` 和 `.statusBadge` 使用 `--font-mono`。
+- `src/ui/ui-tokens.test.tsx` 会锁定这些核心映射；调整字体策略时必须同步更新本规范和 harness。
+
 ## Line Length
 
 - 正文理想行长 45 到 75 个英文字符等价宽度。
