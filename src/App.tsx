@@ -155,10 +155,6 @@ function CatalogPage() {
           <h1>对象目录</h1>
           <p className="pageSubtitle">集中查看正式对象、owner 槽位、生命周期与依赖关系。</p>
         </div>
-        <button className="primaryButton" type="button" aria-label="新建对象">
-          <PixelIcon name="blocks" size={16} />
-          新建对象
-        </button>
       </header>
 
       <section className="toolbar" aria-label="对象筛选">

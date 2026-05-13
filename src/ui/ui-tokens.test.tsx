@@ -32,17 +32,25 @@ describe("Cream Arcade UI primitives", () => {
 
   it("defines the current Pixel, Sans, and Mono font roles in shared tokens", () => {
     const tokens = readFileSync("src/ui/tokens.css", "utf8");
+    const appStyles = readFileSync("src/styles.css", "utf8");
+    const styles = `${tokens}\n${appStyles}`;
 
     expect(tokens).toContain("--font-pixel:");
     expect(tokens).toContain("--font-sans:");
     expect(tokens).toContain("--font-mono:");
     expect(tokens).toContain("JetBrains Mono");
-    expect(tokens).toMatch(/\.pixel-button\s*{[^}]*font-family:\s*var\(--font-sans\)/s);
-    expect(tokens).toMatch(/\.pixel-logo__wordmark\s*{[^}]*font-family:\s*var\(--font-pixel\)/s);
-    expect(tokens).toMatch(/\.auth-layout\s*{[^}]*font-family:\s*var\(--font-sans\)/s);
-    expect(tokens).toMatch(/\.auth-layout__title\s*{[^}]*font-family:\s*var\(--font-pixel\)/s);
-    expect(tokens).toMatch(/\.auth-copy\s*{[^}]*font-family:\s*var\(--font-sans\)/s);
-    expect(tokens).toMatch(/\.auth-preview__metric\s*{[^}]*font-family:\s*var\(--font-mono\)/s);
+    expect(styles).toMatch(/\.pixel-button\s*{[^}]*font-family:\s*var\(--font-sans\)/s);
+    expect(styles).toMatch(/\.pixel-logo__wordmark\s*{[^}]*font-family:\s*var\(--font-pixel\)/s);
+    expect(styles).toMatch(/\.auth-layout\s*{[^}]*font-family:\s*var\(--font-sans\)/s);
+    expect(styles).toMatch(/\.auth-layout__title\s*{[^}]*font-family:\s*var\(--font-pixel\)/s);
+    expect(styles).toMatch(/\.auth-copy\s*{[^}]*font-family:\s*var\(--font-sans\)/s);
+    expect(styles).toMatch(/\.auth-preview__metric\s*{[^}]*font-family:\s*var\(--font-mono\)/s);
+    expect(styles).toMatch(/\.navItem\s*{[^}]*font-family:\s*var\(--font-mono\)/s);
+    expect(styles).toMatch(/\.primaryButton\s*{[^}]*font-family:\s*var\(--font-sans\)/s);
+    expect(styles).toMatch(/\.toolbarField select\s*{[^}]*font-family:\s*var\(--font-sans\)/s);
+    expect(styles).toMatch(/\.metricCard strong\s*{[^}]*font-family:\s*var\(--font-mono\)/s);
+    expect(styles).toMatch(/\.workCard strong\s*{[^}]*font-family:\s*var\(--font-sans\)/s);
+    expect(styles).toMatch(/\.detailBlock p,\n\.detailBlock li\s*{[^}]*font-family:\s*var\(--font-sans\)/s);
   });
 
   it("renders buttons, badges, panels, and fields with token classes", () => {

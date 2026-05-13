@@ -342,7 +342,7 @@ button {
   border-radius: var(--agentlane-radius-none);
   color: var(--agentlane-color-ink);
   display: flex;
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-mono);
   gap: 10px;
   height: 38px;
   padding: 0 10px;
@@ -455,7 +455,7 @@ h1 {
   box-shadow: var(--agentlane-shadow-small);
   color: var(--agentlane-color-ink);
   display: flex;
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-sans);
   gap: 8px;
   height: 38px;
   padding: 0 14px;
@@ -521,7 +521,7 @@ h1 {
 
 .controlLabel {
   color: var(--agentlane-color-muted);
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 700;
   line-height: 1;
@@ -542,7 +542,7 @@ h1 {
 .searchBox input {
   border: 0;
   color: var(--agentlane-color-ink);
-  font-family: var(--agentlane-font-body);
+  font-family: var(--font-sans);
   outline: 0;
   width: 100%;
 }
@@ -553,7 +553,7 @@ h1 {
   border-radius: var(--agentlane-radius-none);
   color: var(--agentlane-color-ink);
   height: 42px;
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-sans);
   padding: 0 10px;
   width: 100%;
 }
@@ -570,7 +570,7 @@ h1 {
   border-radius: var(--agentlane-radius-none);
   color: var(--agentlane-color-ink);
   display: grid;
-  font-family: var(--agentlane-font-body);
+  font-family: var(--font-sans);
   gap: 10px;
   grid-template-columns: auto minmax(0, 1fr) auto;
   height: 42px;
@@ -591,7 +591,7 @@ h1 {
   border: 1px solid var(--agentlane-color-line-dashed);
   border-radius: var(--agentlane-radius-none);
   color: var(--agentlane-color-ink);
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-mono);
   font-weight: 700;
   min-width: 48px;
   padding: 5px 8px;
@@ -637,6 +637,7 @@ h1 {
   border: 0;
   color: var(--agentlane-color-link);
   display: inline-flex;
+  font-family: var(--font-sans);
   font-weight: 700;
   gap: 6px;
   padding: 0;
@@ -669,6 +670,7 @@ h1 {
 .timeInputLabel {
   color: var(--agentlane-color-muted);
   display: grid;
+  font-family: var(--font-sans);
   font-size: 12px;
   font-weight: 700;
   gap: 6px;
@@ -701,7 +703,7 @@ h1 {
   border: var(--agentlane-border-thin);
   border-radius: var(--agentlane-radius-none);
   color: var(--agentlane-color-ink);
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-sans);
   font-weight: 700;
   height: 42px;
   padding: 0 12px;
@@ -712,7 +714,7 @@ h1 {
   border: var(--agentlane-border-thin);
   border-radius: var(--agentlane-radius-none);
   color: var(--agentlane-color-ink);
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-sans);
   font-weight: 700;
   height: 42px;
   padding: 0 18px;
@@ -747,7 +749,7 @@ h1 {
   border: 0;
   border-radius: var(--agentlane-radius-none);
   color: var(--agentlane-color-muted);
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-sans);
   flex: 1 1 0;
   height: 34px;
   min-width: 0;
@@ -779,13 +781,13 @@ h1 {
 
 .metricCard span {
   color: var(--agentlane-color-muted);
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-sans);
   font-size: 13px;
 }
 
 .metricCard strong {
   color: var(--agentlane-color-ink);
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-mono);
   font-size: 24px;
 }
 
@@ -820,7 +822,7 @@ h1 {
 
 .collectionHealthSummary h2 {
   color: var(--agentlane-color-ink);
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-sans);
   font-size: 16px;
   line-height: 1.2;
   margin: 0 0 4px;
@@ -939,7 +941,7 @@ h1 {
 
 .workLaneHeader h2 {
   color: var(--agentlane-color-ink);
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-sans);
   font-size: 15px;
   margin: 0;
 }
@@ -949,7 +951,7 @@ h1 {
   border: 2px solid var(--agentlane-color-line);
   border-radius: var(--agentlane-radius-none);
   color: var(--agentlane-color-ink);
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 800;
   min-width: 24px;
@@ -1006,7 +1008,7 @@ h1 {
 }
 
 .workCard strong {
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-sans);
   font-size: 17px;
   line-height: 1.25;
 }
@@ -1029,7 +1031,7 @@ h1 {
   border: var(--agentlane-border-thin);
   border-radius: var(--agentlane-radius-none);
   color: var(--agentlane-color-ink);
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-sans);
   font-weight: 700;
   height: 40px;
   min-width: 112px;
@@ -1080,7 +1082,7 @@ h1 {
 
 .runtimePanelHeader h2 {
   color: var(--agentlane-color-ink);
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-sans);
   font-size: 16px;
   line-height: 1.2;
   margin: 0 0 4px;
@@ -1140,7 +1142,7 @@ h1 {
 .tableSummary {
   border-bottom: var(--agentlane-border-thin);
   color: var(--agentlane-color-muted);
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-mono);
   font-size: 13px;
   padding: 10px 14px;
 }
@@ -1172,7 +1174,7 @@ h1 {
 .tableHeader {
   background: var(--agentlane-color-surface-hover);
   color: var(--agentlane-color-muted);
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 800;
   min-height: 40px;
@@ -1204,7 +1206,7 @@ button.tableRow:hover,
 .assetHeader {
   background: var(--agentlane-color-surface-hover);
   color: var(--agentlane-color-muted);
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 800;
   min-height: 38px;
@@ -1251,7 +1253,7 @@ button.tableRow:hover,
   border: var(--agentlane-border-thin);
   border-radius: var(--agentlane-radius-none);
   display: inline-flex;
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 700;
   min-height: 24px;
@@ -1310,7 +1312,7 @@ button.tableRow:hover,
 
 .detailHeader h2 {
   color: var(--agentlane-color-ink);
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-sans);
   display: -webkit-box;
   font-size: 20px;
   line-height: 1.28;
@@ -1330,7 +1332,7 @@ button.tableRow:hover,
 
 .detailBlock h3 {
   color: var(--agentlane-color-ink);
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-sans);
   font-size: 13px;
   margin-bottom: 6px;
 }
@@ -1338,6 +1340,7 @@ button.tableRow:hover,
 .detailBlock p,
 .detailBlock li {
   color: var(--agentlane-color-muted);
+  font-family: var(--font-sans);
   font-size: 13px;
   line-height: 1.55;
   overflow-wrap: anywhere;
@@ -1367,7 +1370,7 @@ button.tableRow:hover,
   border-radius: var(--agentlane-radius-none);
   color: var(--agentlane-color-green);
   display: inline-flex;
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 700;
   min-height: 24px;

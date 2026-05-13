@@ -157,6 +157,12 @@ describe("Catalog page", () => {
     expect(within(table).getByText("业务指标 Agent")).toBeInTheDocument();
   });
 
+  it("does not expose unavailable Catalog creation actions", () => {
+    render(<App />);
+
+    expect(screen.queryByRole("button", { name: "新建对象" })).not.toBeInTheDocument();
+  });
+
   it("renders visible labels for all catalog filters", () => {
     render(<App />);
 
