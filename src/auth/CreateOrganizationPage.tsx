@@ -30,6 +30,7 @@ export function CreateOrganizationPage({ error, onSubmit }: CreateOrganizationPa
         }}
       >
         <PixelField
+          icon="blocks"
           label="组织名称"
           name="organization-name"
           placeholder="例如：增长工程组"
@@ -38,6 +39,7 @@ export function CreateOrganizationPage({ error, onSubmit }: CreateOrganizationPa
           required
         />
         <PixelField
+          icon="terminal"
           label="组织标识"
           name="organization-slug"
           placeholder="growth-eng"

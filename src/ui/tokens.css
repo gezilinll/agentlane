@@ -45,7 +45,7 @@
   --agentlane-border: 3px solid var(--agentlane-color-line);
   --agentlane-border-thin: 2px solid var(--agentlane-color-line);
   --agentlane-border-hairline: 1px solid var(--agentlane-color-line);
-  --agentlane-shadow-pixel: 8px 8px 0 #d7b765;
+  --agentlane-shadow-pixel: 7px 7px 0 #d7b765;
   --agentlane-shadow-small: 4px 4px 0 #d7b765;
   --agentlane-shadow-blue: 4px 4px 0 var(--agentlane-color-blue);
 
@@ -55,6 +55,14 @@
   --agentlane-space-4: 16px;
   --agentlane-space-5: 24px;
   --agentlane-space-6: 32px;
+}
+
+.pixel-icon {
+  display: inline-block;
+  fill: currentColor;
+  flex: 0 0 auto;
+  stroke: none;
+  vertical-align: -0.15em;
 }
 
 .pixel-logo {
@@ -87,35 +95,34 @@
 }
 
 .pixel-panel {
-  background: rgba(255, 253, 244, 0.94);
+  background:
+    linear-gradient(180deg, rgba(255, 253, 244, 0.98), rgba(255, 249, 229, 0.96));
   border: var(--agentlane-border);
   box-shadow: var(--agentlane-shadow-pixel);
+  clip-path: polygon(18px 0, 100% 0, 100% calc(100% - 18px), calc(100% - 18px) 100%, 0 100%, 0 18px);
   color: var(--agentlane-color-ink);
   position: relative;
 }
 
-.pixel-panel::before,
-.pixel-panel::after {
-  background: var(--agentlane-color-paper);
+.pixel-panel::before {
+  border: 2px solid rgba(214, 169, 70, 0.22);
+  clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
   content: "";
-  height: 14px;
+  inset: 10px;
   pointer-events: none;
   position: absolute;
-  width: 14px;
-}
-
-.pixel-panel::before {
-  border-bottom: var(--agentlane-border);
-  border-right: var(--agentlane-border);
-  left: -3px;
-  top: -3px;
 }
 
 .pixel-panel::after {
-  border-left: var(--agentlane-border);
-  border-top: var(--agentlane-border);
-  bottom: -3px;
-  right: -3px;
+  background:
+    linear-gradient(var(--agentlane-color-line), var(--agentlane-color-line)) 0 18px / 18px 3px no-repeat,
+    linear-gradient(var(--agentlane-color-line), var(--agentlane-color-line)) 18px 0 / 3px 18px no-repeat,
+    linear-gradient(var(--agentlane-color-line), var(--agentlane-color-line)) 100% calc(100% - 18px) / 18px 3px no-repeat,
+    linear-gradient(var(--agentlane-color-line), var(--agentlane-color-line)) calc(100% - 18px) 100% / 3px 18px no-repeat;
+  content: "";
+  inset: -3px;
+  pointer-events: none;
+  position: absolute;
 }
 
 .pixel-panel__inner {
@@ -173,12 +180,8 @@
 }
 
 .pixel-button__svg {
-  fill: #fffdf4;
-  height: 24px;
-  stroke: var(--agentlane-color-ink);
-  stroke-linejoin: round;
-  stroke-width: 2.2px;
-  width: 24px;
+  height: 30px;
+  width: 30px;
 }
 
 .pixel-badge {
@@ -220,16 +223,34 @@
   font-weight: 700;
 }
 
-.pixel-field__input {
+.pixel-field__control {
+  align-items: center;
   background: #fff;
   border: var(--agentlane-border-thin);
   box-shadow: inset 4px 4px 0 rgba(18, 18, 18, 0.05);
+  display: flex;
+  gap: var(--agentlane-space-3);
+  min-height: 54px;
+  padding: 0 var(--agentlane-space-4);
+}
+
+.pixel-field__icon {
+  color: var(--agentlane-color-ink);
+  flex: 0 0 auto;
+}
+
+.pixel-field__input {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
   box-sizing: border-box;
   color: var(--agentlane-color-ink);
   font-family: var(--agentlane-font-body);
   font-size: 18px;
-  min-height: 54px;
-  padding: 0 var(--agentlane-space-4);
+  min-height: 50px;
+  min-width: 0;
+  outline: 0;
+  padding: 0;
   width: 100%;
 }
 
@@ -239,6 +260,9 @@
     radial-gradient(circle at 32% 13%, var(--agentlane-color-pink) 0 4px, transparent 5px),
     radial-gradient(circle at 44% 13%, var(--agentlane-color-yellow) 0 4px, transparent 5px),
     radial-gradient(circle at 91% 15%, var(--agentlane-color-blue) 0 4px, transparent 5px),
+    radial-gradient(circle at 84% 52%, var(--agentlane-color-pink) 0 3px, transparent 4px),
+    radial-gradient(circle at 38% 85%, var(--agentlane-color-pink) 0 3px, transparent 4px),
+    radial-gradient(circle at 64% 86%, var(--agentlane-color-pink) 0 3px, transparent 4px),
     radial-gradient(circle at 95% 55%, var(--agentlane-color-pink) 0 4px, transparent 5px),
     linear-gradient(180deg, var(--agentlane-color-paper), var(--agentlane-color-cream));
   box-sizing: border-box;
@@ -285,20 +309,21 @@
   font-size: 18px;
   font-weight: 700;
   gap: var(--agentlane-space-2);
+  white-space: nowrap;
 }
 
 .auth-layout__main {
   align-items: start;
   display: grid;
-  gap: 54px;
-  grid-template-columns: minmax(360px, 560px) minmax(360px, 560px);
+  gap: 62px;
+  grid-template-columns: minmax(520px, 720px) minmax(520px, 720px);
   justify-content: center;
-  margin: 68px auto 0;
-  max-width: 1240px;
+  margin: 66px auto 0;
+  max-width: 1520px;
 }
 
 .auth-layout__card .pixel-panel__inner {
-  min-height: 450px;
+  min-height: 520px;
 }
 
 .auth-layout__title {
@@ -325,7 +350,7 @@
 }
 
 .auth-layout__preview {
-  min-height: 420px;
+  min-height: 520px;
 }
 
 .auth-form {
@@ -379,7 +404,7 @@
   border-bottom: 2px dashed #e5c87b;
   display: grid;
   gap: var(--agentlane-space-5);
-  grid-template-columns: 64px minmax(0, 1fr) auto;
+  grid-template-columns: 76px minmax(0, 1fr) auto;
   min-width: 0;
   padding-bottom: var(--agentlane-space-5);
 }
@@ -389,7 +414,7 @@
 }
 
 .auth-preview__row h2 {
-  font-size: 24px;
+  font-size: 28px;
   margin: 0 0 var(--agentlane-space-1);
 }
 
@@ -425,40 +450,27 @@
   border: var(--agentlane-border-thin);
   box-shadow: var(--agentlane-shadow-blue);
   display: inline-flex;
-  height: 54px;
+  height: 64px;
   justify-content: center;
-  width: 54px;
-}
-
-.auth-preview__icon > span {
-  display: block;
-  height: 30px;
-  position: relative;
-  width: 30px;
+  width: 64px;
 }
 
 .auth-preview__iconSvg {
-  fill: var(--agentlane-color-blue-dark);
-  height: 34px;
-  width: 34px;
+  color: var(--agentlane-color-blue-dark);
+  height: 42px;
+  width: 42px;
 }
 
-.auth-preview__icon--fleet > span {
-  background:
-    linear-gradient(var(--agentlane-color-blue) 0 0) 6px 5px / 18px 4px no-repeat,
-    linear-gradient(var(--agentlane-color-blue) 0 0) 6px 13px / 18px 4px no-repeat,
-    linear-gradient(var(--agentlane-color-blue) 0 0) 6px 21px / 18px 4px no-repeat;
-  border: 3px solid var(--agentlane-color-blue-dark);
+.auth-preview__icon--server .auth-preview__iconSvg {
+  color: var(--agentlane-color-blue-dark);
 }
 
-.auth-preview__icon--runs > span {
-  display: none;
+.auth-preview__icon--chart .auth-preview__iconSvg {
+  color: var(--agentlane-color-blue-dark);
 }
 
-.auth-preview__icon--health > span {
-  background:
-    linear-gradient(var(--agentlane-color-green) 0 0) 11px 4px / 8px 22px no-repeat,
-    linear-gradient(var(--agentlane-color-green) 0 0) 4px 11px / 22px 8px no-repeat;
+.auth-preview__icon--shield .auth-preview__iconSvg {
+  color: var(--agentlane-color-green);
 }
 
 .auth-layout__notice {
@@ -477,15 +489,13 @@
   text-align: center;
 }
 
-.auth-layout__notice::before {
+.auth-layout__noticeIcon {
   align-items: center;
   background: var(--agentlane-color-blue);
   border: var(--agentlane-border-thin);
   color: #fff;
-  content: "i";
   display: inline-flex;
   flex: 0 0 auto;
-  font-family: var(--agentlane-font-pixel);
   height: 34px;
   justify-content: center;
   width: 34px;
@@ -500,7 +510,7 @@
   margin-top: 28px;
 }
 
-.auth-layout__footer span {
+.auth-layout__footer .pixel-icon {
   color: var(--agentlane-color-pink);
 }
 
@@ -651,57 +661,38 @@
 }
 
 .pixel-deco--sprite {
-  bottom: 42px;
-  height: 68px;
-  width: 68px;
-}
-
-.pixel-deco--sprite::before {
-  content: "";
-  display: block;
-  height: 100%;
-  width: 100%;
+  bottom: 50px;
+  height: 108px;
+  width: 108px;
 }
 
 .pixel-deco--sprite-pink {
-  left: 28px;
+  left: 36px;
 }
 
 .pixel-deco--sprite-blue {
-  right: 32px;
+  right: 44px;
 }
 
-.pixel-deco--sprite-pink::before {
-  background:
-    linear-gradient(var(--agentlane-color-pink) 0 0) 20px 0 / 28px 8px no-repeat,
-    linear-gradient(var(--agentlane-color-pink) 0 0) 12px 8px / 44px 8px no-repeat,
-    linear-gradient(var(--agentlane-color-pink) 0 0) 4px 16px / 60px 32px no-repeat,
-    linear-gradient(#fff 0 0) 18px 24px / 8px 10px no-repeat,
-    linear-gradient(#fff 0 0) 42px 24px / 8px 10px no-repeat,
-    linear-gradient(var(--agentlane-color-pink) 0 0) 4px 48px / 12px 16px no-repeat,
-    linear-gradient(var(--agentlane-color-pink) 0 0) 52px 48px / 12px 16px no-repeat;
+.pixel-deco--sprite-pink .pixel-sprite__body {
+  fill: var(--agentlane-color-pink);
 }
 
-.pixel-deco--sprite-blue::before {
-  background:
-    linear-gradient(var(--agentlane-color-blue) 0 0) 20px 0 / 28px 8px no-repeat,
-    linear-gradient(var(--agentlane-color-blue) 0 0) 12px 8px / 44px 8px no-repeat,
-    linear-gradient(var(--agentlane-color-blue) 0 0) 4px 16px / 60px 32px no-repeat,
-    linear-gradient(#fff 0 0) 18px 24px / 8px 10px no-repeat,
-    linear-gradient(#fff 0 0) 42px 24px / 8px 10px no-repeat,
-    linear-gradient(var(--agentlane-color-blue) 0 0) 4px 48px / 12px 16px no-repeat,
-    linear-gradient(var(--agentlane-color-blue) 0 0) 52px 48px / 12px 16px no-repeat;
+.pixel-deco--sprite-blue .pixel-sprite__body {
+  fill: var(--agentlane-color-blue);
+}
+
+.pixel-sprite__highlight {
+  fill: #fffdf4;
+}
+
+.pixel-sprite__shine {
+  fill: var(--agentlane-color-yellow);
 }
 
 .pixel-deco--heart {
   bottom: 28px;
   color: var(--agentlane-color-pink);
-  font-family: var(--agentlane-font-pixel);
-  font-size: 18px;
-}
-
-.pixel-deco--heart::before {
-  content: "♥";
 }
 
 .pixel-deco--heart-left {
@@ -733,7 +724,7 @@
   }
 
   .auth-preview__row {
-    grid-template-columns: 48px minmax(0, 1fr);
+    grid-template-columns: 72px minmax(0, 1fr);
   }
 
   .auth-preview__row .pixel-badge {
@@ -752,11 +743,19 @@
   }
 
   .auth-layout__header {
+    gap: 12px;
+    min-height: 72px;
     padding: 10px;
   }
 
   .auth-layout__language {
-    font-size: 14px;
+    flex: 0 0 auto;
+    font-size: 13px;
+    gap: 6px;
+  }
+
+  .auth-layout__language span:last-child {
+    display: none;
   }
 
   .auth-layout__main {
@@ -767,10 +766,12 @@
     padding: 22px;
   }
 
+  .auth-layout__header .pixel-logo__wordmark,
   .pixel-logo__wordmark {
     font-size: 26px;
   }
 
+  .auth-layout__header .pixel-logo__mark,
   .pixel-logo__mark {
     height: 36px;
     width: 36px;
@@ -778,5 +779,10 @@
 
   .auth-layout__title {
     font-size: 42px;
+  }
+
+  .auth-preview__icon {
+    height: 60px;
+    width: 60px;
   }
 }

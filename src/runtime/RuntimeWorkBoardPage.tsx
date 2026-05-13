@@ -1,4 +1,3 @@
-import { CalendarDays, ChevronDown, ChevronLeft, ChevronUp, RefreshCw, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   mapMulticaWorkState,
@@ -26,6 +25,7 @@ import {
   createWorkItemsQueryUrl,
   runtimeWorkItemsQueryPageFromResponse,
 } from "./runtime-work-query-api";
+import { PixelIcon } from "../ui/PixelIcon";
 
 const autoRefreshIntervalMs = 30_000;
 
@@ -312,7 +312,7 @@ export function RuntimeWorkBoardPage() {
               void loadLatestSnapshot();
             }}
           >
-            <RefreshCw size={16} aria-hidden="true" />
+            <PixelIcon name="reload" size={16} />
             {refreshState.status === "running" ? "刷新中" : "刷新看板"}
           </button>
           {refreshState.message ? (
@@ -327,7 +327,7 @@ export function RuntimeWorkBoardPage() {
         <label className="toolbarField toolbarSearch">
           <span className="controlLabel">搜索</span>
           <span className="searchBox">
-            <Search size={16} aria-hidden="true" />
+            <PixelIcon name="search" size={16} />
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
@@ -386,7 +386,7 @@ export function RuntimeWorkBoardPage() {
           >
             <span className="timeRangeDuration">{timeRangeDuration}</span>
             <span className="timeRangeSummary">{timeRangeSummary}</span>
-            {timeRangeOpen ? <ChevronUp size={18} aria-hidden="true" /> : <ChevronDown size={18} aria-hidden="true" />}
+            {timeRangeOpen ? <PixelIcon name="chevron-up" size={18} /> : <PixelIcon name="chevron-down" size={18} />}
           </button>
           {timeRangeOpen ? (
             <div className="timeRangePopover" id="runs-time-range-panel" role="dialog" aria-label="时间范围选择">
@@ -395,7 +395,7 @@ export function RuntimeWorkBoardPage() {
                   <div className="timeRangePopoverHeader">
                     <strong>时间选择</strong>
                     <button className="timeRangeTextButton" type="button" onClick={() => setTimeRangeMode("custom")}>
-                      <CalendarDays size={16} aria-hidden="true" />
+                      <PixelIcon name="calendar" size={16} />
                       日历中选择
                     </button>
                   </div>
@@ -427,7 +427,7 @@ export function RuntimeWorkBoardPage() {
               ) : (
                 <>
                   <button className="timeRangeBackButton" type="button" onClick={() => setTimeRangeMode("quick")}>
-                    <ChevronLeft size={16} aria-hidden="true" />
+                    <PixelIcon name="chevron-left" size={16} />
                     日历中选择
                   </button>
                   <div className="timeRangeManualInputs">

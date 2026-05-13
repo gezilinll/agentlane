@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { PixelDecorations } from "./PixelDecorations";
+import { PixelIcon } from "./PixelIcon";
 import { PixelLogo } from "./PixelLogo";
 import { PixelPanel } from "./PixelPanel";
 
@@ -31,11 +32,18 @@ export function AuthLayout({ children, notice, preview, subtitle, title }: AuthL
         </PixelPanel>
         {preview ? <PixelPanel className="auth-layout__card auth-layout__preview">{preview}</PixelPanel> : null}
       </main>
-      {notice ? <div className="auth-layout__notice">{notice}</div> : null}
+      {notice ? (
+        <div className="auth-layout__notice">
+          <span className="auth-layout__noticeIcon" aria-hidden="true">
+            <PixelIcon name="info" size={22} />
+          </span>
+          <span>{notice}</span>
+        </div>
+      ) : null}
       <footer className="auth-layout__footer">
-        <span aria-hidden="true">♥</span>
+        <PixelIcon name="heart" size={14} />
         © 2026 Agentlane. All rights reserved.
-        <span aria-hidden="true">♥</span>
+        <PixelIcon name="heart" size={14} />
       </footer>
     </div>
   );

@@ -6,6 +6,7 @@ import { PixelButton } from "./PixelButton";
 import { PixelField } from "./PixelField";
 import { PixelLogo } from "./PixelLogo";
 import { PixelPanel } from "./PixelPanel";
+import { AuthOperationsPreview } from "../auth/auth-preview";
 
 describe("Cream Arcade UI primitives", () => {
   it("renders the pixel logo with an accessible brand label", () => {
@@ -19,7 +20,7 @@ describe("Cream Arcade UI primitives", () => {
   it("renders buttons, badges, panels, and fields with token classes", () => {
     render(
       <PixelPanel title="登录">
-        <PixelField label="邮箱" name="email" placeholder="name@company.com" />
+        <PixelField icon="mail" label="邮箱" name="email" placeholder="name@company.com" />
         <PixelButton type="button" icon="paper-plane">
           发送验证码
         </PixelButton>
@@ -28,10 +29,20 @@ describe("Cream Arcade UI primitives", () => {
     );
 
     expect(screen.getByRole("group", { name: "登录" })).toHaveClass("pixel-panel");
+    expect(screen.getByRole("group", { name: "登录" })).toHaveAttribute("data-panel-style", "cut-corner");
     expect(screen.getByLabelText("邮箱")).toHaveAttribute("name", "email");
+    expect(screen.getByLabelText("邮箱").parentElement?.querySelector('[data-pixel-icon="mail"]')).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "发送验证码" })).toHaveClass("pixel-button");
-    expect(screen.getByTestId("pixel-button-icon").querySelector("svg")).toHaveClass("pixel-button__svg");
+    expect(screen.getByTestId("pixel-button-icon").querySelector("svg")).toHaveAttribute("data-pixel-icon", "send");
     expect(screen.getByText("在线")).toHaveClass("pixel-badge--success");
+  });
+
+  it("renders operational preview icons from the shared pixel icon system", () => {
+    render(<AuthOperationsPreview />);
+
+    expect(screen.getByLabelText("运营概览").querySelector('[data-pixel-icon="server"]')).toBeInTheDocument();
+    expect(screen.getByLabelText("运营概览").querySelector('[data-pixel-icon="chart"]')).toBeInTheDocument();
+    expect(screen.getByLabelText("运营概览").querySelector('[data-pixel-icon="shield"]')).toBeInTheDocument();
   });
 
   it("composes an auth layout with brand, content, preview, and notice regions", () => {
@@ -48,6 +59,9 @@ describe("Cream Arcade UI primitives", () => {
 
     expect(screen.getByRole("banner")).toContainElement(screen.getByLabelText("Agentlane"));
     expect(screen.getByTestId("auth-pixel-decorations")).toBeInTheDocument();
+    expect(screen.getByTestId("auth-pixel-decorations").querySelector('[data-pixel-sprite="pink"]')).toBeInTheDocument();
+    expect(screen.getByTestId("auth-pixel-decorations").querySelector('[data-pixel-sprite="blue"]')).toBeInTheDocument();
+    expect(screen.getByTestId("auth-pixel-decorations").querySelector('[data-pixel-icon="heart"]')).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "登录 Agentlane" })).toBeInTheDocument();
     expect(screen.getByText("Runtime Fleet")).toBeInTheDocument();
     expect(screen.getByText(/Device、Runtime、Agent/)).toBeInTheDocument();

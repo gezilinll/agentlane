@@ -29,6 +29,7 @@ export function LoginPage({ error, onSubmit }: LoginPageProps) {
         }}
       >
         <PixelField
+          icon="mail"
           label="邮箱"
           name="email"
           placeholder="name@company.com"

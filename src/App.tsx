@@ -1,17 +1,3 @@
-import {
-  Activity,
-  Blocks,
-  Bot,
-  GitBranch,
-  Library,
-  PlayCircle,
-  Search,
-  Server,
-  ShieldCheck,
-  Users,
-  Wrench,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AuthProvider, useOptionalAuthSession } from "./auth/AuthProvider";
 import {
@@ -29,22 +15,23 @@ import {
 import { RuntimeFleetPage } from "./runtime/RuntimeFleetPage";
 import { RuntimeWorkBoardPage } from "./runtime/RuntimeWorkBoardPage";
 import { PixelDecorations } from "./ui/PixelDecorations";
+import { PixelIcon, type PixelIconName } from "./ui/PixelIcon";
 import { PixelLogo } from "./ui/PixelLogo";
 
 type PageKey = "catalog" | "runtime" | "work";
 
-const navItems: Array<{ label: string; icon: LucideIcon; page?: PageKey }> = [
-  { label: "总控台", icon: Activity },
-  { label: "对象目录", icon: Library, page: "catalog" },
-  { label: "Runtime Fleet", icon: Server, page: "runtime" },
-  { label: "Agent Studio", icon: Bot },
-  { label: "Workflow Studio", icon: GitBranch },
-  { label: "Skill Registry", icon: Wrench },
-  { label: "Worker Fleet", icon: Server },
-  { label: "Runs", icon: PlayCircle, page: "work" },
-  { label: "People", icon: Users },
-  { label: "Integrations", icon: Blocks },
-  { label: "Governance", icon: ShieldCheck },
+const navItems: Array<{ label: string; icon: PixelIconName; page?: PageKey }> = [
+  { label: "总控台", icon: "activity" },
+  { label: "对象目录", icon: "catalog", page: "catalog" },
+  { label: "Runtime Fleet", icon: "server", page: "runtime" },
+  { label: "Agent Studio", icon: "bot" },
+  { label: "Workflow Studio", icon: "branch" },
+  { label: "Skill Registry", icon: "tool" },
+  { label: "Worker Fleet", icon: "cpu" },
+  { label: "Runs", icon: "play", page: "work" },
+  { label: "People", icon: "users" },
+  { label: "Integrations", icon: "blocks" },
+  { label: "Governance", icon: "shield" },
 ] as const;
 
 export type AppAuthMode = "disabled" | "required";
@@ -66,7 +53,6 @@ function ConsoleApp() {
         </div>
         <nav className="navList">
           {navItems.map((item) => {
-            const Icon = item.icon;
             const isActive = item.page === activePage;
             return (
               <button
@@ -78,7 +64,7 @@ function ConsoleApp() {
                 }}
               >
                 <span className="navIconFrame">
-                  <Icon size={15} aria-hidden="true" />
+                  <PixelIcon name={item.icon} size={16} />
                 </span>
                 <span>{item.label}</span>
               </button>
@@ -141,7 +127,7 @@ function CatalogPage() {
           <p className="pageSubtitle">集中查看正式对象、owner 槽位、生命周期与依赖关系。</p>
         </div>
         <button className="primaryButton" type="button" aria-label="新建对象">
-          <Blocks size={16} aria-hidden="true" />
+          <PixelIcon name="blocks" size={16} />
           新建对象
         </button>
       </header>
@@ -150,7 +136,7 @@ function CatalogPage() {
         <label className="toolbarField toolbarSearch">
           <span className="controlLabel">搜索</span>
           <span className="searchBox">
-            <Search size={16} aria-hidden="true" />
+            <PixelIcon name="search" size={16} />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}

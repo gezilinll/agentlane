@@ -31,6 +31,7 @@ export function VerifyCodePage({ email, error, onBack, onSubmit }: VerifyCodePag
         }}
       >
         <PixelField
+          icon="terminal"
           label="验证码"
           name="code"
           inputMode="numeric"

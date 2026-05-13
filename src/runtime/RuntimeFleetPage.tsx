@@ -1,4 +1,3 @@
-import { Bot, Cpu, Monitor, RefreshCw, Search, Server } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import fixtureSnapshot from "../../fixtures/runtime/collector-snapshot.sample.json";
 import {
@@ -37,6 +36,7 @@ import {
   type CollectionHealthCheck,
   type DeviceCollectionHealth,
 } from "./runtime-collection-health";
+import { PixelIcon } from "../ui/PixelIcon";
 
 const fixtureRuntimeSnapshot = fixtureSnapshot as RuntimeInventorySnapshot;
 const autoRefreshIntervalMs = 30_000;
@@ -254,7 +254,7 @@ export function RuntimeFleetPage() {
               void handleRefresh();
             }}
           >
-            <RefreshCw size={16} aria-hidden="true" />
+            <PixelIcon name="reload" size={16} />
             {isRefreshRunning ? "刷新中" : refreshButtonLabel}
           </button>
           {refreshState.message ? (
@@ -269,7 +269,7 @@ export function RuntimeFleetPage() {
         <label className="toolbarField toolbarSearch">
           <span className="controlLabel">搜索</span>
           <span className="searchBox">
-            <Search size={16} aria-hidden="true" />
+            <PixelIcon name="search" size={16} />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -535,11 +535,11 @@ function DevicePanel({
           <h2>设备</h2>
           <p>最新采集快照来源</p>
         </div>
-        <Server size={18} aria-hidden="true" />
+        <PixelIcon name="server" size={18} />
       </div>
       <button className="deviceSummary" type="button" onClick={onSelect}>
         <span className="iconSquare">
-          <Monitor size={18} aria-hidden="true" />
+          <PixelIcon name="monitor" size={18} />
         </span>
         <span>
           <strong>{snapshot.device.name}</strong>
@@ -574,7 +574,7 @@ function RuntimeTable({
           <h2>Runtime</h2>
           <p>{runtimes.length} 个 Runtime 匹配当前筛选</p>
         </div>
-        <Cpu size={18} aria-hidden="true" />
+        <PixelIcon name="cpu" size={18} />
       </div>
       {runtimes.length === 0 ? (
         <EmptyAsset message="没有匹配的 Runtime" />
@@ -657,7 +657,7 @@ function AgentTable({
           <h2>Agent</h2>
           <p>{agents.length} 个 Agent 匹配当前筛选</p>
         </div>
-        <Bot size={18} aria-hidden="true" />
+        <PixelIcon name="bot" size={18} />
       </div>
       {agents.length === 0 ? (
         <EmptyAsset message="没有匹配的 Agent" />
