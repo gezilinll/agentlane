@@ -83,10 +83,10 @@ button {
 .homeHero {
   align-items: center;
   display: grid;
-  gap: clamp(34px, 4vw, 70px);
-  grid-template-columns: minmax(420px, 0.85fr) minmax(520px, 1.15fr);
-  margin: 64px auto 0;
-  max-width: 1540px;
+  gap: clamp(30px, 3.2vw, 54px);
+  grid-template-columns: minmax(360px, 0.82fr) minmax(620px, 1.18fr);
+  margin: 54px auto 0;
+  max-width: 1420px;
 }
 
 .homeHero__copy {
@@ -111,9 +111,9 @@ button {
 
 .homeTitle {
   font-family: var(--agentlane-font-pixel);
-  font-size: clamp(48px, 4.8vw, 78px);
+  font-size: clamp(42px, 4.1vw, 64px);
   letter-spacing: 0;
-  line-height: 1.08;
+  line-height: 1.12;
   margin: 0;
   max-width: 100%;
 }
@@ -121,10 +121,10 @@ button {
 .homeLead {
   color: var(--agentlane-color-muted);
   font-family: var(--font-sans);
-  font-size: clamp(16px, 1vw, 19px);
+  font-size: clamp(16px, 0.95vw, 18px);
   line-height: 1.72;
   margin: 24px 0 0;
-  max-width: 640px;
+  max-width: 580px;
 }
 
 .homeActions {
@@ -194,8 +194,8 @@ button {
 
 .homeConsole__body {
   display: grid;
-  grid-template-columns: 190px minmax(0, 1fr);
-  min-height: 480px;
+  grid-template-columns: 160px minmax(0, 1fr);
+  min-height: 430px;
 }
 
 .homeConsole__menu {
@@ -204,7 +204,7 @@ button {
   font-family: var(--agentlane-font-pixel);
   gap: 14px;
   align-content: start;
-  padding: 28px 24px;
+  padding: 28px 20px;
 }
 
 .homeConsole__menu span,
@@ -221,8 +221,8 @@ button {
 
 .homeConsole__content {
   display: grid;
-  gap: 28px;
-  padding: 32px;
+  gap: 26px;
+  padding: 30px;
 }
 
 .homeConsole__stats,
@@ -234,13 +234,13 @@ button {
 
 .homeMetric {
   border: var(--agentlane-border-thin);
-  padding: 18px;
+  padding: 16px;
 }
 
 .homeMetric strong {
   display: block;
   font-family: var(--agentlane-font-pixel);
-  font-size: 44px;
+  font-size: 38px;
   line-height: 1;
 }
 
@@ -253,9 +253,10 @@ button {
 .homeLane {
   border: 2px solid rgba(18, 18, 18, 0.28);
   display: grid;
-  gap: 14px;
+  gap: 12px;
   align-content: start;
-  padding: 16px;
+  min-width: 0;
+  padding: 14px;
 }
 
 .homeLane header {
@@ -276,12 +277,14 @@ button {
   align-items: center;
   background: var(--agentlane-color-field);
   border: var(--agentlane-border-thin);
-  display: grid;
+  display: flex;
+  font-family: var(--font-sans);
+  font-size: 14px;
   gap: 8px;
-  grid-template-columns: 20px minmax(0, 1fr);
-  min-height: 72px;
+  line-height: 1.35;
+  min-height: 58px;
   min-width: 0;
-  padding: 12px;
+  padding: 10px;
 }
 
 .homeLane article span {
@@ -499,13 +502,13 @@ h1 {
   box-shadow: var(--agentlane-shadow-small);
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(360px, 1fr) 210px 210px 244px;
+  grid-template-columns: minmax(260px, 1fr) minmax(150px, 190px) minmax(150px, 190px) minmax(180px, 220px);
   padding: 12px;
 }
 
 .workBoardToolbar {
   align-items: start;
-  grid-template-columns: minmax(320px, 1fr) repeat(3, 108px) minmax(300px, 360px);
+  grid-template-columns: minmax(300px, 1fr) repeat(3, 86px) minmax(340px, 360px);
   justify-content: start;
 }
 
@@ -571,11 +574,11 @@ h1 {
   color: var(--agentlane-color-ink);
   display: grid;
   font-family: var(--font-sans);
-  gap: 10px;
+  gap: 6px;
   grid-template-columns: auto minmax(0, 1fr) auto;
   height: 42px;
   min-width: 0;
-  padding: 0 10px;
+  padding: 0 8px;
   text-align: left;
   width: 100%;
 }
@@ -593,8 +596,8 @@ h1 {
   color: var(--agentlane-color-ink);
   font-family: var(--font-mono);
   font-weight: 700;
-  min-width: 48px;
-  padding: 5px 8px;
+  min-width: 44px;
+  padding: 5px 6px;
   text-align: center;
 }
 
@@ -753,7 +756,8 @@ h1 {
   flex: 1 1 0;
   height: 34px;
   min-width: 0;
-  padding: 0 12px;
+  padding: 0 8px;
+  white-space: nowrap;
 }
 
 .segmentedControl .segmentActive {
@@ -1063,7 +1067,7 @@ h1 {
 }
 
 .tablePanel {
-  overflow: hidden;
+  overflow-x: auto;
 }
 
 .runtimeAssetPanel {
@@ -1149,6 +1153,7 @@ h1 {
 
 .objectTable {
   display: grid;
+  min-width: 854px;
 }
 
 .assetTable {
@@ -1480,6 +1485,28 @@ button.tableRow:hover,
   .workBoardToolbar .timeRangeField {
     grid-column: 1 / -1;
     max-width: 520px;
+  }
+}
+
+@media (max-width: 1360px) {
+  .workBoardToolbar {
+    grid-template-columns: minmax(320px, 1fr) repeat(3, 86px);
+  }
+
+  .workBoardToolbar .timeRangeField {
+    grid-column: 1 / -1;
+    max-width: 360px;
+  }
+
+  .contentGrid,
+  .runtimeFleetGrid,
+  .workBoardGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .detailPanel {
+    max-height: none;
+    position: static;
   }
 }
 

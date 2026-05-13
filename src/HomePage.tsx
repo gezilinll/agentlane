@@ -62,9 +62,9 @@ export function HomePage() {
                 <MetricCard value="883" label="工作项快照" />
               </div>
               <div className="homeConsole__lanes">
-                <LanePreview title="待处理" count="42" cards={["同步最近 7 天成本数据", "新增投放日报指标口径"]} />
-                <LanePreview title="处理中" count="6" cards={["修复工具链生成记录异常", "整理用户反馈聚类"]} />
-                <LanePreview title="需关注" count="3" cards={["Collector 心跳延迟超过阈值", "Runtime 状态映射待确认"]} />
+                <LanePreview title="待处理" count="42" cards={["同步成本数据", "新增日报口径"]} />
+                <LanePreview title="处理中" count="6" cards={["修复记录异常", "反馈聚类"]} />
+                <LanePreview title="需关注" count="3" cards={["心跳延迟", "状态待确认"]} />
               </div>
             </div>
           </div>
