@@ -18,6 +18,7 @@ describe("Cream Arcade UI primitives", () => {
     const mark = screen.getByTestId("pixel-logo-mark").querySelector("svg");
     expect(mark).toHaveClass("pixel-logo__svg");
     expect(mark).toHaveAttribute("data-logo-mark", "agentlane-brain-circuit");
+    expect(mark).toHaveAttribute("data-logo-version", "streamline-brain");
   });
 
   it("keeps the browser tab metadata aligned with the shared brand mark", () => {
@@ -25,7 +26,19 @@ describe("Cream Arcade UI primitives", () => {
     const indexHtml = readFileSync("index.html", "utf8");
 
     expect(favicon).toContain('data-logo-mark="agentlane-brain-circuit"');
+    expect(favicon).toContain('data-logo-version="streamline-brain"');
     expect(indexHtml).toContain("<title>Agentlane</title>");
+  });
+
+  it("defines the current Pixel, Sans, and Mono font roles in shared tokens", () => {
+    const tokens = readFileSync("src/ui/tokens.css", "utf8");
+
+    expect(tokens).toContain("--font-pixel:");
+    expect(tokens).toContain("--font-sans:");
+    expect(tokens).toContain("--font-mono:");
+    expect(tokens).toContain("JetBrains Mono");
+    expect(tokens).toMatch(/\.pixel-button\s*{[^}]*font-family:\s*var\(--font-sans\)/s);
+    expect(tokens).toMatch(/\.pixel-logo__wordmark\s*{[^}]*font-family:\s*var\(--font-pixel\)/s);
   });
 
   it("renders buttons, badges, panels, and fields with token classes", () => {
@@ -44,7 +57,7 @@ describe("Cream Arcade UI primitives", () => {
     expect(screen.getByLabelText("邮箱")).toHaveAttribute("name", "email");
     expect(screen.getByLabelText("邮箱").parentElement?.querySelector('[data-pixel-icon="mail"]')).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "发送验证码" })).toHaveClass("pixel-button");
-    expect(screen.getByTestId("pixel-button-icon").querySelector("svg")).toHaveAttribute("data-pixel-icon", "send");
+    expect(screen.getByTestId("pixel-button-icon").querySelector("svg")).toHaveAttribute("data-pixel-icon", "paper-plane");
     expect(screen.getByText("在线")).toHaveClass("pixel-badge--success");
   });
 

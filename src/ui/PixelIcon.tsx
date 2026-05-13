@@ -39,10 +39,10 @@ export type PixelIconName =
   | "info"
   | "mail"
   | "monitor"
+  | "paper-plane"
   | "play"
   | "reload"
   | "search"
-  | "send"
   | "server"
   | "settings"
   | "shield"
@@ -67,10 +67,10 @@ const pixelIconComponents: Record<PixelIconName, ComponentType<SVGProps<SVGSVGEl
   info: InfoBox,
   mail: Mail,
   monitor: Monitor,
+  "paper-plane": Send,
   play: Play,
   reload: Reload,
   search: Search,
-  send: Send,
   server: PixelDocumentIcon,
   settings: SettingsCog,
   shield: PixelShieldIcon,

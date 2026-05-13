@@ -16,7 +16,7 @@ export function PixelButton({ children, className = "", icon, variant = "primary
     <button className={`pixel-button${variantClass}${className ? ` ${className}` : ""}`} {...props}>
       {icon ? (
         <span className="pixel-button__icon" data-testid="pixel-button-icon" aria-hidden="true">
-          <PixelIcon className="pixel-button__svg" name="send" size={28} />
+          <PixelIcon className="pixel-button__svg" name="paper-plane" size={28} />
         </span>
       ) : null}
       <span>{children}</span>

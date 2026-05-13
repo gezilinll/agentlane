@@ -13,9 +13,12 @@
 }
 
 :root {
-  --agentlane-font-pixel: "Fusion Pixel", "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
-  --agentlane-font-body: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
-  --agentlane-font-mono: "SFMono-Regular", "Cascadia Code", "Roboto Mono", ui-monospace, monospace;
+  --font-pixel: "Fusion Pixel", "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
+  --font-sans: "Noto Sans SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Sarasa Mono SC", "SFMono-Regular", "Cascadia Code", "Roboto Mono", ui-monospace, monospace;
+  --agentlane-font-pixel: var(--font-pixel);
+  --agentlane-font-body: var(--font-sans);
+  --agentlane-font-mono: var(--font-mono);
 
   --agentlane-color-cream: #fff4d6;
   --agentlane-color-cream-deep: #f7e3ac;
@@ -87,7 +90,7 @@
 }
 
 .pixel-logo__wordmark {
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-pixel);
   font-size: 34px;
   font-weight: 700;
   letter-spacing: 0;
@@ -146,7 +149,7 @@
   color: var(--agentlane-color-ink);
   cursor: pointer;
   display: inline-flex;
-  font-family: var(--agentlane-font-pixel);
+  font-family: var(--font-sans);
   font-size: 20px;
   font-weight: 700;
   gap: var(--agentlane-space-2);
