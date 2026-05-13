@@ -8,6 +8,22 @@ required_paths=(
   "README.md"
   "AGENTS.md"
   "docs/product/ui-design.md"
+  "docs/product/design/README.md"
+  "docs/product/design/principles.md"
+  "docs/product/design/surface-register.md"
+  "docs/product/design/visual-language.md"
+  "docs/product/design/tokens.md"
+  "docs/product/design/typography.md"
+  "docs/product/design/color.md"
+  "docs/product/design/layout.md"
+  "docs/product/design/components.md"
+  "docs/product/design/icons-and-assets.md"
+  "docs/product/design/interaction.md"
+  "docs/product/design/motion.md"
+  "docs/product/design/content-and-terminology.md"
+  "docs/product/design/responsive-and-accessibility.md"
+  "docs/product/design/page-patterns.md"
+  "docs/product/design/review-and-harness.md"
   "docs/product/catalog-page-spec.md"
   "docs/product/runtime-device-registration-spec.md"
   "docs/product/runtime-fleet-page-spec.md"
@@ -67,6 +83,22 @@ markdown_files = [
     Path("README.md"),
     Path("AGENTS.md"),
     Path("docs/product/ui-design.md"),
+    Path("docs/product/design/README.md"),
+    Path("docs/product/design/principles.md"),
+    Path("docs/product/design/surface-register.md"),
+    Path("docs/product/design/visual-language.md"),
+    Path("docs/product/design/tokens.md"),
+    Path("docs/product/design/typography.md"),
+    Path("docs/product/design/color.md"),
+    Path("docs/product/design/layout.md"),
+    Path("docs/product/design/components.md"),
+    Path("docs/product/design/icons-and-assets.md"),
+    Path("docs/product/design/interaction.md"),
+    Path("docs/product/design/motion.md"),
+    Path("docs/product/design/content-and-terminology.md"),
+    Path("docs/product/design/responsive-and-accessibility.md"),
+    Path("docs/product/design/page-patterns.md"),
+    Path("docs/product/design/review-and-harness.md"),
     Path("docs/product/catalog-page-spec.md"),
     Path("docs/product/runtime-device-registration-spec.md"),
     Path("docs/product/runtime-fleet-page-spec.md"),

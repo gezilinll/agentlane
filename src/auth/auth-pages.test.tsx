@@ -14,6 +14,7 @@ afterEach(() => {
 
 describe("auth pages", () => {
   it("guards the console behind email-code login", async () => {
+    window.history.pushState({}, "", "/catalog");
     globalThis.fetch = vi.fn(async (input) => {
       const url = input.toString();
       if (url.endsWith("/api/me")) {
@@ -29,6 +30,7 @@ describe("auth pages", () => {
   });
 
   it("does not surface anonymous session probe errors on the login page", async () => {
+    window.history.pushState({}, "", "/login");
     globalThis.fetch = vi.fn(async (input) => {
       const url = input.toString();
       if (url.endsWith("/api/me")) {
@@ -45,6 +47,7 @@ describe("auth pages", () => {
   });
 
   it("surfaces unexpected session probe errors instead of hiding backend failures", async () => {
+    window.history.pushState({}, "", "/login");
     globalThis.fetch = vi.fn(async (input) => {
       const url = input.toString();
       if (url.endsWith("/api/me")) {
@@ -61,6 +64,7 @@ describe("auth pages", () => {
 
   it("requests an email code and signs in with the verification code", async () => {
     const user = userEvent.setup();
+    window.history.pushState({}, "", "/login");
     const requests: Array<{ body: unknown; url: string }> = [];
     globalThis.fetch = vi.fn(async (input, init) => {
       const url = input.toString();
@@ -97,6 +101,7 @@ describe("auth pages", () => {
 
   it("asks a signed-in user without organizations to create one", async () => {
     const user = userEvent.setup();
+    window.history.pushState({}, "", "/catalog");
     globalThis.fetch = vi.fn(async (input, init) => {
       const url = input.toString();
       if (url.endsWith("/api/me")) return jsonResponse(sessionResponse({ organizations: [] }));
@@ -142,6 +147,7 @@ describe("auth pages", () => {
 
   it("logs out and returns to the login page", async () => {
     const user = userEvent.setup();
+    window.history.pushState({}, "", "/catalog");
     globalThis.fetch = vi.fn(async (input) => {
       const url = input.toString();
       if (url.endsWith("/api/me")) {

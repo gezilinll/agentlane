@@ -10,6 +10,7 @@ Current source of truth:
 
 - `README.md`: public project overview and operating model.
 - `docs/product/ui-design.md`: product object model, information architecture, pages, flows, and implementation priorities.
+- `docs/product/design/README.md`: design system source of truth for visual language, tokens, typography, color, layout, components, icons, interaction, content, responsive behavior, page patterns, and UI review harness.
 - `docs/product/catalog-page-spec.md`: TinySpec for the first Catalog / Registry page.
 - `docs/product/runtime-device-registration-spec.md`: TinySpec for v1 device registration, collector, runtime adapters, and runtime inventory snapshots.
 - `docs/product/runtime-fleet-page-spec.md`: TinySpec for the first Runtime Fleet management page.
@@ -17,6 +18,7 @@ Current source of truth:
 - `docs/product/runtime-listening-acceptance-spec.md`: TinySpec for whether OpenClaw, Multica, and Slock listening is sufficient for Runs and future task management.
 - `docs/product/backend-service-spec.md`: TinySpec for the local-first formal backend service, Postgres persistence, collector ingestion, and backend query APIs.
 - `docs/product/auth-and-access-spec.md`: TinySpec for organization-based auth/access, email-code login, invitations, sessions, and device tokens.
+- `src/HomePage.tsx`: public homepage entry for the current Agentlane value proposition and implemented capabilities.
 - `src/catalog/catalog-object.ts`: initial TypeScript source of truth for Catalog Object shape.
 - `src/catalog/catalog-seed.ts`: first reviewable seed data for the Catalog page.
 - `src/runtime/runtime-normalize.ts`: TypeScript source of truth for v1 runtime inventory normalization.
@@ -33,6 +35,7 @@ Current source of truth:
 - `src/server/runtime-control-channel.ts`: in-memory v1 device control channel for connection, heartbeat, and refresh command lifecycle.
 - `src/server/runtime-http-api.ts`: backend HTTP API for collector ingestion, Runtime Fleet / Runs query endpoints, refresh commands, and ingestion diagnostics.
 - `src/backend/backend-server.ts`: standalone local-first backend service that composes the HTTP API and device WebSocket control channel outside Vite.
+- `src/ui/PixelLogo.tsx` and `public/favicon.svg`: shared brand mark source for app chrome and browser tab metadata.
 - `vite.backend.config.ts`: backend bundle entry for production-like Node execution.
 - `db/migrations/`: Postgres schema migrations for the formal backend service.
 - `scripts/db-migrate.mjs`: local Postgres migration runner.
@@ -60,8 +63,11 @@ Current source of truth:
 - Treat the device WebSocket as a control plane only. Do not use it for chat, arbitrary command execution, external platform protocol emulation, or task scheduling until a spec and harness explicitly introduce those behaviors.
 - Keep runtime/device/auth secrets out of logs, fixtures, tests, docs, and UI screenshots. `deviceToken`, Slock keys, bearer tokens, platform API keys, login codes, session tokens, invitation tokens, and email provider keys may be passed through local config, but they must not be committed or displayed.
 - Auth/access rules belong in `docs/product/auth-and-access-spec.md` and backend auth modules. Do not implement permission decisions as ad hoc React conditionals.
-- Cream Arcade visual rules belong in `docs/product/ui-design.md` and shared UI tokens. Do not scatter one-off color, border, shadow, or font decisions across product components.
+- Cream Arcade visual rules belong in `docs/product/design/` and shared UI tokens. Do not scatter one-off color, border, shadow, or font decisions across product components.
 - Product icons and decorative pixel assets must enter pages through shared `src/ui` primitives, especially `PixelIcon` and `PixelDecorations`. Do not mix icon libraries, text symbols, CSS one-offs, or business-page SVG snippets unless the shared primitive first grows that need.
+- Only expose implemented, user-verifiable capabilities in navigation, homepage CTAs, and page-level action buttons. Current Console navigation is `对象目录`, `Runtime Fleet`, and `Runs`; future surfaces such as Agent Studio, Workflow Studio, People, Integrations, and Governance stay in docs/backlog until their page, data path, permissions, and harness exist.
+- Keep URL routes durable and minimal: `/` is the public homepage, `/login` is the auth entry, `/invite/:token` is the invitation entry, and `/catalog`, `/runtime`, `/runs` are the current protected Console pages.
+- Keep the browser tab icon and in-app logo aligned. If `PixelLogo` changes, update `public/favicon.svg`, relevant tests, and product visual rules in the same change.
 - Runtime adapters must translate platform-specific fields into Agentlane-owned semantics before UI consumption. Do not make React components infer whether OpenClaw sessions, Multica tasks, or Slock workspaces mean `active`, `idle`, `lastSeenAt`, or runtime statistics.
 - Keep Runtime and Channel separate in UI and query models. OpenClaw, Multica, Slock, Codex, and Claude Code are Runtime / platform sources; Runs Channel filters are only user-facing touchpoints such as DingTalk, Telegram, Slack, or future detected message channels.
 - Runs / Work Board must stay task-context first: do not render unlinked runtime executions, listening status, capability gaps, adapter evidence, raw limitations, command names, or debugging notes as user-facing task cards. If a platform cannot provide creator, assignee, group/channel, message excerpt, or execution state for a real work item, show a concise unsupported/unknown/user-facing fallback and keep details in logs/spec/harness. Do not display raw DingTalk `cid...`, phone numbers, open conversation ids, or other opaque external ids as conversation names. For DingTalk direct chats without a readable person name, show `DingTalk 私聊`; for groups without a readable name, show `DingTalk 群聊`. A real work item with no linked execution should say `未关联执行`, not `不支持采集`.
@@ -98,15 +104,18 @@ Current spec and harness mapping:
 | Runtime snapshot and control backend | `docs/product/runtime-device-registration-spec.md`, `src/runtime/runtime-collection-health.ts`, `src/server/runtime-inventory-store.ts`, `src/server/runtime-control-channel.ts`, `src/server/runtime-http-api.ts`, `src/backend/backend-server.ts` | `src/runtime/runtime-collection-health.test.ts`, `src/server/runtime-inventory-store.test.ts`, `src/server/runtime-control-channel.test.ts`, `src/server/runtime-http-api.test.ts`, `src/runtime/device-collector-script.test.ts`, `npm run check:backend` |
 | Backend service formalization | `docs/product/backend-service-spec.md`, `src/backend/backend-server.ts`, `src/server/postgres-store.ts`, `db/migrations/`, `scripts/db-migrate.mjs`, `scripts/dev-e2e.ts`, `scripts/smoke-production.mjs`, `vite.backend.config.ts`, `Dockerfile.backend`, `Dockerfile.frontend`, `nginx.agentlane.conf`, `docker-compose.prod-like.yml` | `src/backend/backend-server.test.ts`, `src/backend/dev-e2e-config.test.ts`, `src/server/db-migrate.test.ts`, `src/server/postgres-store.test.ts`, `src/server/runtime-http-api-postgres.test.ts`, `scripts/check-deploy-config.mjs`, `npm run check:backend:standalone`, `npm run check:db`, `npm run check:backend`, `npm run check:deploy`, `npm run smoke:production` |
 | Auth and access | `docs/product/auth-and-access-spec.md`, `src/auth/`, `db/migrations/` | `src/auth/auth-crypto.test.ts`, `src/auth/auth-store.test.ts`, `src/auth/auth-http-api.test.ts`, `src/server/runtime-http-api.test.ts`, `npm run check:backend`, `npm run check:db`, `npm run check:quick` |
-| Cream Arcade UI tokens | `docs/product/ui-design.md`, `src/ui/tokens.css`, `src/ui/` | `src/ui/ui-tokens.test.tsx`, `src/App.test.tsx`, `e2e/runtime-fleet.spec.ts`, `e2e/runtime-work-board.spec.ts`, `npm run check:quick`, `npm run check:e2e` |
+| Public entry, routing, and navigation | `src/HomePage.tsx`, `src/App.tsx`, `docs/product/ui-design.md` | `src/App.test.tsx`, `npm run check:quick`, `npm run check:e2e` |
+| Cream Arcade design system | `docs/product/design/`, `src/ui/tokens.css`, `src/ui/` | `src/ui/ui-tokens.test.tsx`, `src/App.test.tsx`, `e2e/runtime-fleet.spec.ts`, `e2e/runtime-work-board.spec.ts`, `npm run check:repo`, `npm run check:quick`, `npm run check:e2e` |
 | Commit message convention | `.githooks/commit-msg`, `scripts/check-commit-message.mjs`, `scripts/check-commit-message.test.mjs` | `npm run check:commit-message`, `npm run setup:git-hooks` |
-| Repo context and docs | `AGENTS.md`, `README.md`, `docs/product/ui-design.md`, `docs/product/auth-and-access-spec.md` | `npm run check:repo` |
+| Repo context and docs | `AGENTS.md`, `README.md`, `docs/product/ui-design.md`, `docs/product/design/`, `docs/product/auth-and-access-spec.md` | `npm run check:repo` |
 
 When a user points out a missed behavior or review gap, decide whether it should become:
 
 - Context: durable agent rule in this file.
 - Spec: acceptance criteria or non-goal in a product spec.
 - Harness: executable check in unit, component, browser, contract, or future runtime tests.
+
+For UI work, read `docs/product/ui-design.md` for product intent, then read `docs/product/design/README.md` and the relevant design spec files before editing. UI changes that alter visual language, token usage, component behavior, content terminology, page patterns, or review expectations must update `docs/product/design/` in the same change.
 
 ## Test Layout
 

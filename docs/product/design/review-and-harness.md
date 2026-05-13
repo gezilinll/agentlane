@@ -1,0 +1,59 @@
+# Review And Harness
+
+UI 工作完成前必须同时做视觉 Review、CSS/token Review 和相关 harness。自动检测是证据，不是结论。
+
+## Review Order
+
+1. 确认页面属于哪个 surface。
+2. 检查是否遵循对应页面规范。
+3. 检查 token 和共享组件是否被复用。
+4. 截图 Review 桌面、窄屏和关键状态。
+5. 检查长文本、空数据、错误、loading、未登录、权限不足。
+6. 运行相关 harness。
+
+## Screenshot Review
+
+截图时至少关注：
+
+- 是否有未实现入口。
+- 是否出现横向滚动。
+- 标题、按钮、badge、详情面板是否溢出。
+- 字体分工是否符合 Pixel / Sans / Mono 规则。
+- Icon 是否统一。
+- 装饰是否遮挡内容或造成视觉疲劳。
+- Console 页面是否仍然能快速扫描。
+
+## CSS And Token Review
+
+检查：
+
+- 是否存在新增硬编码色值。
+- 是否绕过共享组件写了临时按钮、输入框、badge。
+- 是否新增了一次性 box-shadow、border、font-family。
+- 是否在业务页面复制 logo 或 icon SVG。
+- 是否破坏 Brand、Identity、Console 之间的 token 一致性。
+
+## Harness Responsibility
+
+- 文档和规范变化运行 `npm run check:repo`。
+- 共享 UI primitive、token、路由或页面交互变化运行 `npm run check:quick`。
+- 布局、响应式、看板、筛选、登录/邀请可视路径变化运行对应 Playwright harness。
+- 全量交付前运行 `npm run verify`。
+
+## Issue Classification
+
+发现问题后判断应沉淀到哪里：
+
+- Context: agent 操作规则，写入 [../../../AGENTS.md](../../../AGENTS.md)。
+- Design spec: 视觉、交互、内容或页面规则，写入本目录。
+- Product spec: 数据、行为、对象边界，写入对应 `docs/product/*-spec.md`。
+- Harness: 可执行质量保障，写入 unit、component 或 e2e。
+
+## Root-Cause Rule
+
+修复 UI 问题时要确认位置合理：
+
+- 跨页面共性问题优先修 token 或共享组件。
+- 单页面布局问题修页面 pattern 或页面实现。
+- 平台适配问题修 adapter，不让 React 组件推断平台语义。
+- 数据质量问题修后端、collector 或 normalized model，不用前端文案掩盖。

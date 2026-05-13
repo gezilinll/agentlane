@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AuthProvider, useOptionalAuthSession } from "./auth/AuthProvider";
 import {
   CATALOG_LIFECYCLES,
@@ -12,37 +12,56 @@ import {
   type CatalogObjectType,
   type CatalogOwnerFilter,
 } from "./catalog";
+import { HomePage } from "./HomePage";
 import { RuntimeFleetPage } from "./runtime/RuntimeFleetPage";
 import { RuntimeWorkBoardPage } from "./runtime/RuntimeWorkBoardPage";
 import { PixelDecorations } from "./ui/PixelDecorations";
 import { PixelIcon, type PixelIconName } from "./ui/PixelIcon";
 import { PixelLogo } from "./ui/PixelLogo";
 
-type PageKey = "catalog" | "runtime" | "work";
+type PageKey = "catalog" | "runtime" | "runs";
 
-const navItems: Array<{ label: string; icon: PixelIconName; page?: PageKey }> = [
-  { label: "总控台", icon: "activity" },
+const navItems: Array<{ label: string; icon: PixelIconName; page: PageKey }> = [
   { label: "对象目录", icon: "catalog", page: "catalog" },
   { label: "Runtime Fleet", icon: "server", page: "runtime" },
-  { label: "Agent Studio", icon: "bot" },
-  { label: "Workflow Studio", icon: "branch" },
-  { label: "Skill Registry", icon: "tool" },
-  { label: "Worker Fleet", icon: "cpu" },
-  { label: "Runs", icon: "play", page: "work" },
-  { label: "People", icon: "users" },
-  { label: "Integrations", icon: "blocks" },
-  { label: "Governance", icon: "shield" },
+  { label: "Runs", icon: "play", page: "runs" },
 ] as const;
+
+const pagePathByKey: Record<PageKey, string> = {
+  catalog: "/catalog",
+  runtime: "/runtime",
+  runs: "/runs",
+};
 
 export type AppAuthMode = "disabled" | "required";
 
 export function App({ authMode = "disabled" }: { authMode?: AppAuthMode }) {
+  if (authMode === "required" && getCurrentPath() === "/") {
+    return <HomePage />;
+  }
+
   const consoleApp = <ConsoleApp />;
   return authMode === "required" ? <AuthProvider>{consoleApp}</AuthProvider> : consoleApp;
 }
 
 function ConsoleApp() {
-  const [activePage, setActivePage] = useState<PageKey>("catalog");
+  const [activePage, setActivePage] = useState<PageKey>(() => pageFromPath(getCurrentPath()) ?? "catalog");
+
+  useEffect(() => {
+    const syncPageFromUrl = () => {
+      setActivePage(pageFromPath(getCurrentPath()) ?? "catalog");
+    };
+    window.addEventListener("popstate", syncPageFromUrl);
+    return () => window.removeEventListener("popstate", syncPageFromUrl);
+  }, []);
+
+  const navigateToPage = (page: PageKey) => {
+    const nextPath = pagePathByKey[page];
+    if (getCurrentPath() !== nextPath) {
+      window.history.pushState({}, "", nextPath);
+    }
+    setActivePage(page);
+  };
 
   return (
     <main className="appShell">
@@ -51,17 +70,16 @@ function ConsoleApp() {
         <div className="brandMark">
           <PixelLogo />
         </div>
-        <nav className="navList">
+        <nav className="navList" aria-label="主导航">
           {navItems.map((item) => {
             const isActive = item.page === activePage;
             return (
               <button
+                aria-current={isActive ? "page" : undefined}
                 className={isActive ? "navItem navItemActive" : "navItem"}
                 key={item.label}
                 type="button"
-                onClick={() => {
-                  if (item.page) setActivePage(item.page);
-                }}
+                onClick={() => navigateToPage(item.page)}
               >
                 <span className="navIconFrame">
                   <PixelIcon name={item.icon} size={16} />
@@ -74,9 +92,20 @@ function ConsoleApp() {
         <AuthSessionActions />
       </aside>
 
-      {activePage === "runtime" ? <RuntimeFleetPage /> : activePage === "work" ? <RuntimeWorkBoardPage /> : <CatalogPage />}
+      {activePage === "runtime" ? <RuntimeFleetPage /> : activePage === "runs" ? <RuntimeWorkBoardPage /> : <CatalogPage />}
     </main>
   );
+}
+
+function getCurrentPath(): string {
+  return typeof window === "undefined" ? "/" : window.location.pathname;
+}
+
+function pageFromPath(path: string): PageKey | null {
+  if (path === "/runtime") return "runtime";
+  if (path === "/runs") return "runs";
+  if (path === "/catalog") return "catalog";
+  return null;
 }
 
 function AuthSessionActions() {

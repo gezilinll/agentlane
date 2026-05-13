@@ -6,9 +6,11 @@ import fixtureSnapshot from "../fixtures/runtime/collector-snapshot.sample.json"
 import type { RuntimeInventorySnapshot, RuntimeWorkStateSnapshot } from "./runtime";
 
 const originalFetch = globalThis.fetch;
+const originalPath = window.location.pathname;
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  window.history.pushState({}, "", originalPath);
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
@@ -97,6 +99,42 @@ function stageFromWorkItemStatus(status: RuntimeWorkStateSnapshot["workItems"][n
 }
 
 describe("Catalog page", () => {
+  it("renders a public home entry at the root without probing auth", () => {
+    const fetchSpy = vi.fn();
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+    window.history.pushState({}, "", "/");
+
+    render(<App authMode="required" />);
+
+    expect(screen.getByRole("heading", { name: /把分散的 Agent 变成可运营的工作网络/ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "登录" })).toHaveAttribute("href", "/login");
+    expect(screen.queryByRole("button", { name: "Agent Studio" })).not.toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("uses URL routes for implemented console pages and hides unavailable nav entries", async () => {
+    const user = userEvent.setup();
+    window.history.pushState({}, "", "/runtime");
+
+    render(<App />);
+
+    expect(screen.getByRole("heading", { name: "运行资产" })).toBeInTheDocument();
+    const nav = screen.getByRole("navigation", { name: "主导航" });
+    for (const label of ["总控台", "Agent Studio", "Workflow Studio", "Skill Registry", "Worker Fleet", "People", "Integrations", "Governance"]) {
+      expect(within(nav).queryByRole("button", { name: label })).not.toBeInTheDocument();
+    }
+
+    await user.click(within(nav).getByRole("button", { name: "Runs" }));
+
+    expect(window.location.pathname).toBe("/runs");
+    expect(screen.getByRole("heading", { name: "工作看板" })).toBeInTheDocument();
+
+    await user.click(within(nav).getByRole("button", { name: "对象目录" }));
+
+    expect(window.location.pathname).toBe("/catalog");
+    expect(screen.getByRole("heading", { name: "对象目录" })).toBeInTheDocument();
+  });
+
   it("renders the Chinese Catalog page with seed objects", () => {
     render(<App />);
 

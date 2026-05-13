@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { AuthLayout } from "./AuthLayout";
 import { PixelBadge } from "./PixelBadge";
@@ -14,7 +15,17 @@ describe("Cream Arcade UI primitives", () => {
 
     expect(screen.getByLabelText("Agentlane")).toBeInTheDocument();
     expect(screen.getByText("Agentlane")).toHaveClass("pixel-logo__wordmark");
-    expect(screen.getByTestId("pixel-logo-mark").querySelector("svg")).toHaveClass("pixel-logo__svg");
+    const mark = screen.getByTestId("pixel-logo-mark").querySelector("svg");
+    expect(mark).toHaveClass("pixel-logo__svg");
+    expect(mark).toHaveAttribute("data-logo-mark", "agentlane-brain-circuit");
+  });
+
+  it("keeps the browser tab metadata aligned with the shared brand mark", () => {
+    const favicon = readFileSync("public/favicon.svg", "utf8");
+    const indexHtml = readFileSync("index.html", "utf8");
+
+    expect(favicon).toContain('data-logo-mark="agentlane-brain-circuit"');
+    expect(indexHtml).toContain("<title>Agentlane</title>");
   });
 
   it("renders buttons, badges, panels, and fields with token classes", () => {
