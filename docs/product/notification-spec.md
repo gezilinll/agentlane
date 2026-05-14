@@ -6,7 +6,7 @@
 
 ## 目标
 
-- 为异步操作提供统一通知模型，避免每个业务模块各自实现通知。
+- 为 [Operation And Job Runner Spec](./operation-job-runner-spec.md) 驱动的异步操作提供统一通知模型，避免每个业务模块各自实现通知。
 - 支持页面内通知和邮件通知。
 - 通知相关 owner、申请人、审批人、设备负责人、Agent 负责人和组织管理员。
 - 对重复异常做聚合、限流、升级和恢复通知，避免线上异常时疯狂重复发送。
@@ -34,6 +34,7 @@ Notification Event 是业务模块发出的原始通知事件。
 - `severity`：`info`、`warning`、`critical`。
 - `sourceModule`：`skill`、`migration`、`runtime`、`approval`、`auth`、`system`。
 - `resourceType` / `resourceId`：关联资源。
+- `operationId`：关联 Operation，可为空。
 - `actorUserId`：触发人，可为空。
 - `recipientUserIds`：候选接收人。
 - `title`：短标题。
@@ -272,6 +273,11 @@ Notification API：
 - `createNotificationEvent`：创建事件并执行聚合。
 - `scheduleNotificationDelivery`：根据偏好、严重级别、冷却和聚合规则创建投递任务。
 - `markNotificationResolved`：关闭 Thread 并发送恢复通知。
+
+Operation 集成 API：
+
+- `notifyOperationStatusChanged`：Operation 进入 `succeeded`、`failed`、`unsupported`、`requires_manual_step` 时创建事件。
+- `notifyOperationRequiresApproval`：业务动作转为 Approval Request 时通知审批人和申请人。
 
 ## Harness
 

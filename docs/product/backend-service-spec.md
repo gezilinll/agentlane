@@ -1,8 +1,8 @@
 # Backend Service Spec
 
-版本：TinySpec v0.3
+版本：TinySpec v0.4
 
-Agentlane backend 是独立于 Vite 的正式服务入口，用于承接 collector 上报、Postgres 持久化、Runtime Fleet / Runs 查询和设备控制面。当前阶段已经具备本地长期运行、production-like Docker / Nginx 验收形态，以及 `agentlane.gezilinll.com` ECS 部署；生产鉴权和运维告警后续单独落地。
+Agentlane backend 是独立于 Vite 的正式服务入口，用于承接登录与组织访问、collector 上报、Postgres 持久化、Runtime Fleet / Runs 查询、Skill 管理、异步 Operation / Job Runner、通知投递和设备控制面。当前阶段已经具备本地长期运行、production-like Docker / Nginx 验收形态，以及 `agentlane.gezilinll.com` ECS 部署。
 
 ## 目标
 
@@ -11,16 +11,16 @@ Agentlane backend 是独立于 Vite 的正式服务入口，用于承接 collect
 - 保留设备侧主动连接后端的模型：collector 通过 outbound WebSocket 建立控制面，通过 HTTP POST 上报采集结果。
 - 将 Runs / Runtime Fleet 的正式数据读取固定为“后端查询、前端展示”，不再使用前端拉 latest snapshot 后本地筛选作为正式路径。
 - 每次 collector 上报都记录 ingestion 结果，并由后端生成设备采集健康结论，支持排查某个平台为什么缺数据、什么时候缺数据、缺了哪些能力。
+- 使用 Postgres-backed Operation / Job Runner 承接 Skill、通知和后续迁移等异步动作。
 - 提供 production-like 本地部署配置：后端 bundle、前端静态构建、Nginx 反代和 Postgres compose。
 - 保持当前功能和测试质量，不为尚未上线的旧实现背兼容包袱。
 
 ## 非目标
 
-- 本阶段不引入云数据库、生产鉴权或生产运维告警。
-- 本阶段不引入用户、组织、多租户、RBAC、完整审计系统或复杂 secret manager。
+- 不引入云数据库、复杂 secret manager 或完整审计系统。
 - 本阶段不做中控 Agent、聊天入口、任务调度、消息代理或外部平台写操作。
 - 本阶段不保留 file-backed latest JSON 作为正式后端路径；fixture 只允许作为开发期离线预览和测试辅助。
-- 本阶段不拆微服务，不引入消息队列，不做跨机调度。
+- 本阶段不拆微服务，不引入外部消息队列，不做跨机调度。
 
 ## 环境依赖
 
@@ -43,6 +43,8 @@ flowchart LR
   Collector <--> Control["Backend WebSocket Control Channel"]
   API --> DB["Postgres"]
   API --> Control
+  API --> Runner["Operation Job Runner"]
+  Runner --> DB
 ```
 
 边界：
@@ -64,6 +66,9 @@ flowchart LR
 - `work_conversations`：会话、群组、线程或私聊上下文。
 - `work_executions`：具体执行记录。
 - `collector_ingestions`：每次 collector 上报的结果、数量、耗时、warning 和错误摘要。
+- `operations`：用户可见的异步动作状态。
+- `operation_jobs`：后端 runner 可 claim 和执行的任务单元。
+- `notification_events` / `notification_threads` / `notification_deliveries` / `notification_preferences`：公共通知事件、聚合、投递和偏好。
 
 暂不单独建 `device_connections`。WebSocket 在线状态可以保存在内存控制通道；可持久化的连接摘要先落在 `devices` 和 `collector_ingestions` 中。
 
@@ -120,6 +125,13 @@ Collector 保持主动上报：
   - `failed`：最近一次上报失败。
   - `unknown`：尚未收到该 snapshot type 的采集记录。
   - 该接口面向产品诊断，不返回外部平台密钥、原始 payload 或调试-only 字段。
+- `GET /api/operations`
+  - 参数：`organizationId`、`status`、`resourceType`、`resourceId`。
+  - 返回用户可见的异步动作状态。
+- `GET /api/operations/:operationId`
+  - 返回 Operation 和最近 Job 状态。
+- `GET /api/notifications`
+  - 返回当前用户可见的通知 Thread。
 
 前端缓存策略：
 
@@ -163,6 +175,8 @@ ECS 部署形态：
 - HTTP API harness：collector POST、runtime fleet query、work item query、ingestion query。
 - readiness harness：`/healthz` 和 `/readyz` 能区分进程存活与数据库可用。
 - control channel harness：WebSocket hello、heartbeat、refresh command lifecycle 继续可用。
+- operation runner harness：Postgres Job claim、lease、retry、完成态和失败态。
+- notification harness：事件聚合、限流、in-app 记录和 email delivery 记录。
 - collector contract harness：现有 collector 上报 payload 仍可被后端接收。
 - deploy config harness：backend bundle、Dockerfile、Nginx、production-like compose 必须和当前服务入口一致。
 - production smoke harness：`npm run smoke:production` 检查 `/healthz`、`/readyz`、Runtime Fleet、Work Items 和设备采集健康查询。
