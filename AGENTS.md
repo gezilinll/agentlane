@@ -18,6 +18,9 @@ Current source of truth:
 - `docs/product/runtime-listening-acceptance-spec.md`: TinySpec for whether OpenClaw, Multica, and Slock listening is sufficient for Runs and future task management.
 - `docs/product/backend-service-spec.md`: TinySpec for the local-first formal backend service, Postgres persistence, collector ingestion, and backend query APIs.
 - `docs/product/auth-and-access-spec.md`: TinySpec for organization-based auth/access, email-code login, invitations, sessions, and device tokens.
+- `docs/product/skill-management-spec.md`: product spec for organization-level Skill assets, import validation, permissions, review, target assignment, and deterministic delivery.
+- `docs/product/agent-migration-spec.md`: product spec for device bootstrap, runtime setup, agent migration, and known-recipe execution boundaries.
+- `docs/product/notification-spec.md`: product spec for in-app and email notifications, recipient scope, dedupe, rate limits, and recovery notifications.
 - `src/HomePage.tsx`: public homepage entry for the current Agentlane value proposition and implemented capabilities.
 - `src/catalog/catalog-object.ts`: initial TypeScript source of truth for Catalog Object shape.
 - `src/catalog/catalog-seed.ts`: first reviewable seed data for the Catalog page.
@@ -104,10 +107,12 @@ Current spec and harness mapping:
 | Runtime snapshot and control backend | `docs/product/runtime-device-registration-spec.md`, `src/runtime/runtime-collection-health.ts`, `src/server/runtime-inventory-store.ts`, `src/server/runtime-control-channel.ts`, `src/server/runtime-http-api.ts`, `src/backend/backend-server.ts` | `src/runtime/runtime-collection-health.test.ts`, `src/server/runtime-inventory-store.test.ts`, `src/server/runtime-control-channel.test.ts`, `src/server/runtime-http-api.test.ts`, `src/runtime/device-collector-script.test.ts`, `npm run check:backend` |
 | Backend service formalization | `docs/product/backend-service-spec.md`, `src/backend/backend-server.ts`, `src/server/postgres-store.ts`, `db/migrations/`, `scripts/db-migrate.mjs`, `scripts/dev-e2e.ts`, `scripts/smoke-production.mjs`, `vite.backend.config.ts`, `Dockerfile.backend`, `Dockerfile.frontend`, `nginx.agentlane.conf`, `docker-compose.prod-like.yml` | `src/backend/backend-server.test.ts`, `src/backend/dev-e2e-config.test.ts`, `src/server/db-migrate.test.ts`, `src/server/postgres-store.test.ts`, `src/server/runtime-http-api-postgres.test.ts`, `scripts/check-deploy-config.mjs`, `npm run check:backend:standalone`, `npm run check:db`, `npm run check:backend`, `npm run check:deploy`, `npm run smoke:production` |
 | Auth and access | `docs/product/auth-and-access-spec.md`, `src/auth/`, `db/migrations/` | `src/auth/auth-crypto.test.ts`, `src/auth/auth-store.test.ts`, `src/auth/auth-http-api.test.ts`, `src/server/runtime-http-api.test.ts`, `npm run check:backend`, `npm run check:db`, `npm run check:quick` |
+| Skill management product rules | `docs/product/skill-management-spec.md`, `docs/product/notification-spec.md` | `npm run check:repo`; add import, permission, adapter, and UI harness when implementation begins |
+| Agent migration and bootstrap product rules | `docs/product/agent-migration-spec.md`, `docs/product/skill-management-spec.md`, `docs/product/notification-spec.md` | `npm run check:repo`; add capability, operation, permission, and UI harness when implementation begins |
 | Public entry, routing, and navigation | `src/HomePage.tsx`, `src/App.tsx`, `docs/product/ui-design.md` | `src/App.test.tsx`, `npm run check:quick`, `npm run check:e2e` |
 | Cream Arcade design system | `docs/product/design/`, `src/ui/tokens.css`, `src/ui/` | `src/ui/ui-tokens.test.tsx`, `src/App.test.tsx`, `e2e/runtime-fleet.spec.ts`, `e2e/runtime-work-board.spec.ts`, `npm run check:repo`, `npm run check:quick`, `npm run check:e2e` |
 | Commit message convention | `.githooks/commit-msg`, `scripts/check-commit-message.mjs`, `scripts/check-commit-message.test.mjs` | `npm run check:commit-message`, `npm run setup:git-hooks` |
-| Repo context and docs | `AGENTS.md`, `README.md`, `docs/product/ui-design.md`, `docs/product/design/`, `docs/product/auth-and-access-spec.md` | `npm run check:repo` |
+| Repo context and docs | `AGENTS.md`, `README.md`, `docs/product/ui-design.md`, `docs/product/design/`, `docs/product/auth-and-access-spec.md`, `docs/product/skill-management-spec.md`, `docs/product/agent-migration-spec.md`, `docs/product/notification-spec.md` | `npm run check:repo` |
 
 When a user points out a missed behavior or review gap, decide whether it should become:
 
