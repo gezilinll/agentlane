@@ -1,4 +1,5 @@
-import type { OperationJobRow, OperationJobType, OperationStore } from "./operation-store";
+import type { NotificationSourceModule, NotificationStore } from "../notifications/notification-store";
+import type { OperationJobRow, OperationJobType, OperationRow, OperationStatus, OperationStore } from "./operation-store";
 
 /** Handler result for a claimed operation job. */
 export interface OperationJobHandlerResult {
@@ -11,6 +12,7 @@ export type OperationJobHandler = (job: OperationJobRow) => Promise<OperationJob
 /** Operation job runner options. */
 export interface OperationJobRunnerOptions {
   operationStore: OperationStore;
+  notificationStore?: Pick<NotificationStore, "createNotificationEvent">;
   handlers: Partial<Record<OperationJobType, OperationJobHandler>>;
   runnerId: string;
   leaseMs?: number;
@@ -51,6 +53,7 @@ export function createOperationJobRunner(options: OperationJobRunnerOptions): Op
           now: now(),
           status: "unsupported",
         });
+        await notifyOperationStatusChanged(options, claimedJob.operationId, now());
         return {
           jobId: claimedJob.id,
           jobType: claimedJob.type,
@@ -66,6 +69,7 @@ export function createOperationJobRunner(options: OperationJobRunnerOptions): Op
           now: now(),
           status: result.status,
         });
+        await notifyOperationStatusChanged(options, claimedJob.operationId, now());
         return {
           jobId: claimedJob.id,
           jobType: claimedJob.type,
@@ -80,6 +84,7 @@ export function createOperationJobRunner(options: OperationJobRunnerOptions): Op
           now: now(),
           retryAfterMs,
         });
+        await notifyOperationStatusChanged(options, claimedJob.operationId, now());
         return {
           errorSummary,
           jobId: claimedJob.id,
@@ -89,6 +94,58 @@ export function createOperationJobRunner(options: OperationJobRunnerOptions): Op
       }
     },
   };
+}
+
+async function notifyOperationStatusChanged(
+  options: OperationJobRunnerOptions,
+  operationId: string,
+  createdAt: Date,
+): Promise<void> {
+  if (!options.notificationStore) return;
+  const operation = await options.operationStore.readOperation({ operationId });
+  if (!operation || !operation.requestedByUserId || !isNotifiableOperationStatus(operation.status)) return;
+  try {
+    await options.notificationStore.createNotificationEvent({
+      actorUserId: operation.requestedByUserId,
+      createdAt,
+      dedupeKey: `operation:${operation.id}:${operation.status}`,
+      emailCooldownMs: 30 * 60 * 1000,
+      eventType: `operation_${operation.status}`,
+      operationId: operation.id,
+      organizationId: operation.organizationId,
+      recipientUserIds: [operation.requestedByUserId],
+      resourceId: operation.resourceId,
+      resourceType: operation.resourceType,
+      severity: operation.status === "succeeded" ? "info" : "warning",
+      sourceModule: sourceModuleForOperation(operation),
+      summary: operation.errorSummary ? `${operation.summary}: ${operation.errorSummary}` : operation.summary,
+      title: `${operation.summary} ${titleSuffixForStatus(operation.status)}`,
+    });
+  } catch {
+    // Operation completion must not be rolled back by notification delivery or persistence issues.
+  }
+}
+
+function isNotifiableOperationStatus(status: OperationStatus): boolean {
+  return status === "succeeded"
+    || status === "failed"
+    || status === "unsupported"
+    || status === "requires_manual_step";
+}
+
+function titleSuffixForStatus(status: OperationStatus): string {
+  if (status === "succeeded") return "已完成";
+  if (status === "failed") return "失败";
+  if (status === "unsupported") return "不支持自动处理";
+  if (status === "requires_manual_step") return "需要人工处理";
+  return "状态更新";
+}
+
+function sourceModuleForOperation(operation: OperationRow): NotificationSourceModule {
+  if (operation.type.startsWith("skill_")) return "skill";
+  if (operation.type === "agent_migration") return "migration";
+  if (operation.type === "device_refresh") return "runtime";
+  return "system";
 }
 
 function normalizeErrorSummary(error: unknown): string {

@@ -102,6 +102,7 @@ export interface CreateNotificationEventResult {
 export interface NotificationStore {
   createNotificationEvent: (input: CreateNotificationEventInput) => Promise<CreateNotificationEventResult>;
   listThreads: (input: { organizationId: string; recipientUserId?: string }) => Promise<NotificationThreadRow[]>;
+  readThread: (input: { threadId: string }) => Promise<NotificationThreadRow | null>;
   listDeliveries: (input: { threadId: string }) => Promise<NotificationDeliveryRow[]>;
   close: () => Promise<void>;
 }
@@ -194,7 +195,7 @@ export function createPostgresNotificationStore(options: PostgresNotificationSto
         return {
           deliveries,
           event,
-          thread: await readThreadById(client, thread.id),
+          thread: await readThreadById(client, thread.id) ?? thread,
         };
       });
     },
@@ -218,6 +219,9 @@ export function createPostgresNotificationStore(options: PostgresNotificationSto
         ORDER BY nt.last_occurred_at DESC
       `, params);
       return result.rows;
+    },
+    readThread(input) {
+      return readThreadById(pool, input.threadId);
     },
     async listDeliveries(input) {
       const result = await pool.query<NotificationDeliveryRow>(`
@@ -304,14 +308,14 @@ async function readThreadByDedupeKey(
   return result.rows[0] ?? null;
 }
 
-async function readThreadById(client: PoolClient, threadId: string): Promise<NotificationThreadRow> {
+async function readThreadById(client: PoolClient | pg.Pool, threadId: string): Promise<NotificationThreadRow | null> {
   const result = await client.query<NotificationThreadRow>(`
     SELECT ${threadColumns()}
     FROM notification_threads
     WHERE id = $1
     LIMIT 1
   `, [threadId]);
-  return result.rows[0];
+  return result.rows[0] ?? null;
 }
 
 async function insertThread(

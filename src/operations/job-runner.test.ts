@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import type { CreateNotificationEventInput } from "../notifications/notification-store";
 import { createOperationJobRunner } from "./job-runner";
-import type { OperationJobRow, OperationStore } from "./operation-store";
+import type { OperationJobRow, OperationRow, OperationStore } from "./operation-store";
 
 describe("operation job runner", () => {
   it("claims one due job and completes it through the matching handler", async () => {
@@ -91,6 +92,53 @@ describe("operation job runner", () => {
     await expect(runner.runDueJobOnce()).resolves.toEqual({ status: "idle" });
     expect(store.claims).toBe(1);
   });
+
+  it("creates a notification when a user-requested operation reaches a terminal status", async () => {
+    const notifications: CreateNotificationEventInput[] = [];
+    const store = createFakeOperationStore(
+      createJob({ type: "skill_publish" }),
+      createOperation({
+        requestedByUserId: "user_1",
+        resourceId: "skill_1",
+        resourceType: "skill",
+        status: "queued",
+        summary: "发布 Skill",
+        type: "skill_publish",
+      }),
+    );
+    const runner = createOperationJobRunner({
+      handlers: {
+        skill_publish: () => ({ status: "succeeded" }),
+      },
+      notificationStore: {
+        createNotificationEvent: async (input) => {
+          notifications.push(input);
+          throw new Error("test should not depend on notification return value");
+        },
+      },
+      now: () => new Date("2026-05-14T12:15:00.000Z"),
+      operationStore: store,
+      runnerId: "runner-a",
+    });
+
+    await expect(runner.runDueJobOnce()).resolves.toMatchObject({
+      outcome: "succeeded",
+      status: "handled",
+    });
+    expect(notifications).toEqual([
+      expect.objectContaining({
+        dedupeKey: "operation:operation_1:succeeded",
+        eventType: "operation_succeeded",
+        recipientUserIds: ["user_1"],
+        resourceId: "skill_1",
+        resourceType: "skill",
+        severity: "info",
+        sourceModule: "skill",
+        summary: "发布 Skill",
+        title: "发布 Skill 已完成",
+      }),
+    ]);
+  });
 });
 
 function createJob(input: Partial<OperationJobRow>): OperationJobRow {
@@ -116,27 +164,63 @@ function createJob(input: Partial<OperationJobRow>): OperationJobRow {
   };
 }
 
-function createFakeOperationStore(claimedJob: OperationJobRow | null): OperationStore & {
+function createOperation(input: Partial<OperationRow>): OperationRow {
+  const now = new Date("2026-05-14T12:00:00.000Z");
+  return {
+    createdAt: now,
+    errorSummary: null,
+    finishedAt: null,
+    id: "operation_1",
+    manualInstruction: null,
+    metadata: {},
+    organizationId: "organization_1",
+    requestedByUserId: null,
+    resourceId: null,
+    resourceType: null,
+    startedAt: null,
+    status: "queued",
+    summary: "Operation",
+    targetId: null,
+    targetType: null,
+    type: "skill_sync",
+    updatedAt: now,
+    ...input,
+  };
+}
+
+function createFakeOperationStore(claimedJob: OperationJobRow | null, initialOperation?: OperationRow): OperationStore & {
   claims: number;
   completed: Array<{ jobId: string; status: "succeeded" | "unsupported" }>;
   failed: Array<{ jobId: string; errorSummary: string; retryAfterMs?: number }>;
+  operation?: OperationRow;
 } {
   return {
     claims: 0,
     completed: [],
     failed: [],
+    operation: initialOperation,
     createOperation: async () => {
       throw new Error("not implemented");
     },
     enqueueJob: async () => {
       throw new Error("not implemented");
     },
+    listOperations: async () => [],
+    listJobs: async () => [],
     async claimNextJob() {
       this.claims += 1;
       return claimedJob;
     },
     async completeJob(input) {
       this.completed.push({ jobId: input.jobId, status: input.status });
+      if (this.operation) {
+        this.operation = {
+          ...this.operation,
+          finishedAt: input.now,
+          status: input.status === "succeeded" ? "succeeded" : "unsupported",
+          updatedAt: input.now,
+        };
+      }
       return claimedJob ? { ...claimedJob, status: input.status } : null;
     },
     async failJob(input) {
@@ -147,7 +231,9 @@ function createFakeOperationStore(claimedJob: OperationJobRow | null): Operation
       });
       return claimedJob ? { ...claimedJob, lastErrorSummary: input.errorSummary, status: "queued" } : null;
     },
-    readOperation: async () => null,
+    async readOperation() {
+      return this.operation ?? null;
+    },
     close: async () => {},
   };
 }

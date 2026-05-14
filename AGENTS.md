@@ -29,8 +29,10 @@ Current source of truth:
 - `src/skills/skill-governance-http-api.ts`: Skill governance HTTP API for permission grants, publish approvals, approval decisions, and target assignment requests.
 - `src/skills/skill-operation-handlers.ts`: executable Skill Operation handlers that apply approved publish and assignment jobs to the governance store.
 - `src/operations/operation-store.ts`: Postgres repository for asynchronous Operations and executable Jobs.
+- `src/operations/operation-http-api.ts`: authenticated Operation query API for user-visible asynchronous status and job details.
 - `src/operations/job-runner.ts`: minimal backend job runner over OperationStore claim, lease, handler, retry, and completion semantics.
 - `src/notifications/notification-store.ts`: Postgres repository for deduplicated notification events, threads, deliveries, and cooldown state.
+- `src/notifications/notification-http-api.ts`: authenticated in-app Notification query API for user-visible threads and delivery details.
 - `src/HomePage.tsx`: public homepage entry for the current Agentlane value proposition and implemented capabilities.
 - `src/catalog/catalog-object.ts`: initial TypeScript source of truth for Catalog Object shape.
 - `src/catalog/catalog-seed.ts`: first reviewable seed data for the Catalog page.
@@ -47,7 +49,7 @@ Current source of truth:
 - `src/server/postgres-store.ts`: Postgres-backed repository for normalized inventory and work-state ingestion.
 - `src/server/runtime-control-channel.ts`: in-memory v1 device control channel for connection, heartbeat, and refresh command lifecycle.
 - `src/server/runtime-http-api.ts`: backend HTTP API for collector ingestion, Runtime Fleet / Runs query endpoints, refresh commands, and ingestion diagnostics.
-- `src/backend/backend-server.ts`: standalone local-first backend service that composes auth, Skill, Runtime / Runs HTTP APIs and the device WebSocket control channel outside Vite.
+- `src/backend/backend-server.ts`: standalone local-first backend service that composes auth, Operation / Notification, Skill, Runtime / Runs HTTP APIs, in-process Operation runner, and the device WebSocket control channel outside Vite.
 - `src/ui/PixelLogo.tsx` and `public/favicon.svg`: shared brand mark source for app chrome and browser tab metadata.
 - `vite.backend.config.ts`: backend bundle entry for production-like Node execution.
 - `db/migrations/`: Postgres schema migrations for the formal backend service.
@@ -120,8 +122,8 @@ Current spec and harness mapping:
 | Skill package import and validation | `docs/product/skill-management-spec.md`, `src/skills/skill-package.ts` | `src/skills/skill-package.test.ts`, `npm run check:backend`, `npm run check:quick` |
 | Skill storage and API | `docs/product/skill-management-spec.md`, `db/migrations/0003_skill_management.sql`, `src/skills/skill-store.ts`, `src/skills/skill-http-api.ts`, `src/backend/backend-server.ts` | `src/skills/skill-store.test.ts`, `src/skills/skill-http-api.test.ts`, `npm run check:backend`, `npm run check:db` |
 | Skill governance permissions and approvals | `docs/product/skill-management-spec.md`, `db/migrations/0004_skill_governance.sql`, `src/skills/skill-governance-store.ts`, `src/skills/skill-governance-http-api.ts`, `src/skills/skill-operation-handlers.ts`, `src/backend/backend-server.ts` | `src/skills/skill-governance-store.test.ts`, `src/skills/skill-governance-http-api.test.ts`, `src/skills/skill-operation-handlers.test.ts`, `src/backend/backend-server.test.ts`, `src/server/db-migrate.test.ts`, `npm run check:backend`, `npm run check:db` |
-| Operation and Job Runner persistence | `docs/product/operation-job-runner-spec.md`, `db/migrations/0005_operations_notifications.sql`, `src/operations/operation-store.ts`, `src/operations/job-runner.ts` | `src/operations/operation-store.test.ts`, `src/operations/job-runner.test.ts`, `src/server/db-migrate.test.ts`, `npm run check:backend`, `npm run check:db` |
-| Notification persistence and dedupe | `docs/product/notification-spec.md`, `db/migrations/0005_operations_notifications.sql`, `src/notifications/notification-store.ts` | `src/notifications/notification-store.test.ts`, `src/server/db-migrate.test.ts`, `npm run check:backend`, `npm run check:db` |
+| Operation and Job Runner persistence/API | `docs/product/operation-job-runner-spec.md`, `db/migrations/0005_operations_notifications.sql`, `src/operations/operation-store.ts`, `src/operations/operation-http-api.ts`, `src/operations/job-runner.ts` | `src/operations/operation-store.test.ts`, `src/operations/operation-http-api.test.ts`, `src/operations/job-runner.test.ts`, `src/backend/backend-server.test.ts`, `src/server/db-migrate.test.ts`, `npm run check:backend`, `npm run check:db` |
+| Notification persistence, dedupe, and in-app API | `docs/product/notification-spec.md`, `db/migrations/0005_operations_notifications.sql`, `src/notifications/notification-store.ts`, `src/notifications/notification-http-api.ts`, `src/operations/job-runner.ts` | `src/notifications/notification-store.test.ts`, `src/notifications/notification-http-api.test.ts`, `src/operations/job-runner.test.ts`, `src/backend/backend-server.test.ts`, `src/server/db-migrate.test.ts`, `npm run check:backend`, `npm run check:db` |
 | Agent migration and bootstrap product rules | `docs/product/agent-migration-spec.md`, `docs/product/skill-management-spec.md`, `docs/product/notification-spec.md` | `npm run check:repo`; add capability, operation, permission, and UI harness when implementation begins |
 | Public entry, routing, and navigation | `src/HomePage.tsx`, `src/App.tsx`, `docs/product/ui-design.md` | `src/App.test.tsx`, `npm run check:quick`, `npm run check:e2e` |
 | Cream Arcade design system | `docs/product/design/`, `src/ui/tokens.css`, `src/ui/` | `src/ui/ui-tokens.test.tsx`, `src/App.test.tsx`, `e2e/runtime-fleet.spec.ts`, `e2e/runtime-work-board.spec.ts`, `npm run check:repo`, `npm run check:quick`, `npm run check:e2e` |

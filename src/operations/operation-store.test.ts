@@ -10,6 +10,76 @@ import { createPostgresOperationStore } from "./operation-store";
 const describeDb = shouldRunPostgresTests() ? describe : describe.skip;
 
 describeDb("Postgres operation store", () => {
+  it("lists operations by organization and exposes recent jobs for details", async () => {
+    const database = await createTemporaryPostgresDatabase();
+    try {
+      runMigrationsScript(database.url);
+      const authStore = createPostgresAuthStore({ connectionString: database.url });
+      const operationStore = createPostgresOperationStore({ connectionString: database.url });
+      try {
+        const user = await authStore.upsertUserForEmail("ops-list@example.com");
+        const organization = await authStore.createOrganization({
+          createdByUserId: user.id,
+          name: "Ops List Team",
+          slug: "ops-list-team",
+        });
+        const otherOrganization = await authStore.createOrganization({
+          createdByUserId: user.id,
+          name: "Other Ops Team",
+          slug: "other-ops-team",
+        });
+        const operation = await operationStore.createOperation({
+          organizationId: organization.id,
+          requestedByUserId: user.id,
+          resourceId: "skill_list",
+          resourceType: "skill",
+          summary: "Publish listed Skill",
+          type: "skill_publish",
+        });
+        await operationStore.enqueueJob({
+          operationId: operation.id,
+          organizationId: organization.id,
+          payload: { skillId: "skill_list", skillVersionId: "version_list" },
+          type: "skill_publish",
+        });
+        await operationStore.createOperation({
+          organizationId: otherOrganization.id,
+          requestedByUserId: user.id,
+          resourceId: "skill_other",
+          resourceType: "skill",
+          summary: "Other org operation",
+          type: "skill_publish",
+        });
+
+        const operations = await operationStore.listOperations({
+          organizationId: organization.id,
+          resourceId: "skill_list",
+          resourceType: "skill",
+          status: "queued",
+        });
+        const jobs = await operationStore.listJobs({ operationId: operation.id });
+
+        expect(operations).toEqual([
+          expect.objectContaining({
+            id: operation.id,
+            organizationId: organization.id,
+            resourceId: "skill_list",
+          }),
+        ]);
+        expect(jobs).toEqual([
+          expect.objectContaining({
+            operationId: operation.id,
+            type: "skill_publish",
+          }),
+        ]);
+      } finally {
+        await Promise.all([authStore.close(), operationStore.close()]);
+      }
+    } finally {
+      await database.drop();
+    }
+  });
+
   it("claims one due job with a lease and completes the owning operation", async () => {
     const database = await createTemporaryPostgresDatabase();
     try {

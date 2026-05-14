@@ -10,6 +10,56 @@ import { createPostgresNotificationStore } from "./notification-store";
 const describeDb = shouldRunPostgresTests() ? describe : describe.skip;
 
 describeDb("Postgres notification store", () => {
+  it("reads a notification thread and its deliveries for an in-app detail view", async () => {
+    const database = await createTemporaryPostgresDatabase();
+    try {
+      runMigrationsScript(database.url);
+      const authStore = createPostgresAuthStore({ connectionString: database.url });
+      const notificationStore = createPostgresNotificationStore({ connectionString: database.url });
+      try {
+        const user = await authStore.upsertUserForEmail("notify-detail@example.com");
+        const organization = await authStore.createOrganization({
+          createdByUserId: user.id,
+          name: "Notify Detail Team",
+          slug: "notify-detail-team",
+        });
+        const result = await notificationStore.createNotificationEvent({
+          actorUserId: user.id,
+          dedupeKey: "skill:skill_detail:publish_succeeded",
+          eventType: "skill_publish_succeeded",
+          organizationId: organization.id,
+          recipientUserIds: [user.id],
+          resourceId: "skill_detail",
+          resourceType: "skill",
+          severity: "info",
+          sourceModule: "skill",
+          summary: "Skill 已发布。",
+          title: "Skill 发布完成",
+        });
+
+        const thread = await notificationStore.readThread({ threadId: result.thread.id });
+        const deliveries = await notificationStore.listDeliveries({ threadId: result.thread.id });
+
+        expect(thread).toMatchObject({
+          id: result.thread.id,
+          latestSummary: "Skill 已发布。",
+          title: "Skill 发布完成",
+        });
+        expect(deliveries).toEqual([
+          expect.objectContaining({
+            channel: "in_app",
+            recipientUserId: user.id,
+            status: "sent",
+          }),
+        ]);
+      } finally {
+        await Promise.all([authStore.close(), notificationStore.close()]);
+      }
+    } finally {
+      await database.drop();
+    }
+  });
+
   it("aggregates duplicate events and always records in-app delivery", async () => {
     const database = await createTemporaryPostgresDatabase();
     try {

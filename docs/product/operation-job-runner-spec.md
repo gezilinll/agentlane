@@ -126,6 +126,8 @@ Job 状态：
 - `GET /api/operations`：按组织、资源、状态查询 Operation。
 - `GET /api/operations/:operationId`：读取单个 Operation 和最近 Job 状态。
 - 业务 API 可以返回 `operation` 摘要，前端据此展示异步状态。
+- Operation API 必须要求用户属于目标组织；不能跨组织读取 Operation 或 Job。
+- Job Runner 在 Operation 进入 `succeeded`、`failed`、`unsupported`、`requires_manual_step` 时，按 `requestedByUserId` 创建站内通知；通知失败不能回滚 Operation 状态。
 
 ## Harness
 

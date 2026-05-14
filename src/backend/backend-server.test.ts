@@ -6,6 +6,7 @@ import WebSocket from "ws";
 import fixtureSnapshot from "../../fixtures/runtime/collector-snapshot.sample.json";
 import { hashSecret } from "../auth/auth-crypto";
 import { createPostgresAuthStore, type AuthStore } from "../auth/auth-store";
+import { createPostgresNotificationStore } from "../notifications/notification-store";
 import { createPostgresOperationStore } from "../operations/operation-store";
 import type { RuntimeInventorySnapshot, RuntimeWorkStateSnapshot } from "../runtime";
 import { createPostgresSkillGovernanceStore } from "../skills/skill-governance-store";
@@ -207,6 +208,95 @@ compatibility: openclaw
       await expect(waitForSkillAssignment(database.url, organizationId, "agent-main")).resolves.toMatchObject({
         status: "approved",
         targetId: "agent-main",
+      });
+    } finally {
+      if (backend) await closeRegisteredBackend(backend);
+      await database.drop();
+    }
+  });
+
+  it("serves authenticated Operation and Notification query APIs", async () => {
+    const database = await createTemporaryPostgresDatabase();
+    let backend: AgentlaneBackendServer | null = null;
+    try {
+      runMigrationsScript(database.url);
+      const authStore = createPostgresAuthStore({ connectionString: database.url });
+      const operationStore = createPostgresOperationStore({ connectionString: database.url });
+      const notificationStore = createPostgresNotificationStore({ connectionString: database.url });
+      let organizationId = "";
+      let operationId = "";
+      try {
+        const user = await authStore.upsertUserForEmail("backend-query@example.com");
+        const organization = await authStore.createOrganization({
+          createdByUserId: user.id,
+          name: "Backend Query Team",
+          slug: "backend-query-team",
+        });
+        organizationId = organization.id;
+        await authStore.createSession({
+          expiresAt: new Date("2026-06-14T10:00:00.000Z"),
+          sessionHash: hashSecret("backend-query-session", "session-token", "test-pepper"),
+          userId: user.id,
+        });
+        const operation = await operationStore.createOperation({
+          organizationId: organization.id,
+          requestedByUserId: user.id,
+          resourceId: "skill_query",
+          resourceType: "skill",
+          summary: "Publish query Skill",
+          type: "skill_publish",
+        });
+        operationId = operation.id;
+        await operationStore.enqueueJob({
+          operationId: operation.id,
+          organizationId: organization.id,
+          payload: { skillId: "skill_query" },
+          type: "skill_publish",
+        });
+        await notificationStore.createNotificationEvent({
+          actorUserId: user.id,
+          dedupeKey: "skill:skill_query:publish_queued",
+          eventType: "skill_publish_queued",
+          organizationId: organization.id,
+          recipientUserIds: [user.id],
+          resourceId: "skill_query",
+          resourceType: "skill",
+          severity: "info",
+          sourceModule: "skill",
+          summary: "Skill 发布已进入队列。",
+          title: "Skill 发布排队中",
+        });
+      } finally {
+        await Promise.all([authStore.close(), operationStore.close(), notificationStore.close()]);
+      }
+
+      backend = await startBackend({
+        authPepper: "test-pepper",
+        databaseUrl: database.url,
+      });
+      const cookie = "agentlane_session=backend-query-session";
+      const operationsResponse = await fetch(`${backend.url}/api/operations?organizationId=${organizationId}`, {
+        headers: { cookie },
+      });
+      const operationDetailResponse = await fetch(`${backend.url}/api/operations/${operationId}`, {
+        headers: { cookie },
+      });
+      const notificationsResponse = await fetch(`${backend.url}/api/notifications?organizationId=${organizationId}`, {
+        headers: { cookie },
+      });
+
+      expect(operationsResponse.status).toBe(200);
+      expect(operationDetailResponse.status).toBe(200);
+      expect(notificationsResponse.status).toBe(200);
+      await expect(operationsResponse.json()).resolves.toMatchObject({
+        operations: [expect.objectContaining({ id: operationId, summary: "Publish query Skill" })],
+      });
+      await expect(operationDetailResponse.json()).resolves.toMatchObject({
+        jobs: [expect.objectContaining({ operationId })],
+        operation: expect.objectContaining({ id: operationId }),
+      });
+      await expect(notificationsResponse.json()).resolves.toMatchObject({
+        threads: [expect.objectContaining({ title: "Skill 发布排队中" })],
       });
     } finally {
       if (backend) await closeRegisteredBackend(backend);

@@ -7,6 +7,9 @@ import {
   type AuthEmailProvider,
 } from "../auth/auth-http-api";
 import { createPostgresAuthStore, type AuthStore } from "../auth/auth-store";
+import { createNotificationHttpApiHandler } from "../notifications/notification-http-api";
+import { createPostgresNotificationStore, type NotificationStore } from "../notifications/notification-store";
+import { createOperationHttpApiHandler } from "../operations/operation-http-api";
 import { createOperationJobRunner } from "../operations/job-runner";
 import { createPostgresOperationStore, type OperationStore } from "../operations/operation-store";
 import { createRuntimeControlChannel, type RuntimeControlSocket } from "../server/runtime-control-channel";
@@ -49,6 +52,8 @@ export interface AgentlaneBackendServerOptions {
   skillGovernanceStore?: SkillGovernanceStore;
   /** Optional Operation repository injection for tests. */
   operationStore?: OperationStore;
+  /** Optional Notification repository injection for tests. */
+  notificationStore?: NotificationStore;
   /** Enable or disable the in-process Operation job runner. */
   operationRunnerEnabled?: boolean;
   /** Operation runner polling interval in milliseconds. */
@@ -113,6 +118,10 @@ export function createAgentlaneBackendServer(
     ? null
     : createPostgresOperationStore({ connectionString: options.databaseUrl });
   const operationStore = options.operationStore ?? ownedOperationStore;
+  const ownedNotificationStore = options.notificationStore
+    ? null
+    : createPostgresNotificationStore({ connectionString: options.databaseUrl });
+  const notificationStore = options.notificationStore ?? ownedNotificationStore;
   const operationRunnerEnabled = options.operationRunnerEnabled
     ?? Boolean(options.databaseUrl ?? process.env.DATABASE_URL);
   const operationRunnerIntervalMs = options.operationRunnerIntervalMs
@@ -120,6 +129,7 @@ export function createAgentlaneBackendServer(
   const operationRunner = operationRunnerEnabled && operationStore && skillGovernanceStore
     ? createOperationJobRunner({
       handlers: createSkillOperationJobHandlers({ governanceStore: skillGovernanceStore }),
+      notificationStore: notificationStore ?? undefined,
       operationStore,
       runnerId: process.env.AGENTLANE_OPERATION_RUNNER_ID ?? "agentlane-backend",
     })
@@ -158,6 +168,18 @@ export function createAgentlaneBackendServer(
       skillStore,
     })
     : undefined;
+  const operationHandler = authGuards && operationStore
+    ? createOperationHttpApiHandler({
+      operationStore,
+      requireUserSession: authGuards.requireUserSession,
+    })
+    : undefined;
+  const notificationHandler = authGuards && notificationStore
+    ? createNotificationHttpApiHandler({
+      notificationStore,
+      requireUserSession: authGuards.requireUserSession,
+    })
+    : undefined;
   const webSocketServer = new WebSocketServer({ noServer: true });
   const server = createServer((request, response) => {
     const notFound = () => {
@@ -182,10 +204,24 @@ export function createAgentlaneBackendServer(
         runSkillHandler();
       }
     };
+    const runOperationHandler = () => {
+      if (operationHandler) {
+        void operationHandler(request, response, runSkillGovernanceHandler);
+      } else {
+        runSkillGovernanceHandler();
+      }
+    };
+    const runNotificationHandler = () => {
+      if (notificationHandler) {
+        void notificationHandler(request, response, runOperationHandler);
+      } else {
+        runOperationHandler();
+      }
+    };
     if (authHandler) {
-      void authHandler(request, response, runSkillGovernanceHandler);
+      void authHandler(request, response, runNotificationHandler);
     } else {
-      runSkillGovernanceHandler();
+      runNotificationHandler();
     }
   });
   let baseUrl = "";
@@ -195,6 +231,7 @@ export function createAgentlaneBackendServer(
   let skillClosed = false;
   let skillGovernanceClosed = false;
   let operationClosed = false;
+  let notificationClosed = false;
   let operationRunnerTimer: ReturnType<typeof setInterval> | null = null;
   let operationRunnerRunning = false;
 
@@ -295,6 +332,10 @@ export function createAgentlaneBackendServer(
       if (ownedOperationStore && !operationClosed) {
         operationClosed = true;
         await ownedOperationStore.close();
+      }
+      if (ownedNotificationStore && !notificationClosed) {
+        notificationClosed = true;
+        await ownedNotificationStore.close();
       }
     },
   };

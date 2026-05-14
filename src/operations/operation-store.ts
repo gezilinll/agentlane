@@ -99,10 +99,23 @@ export interface EnqueueOperationJobInput {
   runAfter?: Date;
 }
 
+/** List operation input for UI and API queries. */
+export interface ListOperationsInput {
+  organizationId: string;
+  status?: OperationStatus;
+  resourceType?: string;
+  resourceId?: string;
+  targetType?: string;
+  targetId?: string;
+  limit?: number;
+}
+
 /** Postgres-backed operation repository. */
 export interface OperationStore {
   createOperation: (input: CreateOperationInput) => Promise<OperationRow>;
   enqueueJob: (input: EnqueueOperationJobInput) => Promise<OperationJobRow>;
+  listOperations: (input: ListOperationsInput) => Promise<OperationRow[]>;
+  listJobs: (input: { operationId: string; limit?: number }) => Promise<OperationJobRow[]>;
   claimNextJob: (input: { runnerId: string; now: Date; leaseMs: number }) => Promise<OperationJobRow | null>;
   completeJob: (input: { jobId: string; now: Date; status: "succeeded" | "unsupported" }) => Promise<OperationJobRow | null>;
   failJob: (input: { jobId: string; now: Date; errorSummary: string; retryAfterMs?: number }) => Promise<OperationJobRow | null>;
@@ -175,6 +188,34 @@ export function createPostgresOperationStore(options: PostgresOperationStoreOpti
         input.runAfter ?? null,
       ]);
       return result.rows[0];
+    },
+    async listOperations(input) {
+      const params: unknown[] = [input.organizationId];
+      const filters = ["organization_id = $1"];
+      appendOptionalFilter(filters, params, "status", input.status);
+      appendOptionalFilter(filters, params, "resource_type", input.resourceType);
+      appendOptionalFilter(filters, params, "resource_id", input.resourceId);
+      appendOptionalFilter(filters, params, "target_type", input.targetType);
+      appendOptionalFilter(filters, params, "target_id", input.targetId);
+      params.push(normalizeLimit(input.limit));
+      const result = await pool.query<OperationRow>(`
+        SELECT ${operationColumns}
+        FROM operations
+        WHERE ${filters.join(" AND ")}
+        ORDER BY updated_at DESC, created_at DESC
+        LIMIT $${params.length}
+      `, params);
+      return result.rows;
+    },
+    async listJobs(input) {
+      const result = await pool.query<OperationJobRow>(`
+        SELECT ${jobColumns}
+        FROM operation_jobs
+        WHERE operation_id = $1
+        ORDER BY updated_at DESC, created_at DESC
+        LIMIT $2
+      `, [input.operationId, normalizeLimit(input.limit)]);
+      return result.rows;
     },
     async claimNextJob(input) {
       return withTransaction(pool, async (client) => {
@@ -423,6 +464,17 @@ async function withTransaction<T>(pool: pg.Pool, callback: (client: PoolClient) 
 
 function sanitizeSummary(value: string): string {
   return value.trim().slice(0, 500);
+}
+
+function appendOptionalFilter(filters: string[], params: unknown[], column: string, value?: string | null): void {
+  if (!value) return;
+  params.push(value);
+  filters.push(`${column} = $${params.length}`);
+}
+
+function normalizeLimit(limit?: number): number {
+  if (!Number.isFinite(limit)) return 50;
+  return Math.max(1, Math.min(100, Math.trunc(limit ?? 50)));
 }
 
 function createId(prefix: string): string {

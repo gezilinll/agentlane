@@ -126,12 +126,19 @@ Collector 保持主动上报：
   - `unknown`：尚未收到该 snapshot type 的采集记录。
   - 该接口面向产品诊断，不返回外部平台密钥、原始 payload 或调试-only 字段。
 - `GET /api/operations`
-  - 参数：`organizationId`、`status`、`resourceType`、`resourceId`。
-  - 返回用户可见的异步动作状态。
+  - 参数：`organizationId`、`status`、`resourceType`、`resourceId`、`targetType`、`targetId`、`limit`。
+  - 需要当前用户属于该组织。
+  - 返回用户可见的异步动作状态，供 Skill 发布、分配、同步、迁移和后续长耗时动作展示进度。
 - `GET /api/operations/:operationId`
+  - 需要当前用户属于该 Operation 所属组织。
   - 返回 Operation 和最近 Job 状态。
 - `GET /api/notifications`
+  - 参数：`organizationId`。
+  - 需要当前用户属于该组织。
   - 返回当前用户可见的通知 Thread。
+- `GET /api/notifications/:threadId`
+  - 需要当前用户属于该 Thread 所属组织，且该 Thread 有当前用户的站内投递。
+  - 返回 Thread 和 Delivery 详情。
 
 前端缓存策略：
 
