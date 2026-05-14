@@ -20,12 +20,15 @@ Current source of truth:
 - `docs/product/auth-and-access-spec.md`: TinySpec for organization-based auth/access, email-code login, invitations, sessions, and device tokens.
 - `docs/product/skill-management-spec.md`: product spec for organization-level Skill assets, import validation, permissions, review, target assignment, and deterministic delivery.
 - `docs/product/agent-migration-spec.md`: product spec for device bootstrap, runtime setup, agent migration, and known-recipe execution boundaries.
+- `docs/product/operation-job-runner-spec.md`: product and engineering spec for Postgres-backed asynchronous Operations, executable Jobs, retry/lease semantics, and user-visible status.
 - `docs/product/notification-spec.md`: product spec for in-app and email notifications, recipient scope, dedupe, rate limits, and recovery notifications.
 - `src/skills/skill-package.ts`: deterministic Skill package normalization and static validation for Markdown, ZIP, GitHub URL, and Marketplace URL imports.
 - `src/skills/skill-store.ts`: Postgres repository for organization-owned Skill copies, versions, and files.
 - `src/skills/skill-http-api.ts`: organization-scoped Skill import, list, detail, and version-file HTTP API.
 - `src/skills/skill-governance-store.ts`: Postgres repository for Skill resource permissions, approval requests, and target assignments.
 - `src/skills/skill-governance-http-api.ts`: Skill governance HTTP API for permission grants, publish approvals, approval decisions, and target assignment requests.
+- `src/operations/operation-store.ts`: Postgres repository for asynchronous Operations and executable Jobs.
+- `src/notifications/notification-store.ts`: Postgres repository for deduplicated notification events, threads, deliveries, and cooldown state.
 - `src/HomePage.tsx`: public homepage entry for the current Agentlane value proposition and implemented capabilities.
 - `src/catalog/catalog-object.ts`: initial TypeScript source of truth for Catalog Object shape.
 - `src/catalog/catalog-seed.ts`: first reviewable seed data for the Catalog page.
@@ -115,11 +118,13 @@ Current spec and harness mapping:
 | Skill package import and validation | `docs/product/skill-management-spec.md`, `src/skills/skill-package.ts` | `src/skills/skill-package.test.ts`, `npm run check:backend`, `npm run check:quick` |
 | Skill storage and API | `docs/product/skill-management-spec.md`, `db/migrations/0003_skill_management.sql`, `src/skills/skill-store.ts`, `src/skills/skill-http-api.ts`, `src/backend/backend-server.ts` | `src/skills/skill-store.test.ts`, `src/skills/skill-http-api.test.ts`, `npm run check:backend`, `npm run check:db` |
 | Skill governance permissions and approvals | `docs/product/skill-management-spec.md`, `db/migrations/0004_skill_governance.sql`, `src/skills/skill-governance-store.ts`, `src/skills/skill-governance-http-api.ts`, `src/backend/backend-server.ts` | `src/skills/skill-governance-store.test.ts`, `src/skills/skill-governance-http-api.test.ts`, `src/server/db-migrate.test.ts`, `npm run check:backend`, `npm run check:db` |
+| Operation and Job Runner persistence | `docs/product/operation-job-runner-spec.md`, `db/migrations/0005_operations_notifications.sql`, `src/operations/operation-store.ts` | `src/operations/operation-store.test.ts`, `src/server/db-migrate.test.ts`, `npm run check:backend`, `npm run check:db` |
+| Notification persistence and dedupe | `docs/product/notification-spec.md`, `db/migrations/0005_operations_notifications.sql`, `src/notifications/notification-store.ts` | `src/notifications/notification-store.test.ts`, `src/server/db-migrate.test.ts`, `npm run check:backend`, `npm run check:db` |
 | Agent migration and bootstrap product rules | `docs/product/agent-migration-spec.md`, `docs/product/skill-management-spec.md`, `docs/product/notification-spec.md` | `npm run check:repo`; add capability, operation, permission, and UI harness when implementation begins |
 | Public entry, routing, and navigation | `src/HomePage.tsx`, `src/App.tsx`, `docs/product/ui-design.md` | `src/App.test.tsx`, `npm run check:quick`, `npm run check:e2e` |
 | Cream Arcade design system | `docs/product/design/`, `src/ui/tokens.css`, `src/ui/` | `src/ui/ui-tokens.test.tsx`, `src/App.test.tsx`, `e2e/runtime-fleet.spec.ts`, `e2e/runtime-work-board.spec.ts`, `npm run check:repo`, `npm run check:quick`, `npm run check:e2e` |
 | Commit message convention | `.githooks/commit-msg`, `scripts/check-commit-message.mjs`, `scripts/check-commit-message.test.mjs` | `npm run check:commit-message`, `npm run setup:git-hooks` |
-| Repo context and docs | `AGENTS.md`, `README.md`, `docs/product/ui-design.md`, `docs/product/design/`, `docs/product/auth-and-access-spec.md`, `docs/product/skill-management-spec.md`, `docs/product/agent-migration-spec.md`, `docs/product/notification-spec.md` | `npm run check:repo` |
+| Repo context and docs | `AGENTS.md`, `README.md`, `docs/product/ui-design.md`, `docs/product/design/`, `docs/product/auth-and-access-spec.md`, `docs/product/skill-management-spec.md`, `docs/product/agent-migration-spec.md`, `docs/product/operation-job-runner-spec.md`, `docs/product/notification-spec.md` | `npm run check:repo` |
 
 When a user points out a missed behavior or review gap, decide whether it should become:
 

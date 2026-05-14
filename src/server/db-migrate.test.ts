@@ -34,6 +34,12 @@ describeDb("database migrations", () => {
           "device_tokens",
           "devices",
           "email_login_codes",
+          "notification_deliveries",
+          "notification_events",
+          "notification_preferences",
+          "notification_threads",
+          "operation_jobs",
+          "operations",
           "organization_invitations",
           "organization_members",
           "organizations",
@@ -56,6 +62,7 @@ describeDb("database migrations", () => {
           "0002_auth_access",
           "0003_skill_management",
           "0004_skill_governance",
+          "0005_operations_notifications",
         ]);
       } finally {
         await client.end();
