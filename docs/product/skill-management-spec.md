@@ -277,7 +277,7 @@ Skill 生命周期：
 
 - 对个人自有 Agent 的低风险 Skill 分配可以直接批准。
 - 对非本人 Agent、共享 Agent、共享 Device、共享 Runtime、生产目标或高风险 Skill 必须审核。
-- 审核通过后，系统才能创建或激活 Assignment 并执行同步。
+- 审核通过后，系统创建对应 Operation；Operation 成功后才创建或激活 Assignment，并继续触发后续同步。
 - 审核拒绝后，不得留下半激活 Assignment。
 - 审核通过的是申请时的 `snapshotHash`。如果 Skill 版本、目标或风险结果变化，必须重新申请。
 
@@ -427,7 +427,7 @@ UI 不展示原始 token、完整脚本风险日志、外部平台私有 API 返
 
 - member 无 `skill.view` 时不能看到 Skill 列表项、详情和版本文件。
 - member 有 `skill.view` 但无 `skill.publish` 时发布会创建审核。
-- 发布审核通过后，对应 Skill Version 被标记为已发布，Skill 进入 `published`。
+- 发布审核通过后创建发布 Operation；Operation 成功后，对应 Skill Version 被标记为已发布，Skill 进入 `published`。
 - 有 `skill.view` 且对目标有 `manage_skills` 时，分配请求创建 Operation，Operation 成功后创建 approved Assignment。
 - 缺少目标 `manage_skills` 时，分配请求创建审核，不创建半激活 Assignment。
 - 审核拒绝不会留下 active Assignment。

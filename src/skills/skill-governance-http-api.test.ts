@@ -1,6 +1,8 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { createPostgresAuthStore, type AuthSessionContext } from "../auth/auth-store";
+import { createOperationJobRunner } from "../operations/job-runner";
+import { createPostgresOperationStore, type OperationStore } from "../operations/operation-store";
 import {
   createTemporaryPostgresDatabase,
   runMigrationsScript,
@@ -8,6 +10,7 @@ import {
 } from "../test/postgres";
 import { createSkillGovernanceHttpApiHandler } from "./skill-governance-http-api";
 import { createPostgresSkillGovernanceStore } from "./skill-governance-store";
+import { createSkillOperationJobHandlers } from "./skill-operation-handlers";
 import { createSkillPackageFromMarkdown } from "./skill-package";
 import { createSkillHttpApiHandler } from "./skill-http-api";
 import { createPostgresSkillStore } from "./skill-store";
@@ -99,6 +102,7 @@ compatibility: openclaw
       const authStore = createPostgresAuthStore({ connectionString: database.url });
       const skillStore = createPostgresSkillStore({ connectionString: database.url });
       const governanceStore = createPostgresSkillGovernanceStore({ connectionString: database.url });
+      const operationStore = createPostgresOperationStore({ connectionString: database.url });
       try {
         const owner = await authStore.upsertUserForEmail("publish-owner@example.com");
         const member = await authStore.upsertUserForEmail("publish-member@example.com");
@@ -145,6 +149,7 @@ compatibility: openclaw
         };
         const { baseUrl } = await startGovernanceApi({
           governanceStore,
+          operationStore,
           requireUserSession: async () => currentSession,
           skillStore,
         });
@@ -176,16 +181,29 @@ compatibility: openclaw
         const approveResponse = await postJson(`${baseUrl}/api/approval-requests/${encodeURIComponent(publishPayload.approvalRequest.id)}/approve`, {
           resolutionReason: "Looks good.",
         });
+        const approvePayload = await approveResponse.json();
+        const beforeRunner = await skillStore.readSkillDetail({ skillId: imported.skill.id });
+        const jobResult = await runOneSkillOperation(operationStore, governanceStore);
         const detail = await skillStore.readSkillDetail({ skillId: imported.skill.id });
 
         expect(approveResponse.status).toBe(200);
+        expect(approvePayload).toMatchObject({
+          approvalRequest: expect.objectContaining({ status: "approved" }),
+          operation: expect.objectContaining({
+            resourceId: imported.skill.id,
+            status: "queued",
+            type: "skill_publish",
+          }),
+        });
+        expect(beforeRunner?.skill.status).toBe("draft");
+        expect(jobResult).toMatchObject({ outcome: "succeeded", status: "handled" });
         expect(detail?.skill.status).toBe("published");
         expect(detail?.versions[0]).toMatchObject({
           id: imported.version.id,
           publishedByUserId: owner.id,
         });
       } finally {
-        await Promise.all([authStore.close(), skillStore.close(), governanceStore.close()]);
+        await Promise.all([authStore.close(), skillStore.close(), governanceStore.close(), operationStore.close()]);
       }
     } finally {
       await database.drop();
@@ -199,6 +217,7 @@ compatibility: openclaw
       const authStore = createPostgresAuthStore({ connectionString: database.url });
       const skillStore = createPostgresSkillStore({ connectionString: database.url });
       const governanceStore = createPostgresSkillGovernanceStore({ connectionString: database.url });
+      const operationStore = createPostgresOperationStore({ connectionString: database.url });
       try {
         const owner = await authStore.upsertUserForEmail("assign-owner@example.com");
         const member = await authStore.upsertUserForEmail("assign-member@example.com");
@@ -249,6 +268,7 @@ compatibility: openclaw
         };
         const { baseUrl } = await startGovernanceApi({
           governanceStore,
+          operationStore,
           requireUserSession: async () => currentSession,
           skillStore,
         });
@@ -295,21 +315,31 @@ compatibility: openclaw
           targetType: "agent",
         });
         const directPayload = await directResponse.json();
+        const beforeRunnerResponse = await fetch(`${baseUrl}/api/skill-assignments?organizationId=${encodeURIComponent(organization.id)}`);
+        const jobResult = await runOneSkillOperation(operationStore, governanceStore);
         const assignmentsResponse = await fetch(`${baseUrl}/api/skill-assignments?organizationId=${encodeURIComponent(organization.id)}`);
 
-        expect(directResponse.status).toBe(201);
+        expect(directResponse.status).toBe(202);
         expect(directPayload).toMatchObject({
-          assignment: expect.objectContaining({
+          operation: expect.objectContaining({
+            status: "queued",
+            targetId: "agent-main",
+            type: "skill_assign",
+          }),
+        });
+        await expect(beforeRunnerResponse.json()).resolves.toMatchObject({
+          assignments: [],
+        });
+        expect(jobResult).toMatchObject({ outcome: "succeeded", status: "handled" });
+        await expect(assignmentsResponse.json()).resolves.toMatchObject({
+          assignments: [expect.objectContaining({
             createdByUserId: member.id,
             status: "approved",
             targetId: "agent-main",
-          }),
-        });
-        await expect(assignmentsResponse.json()).resolves.toMatchObject({
-          assignments: [expect.objectContaining({ id: directPayload.assignment.id })],
+          })],
         });
       } finally {
-        await Promise.all([authStore.close(), skillStore.close(), governanceStore.close()]);
+        await Promise.all([authStore.close(), skillStore.close(), governanceStore.close(), operationStore.close()]);
       }
     } finally {
       await database.drop();
@@ -443,4 +473,18 @@ function postJson(url: string, payload: unknown): Promise<Response> {
     headers: { "content-type": "application/json" },
     method: "POST",
   });
+}
+
+async function runOneSkillOperation(
+  operationStore: OperationStore,
+  governanceStore: ReturnType<typeof createPostgresSkillGovernanceStore>,
+) {
+  const runner = createOperationJobRunner({
+    handlers: createSkillOperationJobHandlers({ governanceStore }),
+    leaseMs: 30_000,
+    now: () => new Date(Date.now() + 60_000),
+    operationStore,
+    runnerId: "skill-governance-http-api-test",
+  });
+  return runner.runDueJobOnce();
 }

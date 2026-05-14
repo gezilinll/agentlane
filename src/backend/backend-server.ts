@@ -7,6 +7,8 @@ import {
   type AuthEmailProvider,
 } from "../auth/auth-http-api";
 import { createPostgresAuthStore, type AuthStore } from "../auth/auth-store";
+import { createOperationJobRunner } from "../operations/job-runner";
+import { createPostgresOperationStore, type OperationStore } from "../operations/operation-store";
 import { createRuntimeControlChannel, type RuntimeControlSocket } from "../server/runtime-control-channel";
 import { createRuntimeHttpApiHandler } from "../server/runtime-http-api";
 import { createRuntimeInventoryStore } from "../server/runtime-inventory-store";
@@ -18,6 +20,7 @@ import {
   type SkillGovernanceStore,
 } from "../skills/skill-governance-store";
 import { createSkillHttpApiHandler } from "../skills/skill-http-api";
+import { createSkillOperationJobHandlers } from "../skills/skill-operation-handlers";
 import { createPostgresSkillStore, type SkillStore } from "../skills/skill-store";
 
 /** Construction options for the standalone Agentlane backend. */
@@ -44,6 +47,12 @@ export interface AgentlaneBackendServerOptions {
   skillStore?: SkillStore;
   /** Optional Skill governance repository injection for tests. */
   skillGovernanceStore?: SkillGovernanceStore;
+  /** Optional Operation repository injection for tests. */
+  operationStore?: OperationStore;
+  /** Enable or disable the in-process Operation job runner. */
+  operationRunnerEnabled?: boolean;
+  /** Operation runner polling interval in milliseconds. */
+  operationRunnerIntervalMs?: number;
   /** Optional email provider injection for tests. */
   emailProvider?: AuthEmailProvider;
   /** Whether Runtime Fleet / Runs read APIs require a valid user session. */
@@ -100,6 +109,21 @@ export function createAgentlaneBackendServer(
     ? null
     : createPostgresSkillGovernanceStore({ connectionString: options.databaseUrl });
   const skillGovernanceStore = options.skillGovernanceStore ?? ownedSkillGovernanceStore;
+  const ownedOperationStore = options.operationStore
+    ? null
+    : createPostgresOperationStore({ connectionString: options.databaseUrl });
+  const operationStore = options.operationStore ?? ownedOperationStore;
+  const operationRunnerEnabled = options.operationRunnerEnabled
+    ?? Boolean(options.databaseUrl ?? process.env.DATABASE_URL);
+  const operationRunnerIntervalMs = options.operationRunnerIntervalMs
+    ?? Number(process.env.AGENTLANE_OPERATION_RUNNER_INTERVAL_MS ?? 1_000);
+  const operationRunner = operationRunnerEnabled && operationStore && skillGovernanceStore
+    ? createOperationJobRunner({
+      handlers: createSkillOperationJobHandlers({ governanceStore: skillGovernanceStore }),
+      operationStore,
+      runnerId: process.env.AGENTLANE_OPERATION_RUNNER_ID ?? "agentlane-backend",
+    })
+    : undefined;
   const authRequired = options.authRequired ?? process.env.AGENTLANE_AUTH_REQUIRED === "1";
   const deviceTokenRequired = options.deviceTokenRequired ?? process.env.AGENTLANE_DEVICE_TOKEN_REQUIRED === "1";
   const authHandler = authStore
@@ -129,6 +153,7 @@ export function createAgentlaneBackendServer(
   const skillGovernanceHandler = authGuards && skillStore && skillGovernanceStore
     ? createSkillGovernanceHttpApiHandler({
       governanceStore: skillGovernanceStore,
+      operationStore: operationStore ?? undefined,
       requireUserSession: authGuards.requireUserSession,
       skillStore,
     })
@@ -169,6 +194,21 @@ export function createAgentlaneBackendServer(
   let authClosed = false;
   let skillClosed = false;
   let skillGovernanceClosed = false;
+  let operationClosed = false;
+  let operationRunnerTimer: ReturnType<typeof setInterval> | null = null;
+  let operationRunnerRunning = false;
+
+  const runOperationRunnerTick = async () => {
+    if (!operationRunner || operationRunnerRunning) return;
+    operationRunnerRunning = true;
+    try {
+      await operationRunner.runDueJobOnce();
+    } catch {
+      // Keep the backend alive when the runner cannot claim or execute a due job.
+    } finally {
+      operationRunnerRunning = false;
+    }
+  };
 
   server.on("upgrade", (request, socket, head) => {
     void (async () => {
@@ -215,11 +255,21 @@ export function createAgentlaneBackendServer(
           const displayHost = host === "0.0.0.0" ? "127.0.0.1" : host;
           baseUrl = `http://${displayHost}:${address.port}`;
           listening = true;
+          if (operationRunner && !operationRunnerTimer) {
+            void runOperationRunnerTick();
+            operationRunnerTimer = setInterval(() => {
+              void runOperationRunnerTick();
+            }, Math.max(100, operationRunnerIntervalMs));
+          }
           resolve();
         });
       });
     },
     async close() {
+      if (operationRunnerTimer) {
+        clearInterval(operationRunnerTimer);
+        operationRunnerTimer = null;
+      }
       await closeWebSocketServer(webSocketServer);
       if (listening) {
         await closeHttpServer(server);
@@ -241,6 +291,10 @@ export function createAgentlaneBackendServer(
       if (ownedSkillGovernanceStore && !skillGovernanceClosed) {
         skillGovernanceClosed = true;
         await ownedSkillGovernanceStore.close();
+      }
+      if (ownedOperationStore && !operationClosed) {
+        operationClosed = true;
+        await ownedOperationStore.close();
       }
     },
   };

@@ -12,7 +12,7 @@ import { createPostgresSkillStore } from "./skill-store";
 const describeDb = shouldRunPostgresTests() ? describe : describe.skip;
 
 describeDb("Postgres skill governance store", () => {
-  it("grants resource permissions and resolves publish approvals", async () => {
+  it("grants resource permissions and resolves approvals without applying async effects", async () => {
     const database = await createTemporaryPostgresDatabase();
     try {
       runMigrationsScript(database.url);
@@ -103,10 +103,11 @@ compatibility: openclaw
         const detail = await skillStore.readSkillDetail({ skillId: imported.skill.id });
 
         expect(resolved).toMatchObject({ status: "approved", resolvedByUserId: owner.id });
-        expect(detail?.skill.status).toBe("published");
+        expect(detail?.skill.status).toBe("draft");
         expect(detail?.versions[0]).toMatchObject({
           id: imported.version.id,
-          publishedByUserId: owner.id,
+          publishedAt: null,
+          publishedByUserId: null,
         });
       } finally {
         await Promise.all([authStore.close(), skillStore.close(), governanceStore.close()]);

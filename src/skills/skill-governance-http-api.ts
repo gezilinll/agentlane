@@ -1,6 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { AuthMemberRole, AuthSessionContext } from "../auth/auth-store";
+import type { OperationRow, OperationStore } from "../operations/operation-store";
 import type {
+  ApprovalRequestRow,
   ApprovalStatus,
   GovernancePermission,
   GovernanceResourceType,
@@ -23,6 +25,8 @@ export interface SkillGovernanceHttpApiHandlerOptions {
   requireUserSession: SkillGovernanceHttpAuth["requireUserSession"];
   /** Skill governance repository. */
   governanceStore: SkillGovernanceStore;
+  /** Operation repository used for asynchronous Skill effects. */
+  operationStore?: OperationStore;
   /** Skill content repository. */
   skillStore: SkillStore;
 }
@@ -124,12 +128,17 @@ export function createSkillGovernanceHttpApiHandler(
         sendJson(response, 202, { approvalRequest });
         return;
       }
-      await options.governanceStore.publishSkillVersion({
+      const operationStore = requireOperationStore(response, options);
+      if (!operationStore) return;
+      const operation = await createSkillPublishOperation(operationStore, {
+        organizationId: detail.skill.organizationId,
         publishedByUserId: session.user.id,
+        requestedByUserId: session.user.id,
         skillId: detail.skill.id,
+        skillName: detail.skill.name,
         skillVersionId: version.id,
       });
-      sendJson(response, 200, { status: "published", skillId: detail.skill.id, versionId: version.id });
+      sendJson(response, 202, { operation });
       return;
     }
 
@@ -180,6 +189,10 @@ export function createSkillGovernanceHttpApiHandler(
         sendJson(response, 404, { error: "approval_request_not_found" });
         return;
       }
+      const operationStore = action === "approved" && approvalNeedsOperation(pending)
+        ? requireOperationStore(response, options)
+        : null;
+      if (action === "approved" && approvalNeedsOperation(pending) && !operationStore) return;
       const body = await readJsonBody(request);
       const approvalRequest = await options.governanceStore.resolveApprovalRequest({
         requestId,
@@ -187,7 +200,12 @@ export function createSkillGovernanceHttpApiHandler(
         resolutionReason: readString(body, "resolutionReason") || null,
         resolvedByUserId: session.user.id,
       });
-      sendJson(response, 200, { approvalRequest });
+      if (action !== "approved" || !approvalRequest || !operationStore || !approvalNeedsOperation(pending)) {
+        sendJson(response, 200, { approvalRequest });
+        return;
+      }
+      const operation = await createOperationForApprovedRequest(operationStore, pending, session.user.id);
+      sendJson(response, 200, { approvalRequest, operation });
       return;
     }
 
@@ -258,22 +276,149 @@ export function createSkillGovernanceHttpApiHandler(
         sendJson(response, 202, { approvalRequest });
         return;
       }
-      const assignment = await options.governanceStore.createSkillAssignment({
+      const operationStore = requireOperationStore(response, options);
+      if (!operationStore) return;
+      const operation = await createSkillAssignOperation(operationStore, {
         approvedByUserId: session.user.id,
         createdByUserId: session.user.id,
         organizationId,
         skillId,
+        skillName: detail.skill.name,
         skillVersionId: version.id,
-        status: "approved",
         targetId,
         targetType,
       });
-      sendJson(response, 201, { assignment });
+      sendJson(response, 202, { operation });
       return;
     }
 
     next();
   };
+}
+
+async function createOperationForApprovedRequest(
+  operationStore: OperationStore,
+  request: ApprovalRequestRow,
+  resolvedByUserId: string,
+): Promise<OperationRow> {
+  if (request.action === "publish_skill" && request.skillId && request.skillVersionId) {
+    return createSkillPublishOperation(operationStore, {
+      organizationId: request.organizationId,
+      publishedByUserId: resolvedByUserId,
+      requestedByUserId: request.requestedByUserId,
+      skillId: request.skillId,
+      skillName: "Skill",
+      skillVersionId: request.skillVersionId,
+    });
+  }
+  if (request.action === "assign_skill" && request.skillId && request.skillVersionId && request.targetId && request.targetType) {
+    return createSkillAssignOperation(operationStore, {
+      approvedByUserId: resolvedByUserId,
+      createdByUserId: request.requestedByUserId,
+      organizationId: request.organizationId,
+      skillId: request.skillId,
+      skillName: "Skill",
+      skillVersionId: request.skillVersionId,
+      targetId: request.targetId,
+      targetType: request.targetType,
+    });
+  }
+  throw new Error("approved approval request does not contain executable Skill operation payload");
+}
+
+async function createSkillPublishOperation(
+  operationStore: OperationStore,
+  input: {
+    organizationId: string;
+    publishedByUserId: string;
+    requestedByUserId: string;
+    skillId: string;
+    skillName: string;
+    skillVersionId: string;
+  },
+): Promise<OperationRow> {
+  const operation = await operationStore.createOperation({
+    metadata: {
+      skillId: input.skillId,
+      skillVersionId: input.skillVersionId,
+    },
+    organizationId: input.organizationId,
+    requestedByUserId: input.requestedByUserId,
+    resourceId: input.skillId,
+    resourceType: "skill",
+    summary: `发布 Skill：${input.skillName}`,
+    type: "skill_publish",
+  });
+  await operationStore.enqueueJob({
+    operationId: operation.id,
+    organizationId: input.organizationId,
+    payload: {
+      publishedByUserId: input.publishedByUserId,
+      skillId: input.skillId,
+      skillVersionId: input.skillVersionId,
+    },
+    type: "skill_publish",
+  });
+  return operation;
+}
+
+async function createSkillAssignOperation(
+  operationStore: OperationStore,
+  input: {
+    approvedByUserId: string;
+    createdByUserId: string;
+    organizationId: string;
+    skillId: string;
+    skillName: string;
+    skillVersionId: string;
+    targetId: string;
+    targetType: SkillAssignmentTargetType;
+  },
+): Promise<OperationRow> {
+  const operation = await operationStore.createOperation({
+    metadata: {
+      skillId: input.skillId,
+      skillVersionId: input.skillVersionId,
+      targetId: input.targetId,
+      targetType: input.targetType,
+    },
+    organizationId: input.organizationId,
+    requestedByUserId: input.createdByUserId,
+    resourceId: input.skillId,
+    resourceType: "skill",
+    summary: `分配 Skill：${input.skillName}`,
+    targetId: input.targetId,
+    targetType: input.targetType,
+    type: "skill_assign",
+  });
+  await operationStore.enqueueJob({
+    operationId: operation.id,
+    organizationId: input.organizationId,
+    payload: {
+      approvedByUserId: input.approvedByUserId,
+      createdByUserId: input.createdByUserId,
+      organizationId: input.organizationId,
+      skillId: input.skillId,
+      skillVersionId: input.skillVersionId,
+      targetId: input.targetId,
+      targetType: input.targetType,
+    },
+    type: "skill_assign",
+  });
+  return operation;
+}
+
+function approvalNeedsOperation(request: ApprovalRequestRow): boolean {
+  return request.action === "publish_skill" || request.action === "assign_skill";
+}
+
+function requireOperationStore(
+  response: ServerResponse,
+  options: SkillGovernanceHttpApiHandlerOptions,
+): OperationStore | null {
+  if (options.operationStore) return options.operationStore;
+  sendJson(response, 503, { error: "operation_store_unavailable" });
+  return null;
 }
 
 async function canManageResourceAccess(

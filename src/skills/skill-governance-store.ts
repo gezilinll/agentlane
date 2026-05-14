@@ -264,7 +264,7 @@ export interface SkillGovernanceStore {
   createApprovalRequest: (input: CreateApprovalRequestInput) => Promise<ApprovalRequestRow>;
   /** List approval requests for an organization. */
   listApprovalRequests: (input: ListApprovalRequestsInput) => Promise<ApprovalRequestRow[]>;
-  /** Resolve an approval request and apply supported approval effects. */
+  /** Resolve an approval request; asynchronous effects are created by API-level Operations. */
   resolveApprovalRequest: (input: ResolveApprovalRequestInput) => Promise<ApprovalRequestRow | null>;
   /** Create or update a Skill assignment. */
   createSkillAssignment: (input: CreateSkillAssignmentInput) => Promise<SkillAssignmentRow>;
@@ -465,9 +465,6 @@ export function createPostgresSkillGovernanceStore(
           resolvedAt,
         ]);
         const resolved = result.rows[0];
-        if (input.resolution === "approved") {
-          await applyApprovedRequest(client, request, input.resolvedByUserId);
-        }
         return resolved;
       });
     },
@@ -580,33 +577,6 @@ async function createSkillAssignment(
     input.approvedByUserId ?? null,
   ]);
   return result.rows[0];
-}
-
-async function applyApprovedRequest(
-  client: PoolClient,
-  request: ApprovalRequestRow,
-  resolvedByUserId: string,
-): Promise<void> {
-  if (request.action === "publish_skill" && request.skillId && request.skillVersionId) {
-    await publishSkillVersion(client, {
-      publishedByUserId: resolvedByUserId,
-      skillId: request.skillId,
-      skillVersionId: request.skillVersionId,
-    });
-    return;
-  }
-  if (request.action === "assign_skill" && request.skillId && request.skillVersionId && request.targetType && request.targetId) {
-    await createSkillAssignment(client, {
-      approvedByUserId: resolvedByUserId,
-      createdByUserId: request.requestedByUserId,
-      organizationId: request.organizationId,
-      skillId: request.skillId,
-      skillVersionId: request.skillVersionId,
-      status: "approved",
-      targetId: request.targetId,
-      targetType: request.targetType,
-    });
-  }
 }
 
 async function isSkillOwner(

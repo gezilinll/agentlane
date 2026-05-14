@@ -5,8 +5,12 @@ import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import fixtureSnapshot from "../../fixtures/runtime/collector-snapshot.sample.json";
 import { hashSecret } from "../auth/auth-crypto";
-import type { AuthStore } from "../auth/auth-store";
+import { createPostgresAuthStore, type AuthStore } from "../auth/auth-store";
+import { createPostgresOperationStore } from "../operations/operation-store";
 import type { RuntimeInventorySnapshot, RuntimeWorkStateSnapshot } from "../runtime";
+import { createPostgresSkillGovernanceStore } from "../skills/skill-governance-store";
+import { createSkillPackageFromMarkdown } from "../skills/skill-package";
+import { createPostgresSkillStore } from "../skills/skill-store";
 import { createTemporaryPostgresDatabase, runMigrationsScript, shouldRunPostgresTests } from "../test/postgres";
 import { createAgentlaneBackendServer, type AgentlaneBackendServer } from "./backend-server";
 
@@ -130,6 +134,85 @@ describeDb("standalone Agentlane backend server with Postgres", () => {
       await database.drop();
     }
   });
+
+  it("runs due Skill operation jobs from the formal backend", async () => {
+    const database = await createTemporaryPostgresDatabase();
+    let backend: AgentlaneBackendServer | null = null;
+    let organizationId = "";
+    try {
+      runMigrationsScript(database.url);
+      const authStore = createPostgresAuthStore({ connectionString: database.url });
+      const skillStore = createPostgresSkillStore({ connectionString: database.url });
+      const governanceStore = createPostgresSkillGovernanceStore({ connectionString: database.url });
+      const operationStore = createPostgresOperationStore({ connectionString: database.url });
+      try {
+        const owner = await authStore.upsertUserForEmail("backend-runner@example.com");
+        const organization = await authStore.createOrganization({
+          createdByUserId: owner.id,
+          name: "Backend Runner Team",
+          slug: "backend-runner-team",
+        });
+        organizationId = organization.id;
+        const imported = await skillStore.importSkillVersion({
+          createdByUserId: owner.id,
+          organizationId: organization.id,
+          package: createSkillPackageFromMarkdown({
+            content: `---
+name: Backend Runner Skill
+description: Verify backend job runner.
+license: MIT
+compatibility: openclaw
+---
+
+# Backend Runner Skill
+`,
+            source: { type: "upload_md" },
+          }),
+        });
+        await governanceStore.publishSkillVersion({
+          publishedByUserId: owner.id,
+          skillId: imported.skill.id,
+          skillVersionId: imported.version.id,
+        });
+        const operation = await operationStore.createOperation({
+          organizationId: organization.id,
+          requestedByUserId: owner.id,
+          resourceId: imported.skill.id,
+          resourceType: "skill",
+          summary: "Assign Skill from backend runner",
+          targetId: "agent-main",
+          targetType: "agent",
+          type: "skill_assign",
+        });
+        await operationStore.enqueueJob({
+          operationId: operation.id,
+          organizationId: organization.id,
+          payload: {
+            approvedByUserId: owner.id,
+            createdByUserId: owner.id,
+            organizationId: organization.id,
+            skillId: imported.skill.id,
+            skillVersionId: imported.version.id,
+            targetId: "agent-main",
+            targetType: "agent",
+          },
+          type: "skill_assign",
+        });
+      } finally {
+        await Promise.all([authStore.close(), skillStore.close(), governanceStore.close(), operationStore.close()]);
+      }
+
+      backend = await startBackend({ databaseUrl: database.url });
+
+      await expect(waitForSkillAssignment(database.url, organizationId, "agent-main")).resolves.toMatchObject({
+        status: "approved",
+        targetId: "agent-main",
+      });
+    } finally {
+      if (backend) await closeRegisteredBackend(backend);
+      await database.drop();
+    }
+  });
 });
 
 async function startBackend(options: {
@@ -179,6 +262,22 @@ function postJson(url: string, payload: unknown): Promise<Response> {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
   });
+}
+
+async function waitForSkillAssignment(databaseUrl: string, organizationId: string, targetId: string) {
+  const governanceStore = createPostgresSkillGovernanceStore({ connectionString: databaseUrl });
+  try {
+    const deadline = Date.now() + 1_500;
+    while (Date.now() < deadline) {
+      const assignments = await governanceStore.listSkillAssignments({ organizationId });
+      const match = assignments.find((assignment) => assignment.targetId === targetId);
+      if (match) return match;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    throw new Error("timed out waiting for Skill assignment");
+  } finally {
+    await governanceStore.close();
+  }
 }
 
 function createWorkStateSnapshot(snapshot: RuntimeInventorySnapshot): RuntimeWorkStateSnapshot {
