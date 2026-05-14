@@ -172,8 +172,8 @@ Agentlane 接受以下导入形态：
 
 - 单个 Markdown 文件：文件内容被规范化为 `SKILL.md`。
 - ZIP 包：包根目录或首层目录必须包含唯一 `SKILL.md`。
-- GitHub URL：支持仓库根目录、子目录、branch、tag 或 commit；导入后记录 resolved commit SHA 和 package hash。
-- Marketplace URL / 条目：Marketplace 只作为来源发现和下载入口；下载后的内容仍按统一包规则校验和入库。
+- GitHub URL：支持 `github.com` 仓库根目录、`tree` 子目录或 `blob` 文件 URL；导入后记录 resolved ref 和 package hash。
+- Marketplace URL / 条目：Marketplace 只作为来源发现和下载入口；当前接受能直接下载 Markdown 或 ZIP 内容的 URL，下载后的内容仍按统一包规则校验和入库。
 
 Skill 包必须包含：
 
@@ -205,7 +205,6 @@ Agentlane 不约束 Skill 包的目录命名风格。中文目录名、空格和
 - `SKILL.md` frontmatter 无法解析。
 - 缺少必填字段 `name` 或 `description`。
 - ZIP entry 的实际落盘路径包含绝对路径、目录逃逸或无法规范化的路径。
-- symlink 指向包根目录外。
 - 单文件、总包、文件数或目录深度超过限制。
 - 文件名包含控制字符或无法规范化。
 
@@ -220,10 +219,10 @@ Agentlane 不约束 Skill 包的目录命名风格。中文目录名、空格和
 
 风险分级规则：
 
-- 包含 `scripts/`、shebang、`.sh`、`.js`、`.ts`、`.py`、`.rb`、`.go`、`.rs` 等可执行内容：`warning`。
+- 包含 `scripts/`、shebang、`.sh`、`.bash`、`.zsh`、`.ps1`、`.cmd`、`.bat`、`.mjs`、`.cjs`、`.js`、`.ts` 等可执行或脚本内容：`warning`。
 - 包含 `package.json`、`requirements.txt`、`pyproject.toml`、`Cargo.toml` 等依赖安装文件：`warning`。
-- 包含二进制文件、嵌套压缩包或不可识别可执行文件：`warning` 或 `blocked`，由文件类型和目标策略决定。
-- 缺少 license 文件或 license frontmatter：`warning`。
+- 包含嵌套压缩包：`warning`。
+- 缺少 license frontmatter：`warning`。
 - license 字段不是可识别 SPDX 表达：`warning`。
 - compatibility 缺失：`warning`。
 - compatibility 明确排除目标 runtime：目标下发时 `blocked`。

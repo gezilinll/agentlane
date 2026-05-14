@@ -21,6 +21,9 @@ Current source of truth:
 - `docs/product/skill-management-spec.md`: product spec for organization-level Skill assets, import validation, permissions, review, target assignment, and deterministic delivery.
 - `docs/product/agent-migration-spec.md`: product spec for device bootstrap, runtime setup, agent migration, and known-recipe execution boundaries.
 - `docs/product/notification-spec.md`: product spec for in-app and email notifications, recipient scope, dedupe, rate limits, and recovery notifications.
+- `src/skills/skill-package.ts`: deterministic Skill package normalization and static validation for Markdown, ZIP, GitHub URL, and Marketplace URL imports.
+- `src/skills/skill-store.ts`: Postgres repository for organization-owned Skill copies, versions, and files.
+- `src/skills/skill-http-api.ts`: organization-scoped Skill import, list, detail, and version-file HTTP API.
 - `src/HomePage.tsx`: public homepage entry for the current Agentlane value proposition and implemented capabilities.
 - `src/catalog/catalog-object.ts`: initial TypeScript source of truth for Catalog Object shape.
 - `src/catalog/catalog-seed.ts`: first reviewable seed data for the Catalog page.
@@ -37,7 +40,7 @@ Current source of truth:
 - `src/server/postgres-store.ts`: Postgres-backed repository for normalized inventory and work-state ingestion.
 - `src/server/runtime-control-channel.ts`: in-memory v1 device control channel for connection, heartbeat, and refresh command lifecycle.
 - `src/server/runtime-http-api.ts`: backend HTTP API for collector ingestion, Runtime Fleet / Runs query endpoints, refresh commands, and ingestion diagnostics.
-- `src/backend/backend-server.ts`: standalone local-first backend service that composes the HTTP API and device WebSocket control channel outside Vite.
+- `src/backend/backend-server.ts`: standalone local-first backend service that composes auth, Skill, Runtime / Runs HTTP APIs and the device WebSocket control channel outside Vite.
 - `src/ui/PixelLogo.tsx` and `public/favicon.svg`: shared brand mark source for app chrome and browser tab metadata.
 - `vite.backend.config.ts`: backend bundle entry for production-like Node execution.
 - `db/migrations/`: Postgres schema migrations for the formal backend service.
@@ -107,7 +110,8 @@ Current spec and harness mapping:
 | Runtime snapshot and control backend | `docs/product/runtime-device-registration-spec.md`, `src/runtime/runtime-collection-health.ts`, `src/server/runtime-inventory-store.ts`, `src/server/runtime-control-channel.ts`, `src/server/runtime-http-api.ts`, `src/backend/backend-server.ts` | `src/runtime/runtime-collection-health.test.ts`, `src/server/runtime-inventory-store.test.ts`, `src/server/runtime-control-channel.test.ts`, `src/server/runtime-http-api.test.ts`, `src/runtime/device-collector-script.test.ts`, `npm run check:backend` |
 | Backend service formalization | `docs/product/backend-service-spec.md`, `src/backend/backend-server.ts`, `src/server/postgres-store.ts`, `db/migrations/`, `scripts/db-migrate.mjs`, `scripts/dev-e2e.ts`, `scripts/smoke-production.mjs`, `vite.backend.config.ts`, `Dockerfile.backend`, `Dockerfile.frontend`, `nginx.agentlane.conf`, `docker-compose.prod-like.yml` | `src/backend/backend-server.test.ts`, `src/backend/dev-e2e-config.test.ts`, `src/server/db-migrate.test.ts`, `src/server/postgres-store.test.ts`, `src/server/runtime-http-api-postgres.test.ts`, `scripts/check-deploy-config.mjs`, `npm run check:backend:standalone`, `npm run check:db`, `npm run check:backend`, `npm run check:deploy`, `npm run smoke:production` |
 | Auth and access | `docs/product/auth-and-access-spec.md`, `src/auth/`, `db/migrations/` | `src/auth/auth-crypto.test.ts`, `src/auth/auth-store.test.ts`, `src/auth/auth-http-api.test.ts`, `src/server/runtime-http-api.test.ts`, `npm run check:backend`, `npm run check:db`, `npm run check:quick` |
-| Skill management product rules | `docs/product/skill-management-spec.md`, `docs/product/notification-spec.md` | `npm run check:repo`; add import, permission, adapter, and UI harness when implementation begins |
+| Skill package import and validation | `docs/product/skill-management-spec.md`, `src/skills/skill-package.ts` | `src/skills/skill-package.test.ts`, `npm run check:backend`, `npm run check:quick` |
+| Skill storage and API | `docs/product/skill-management-spec.md`, `db/migrations/0003_skill_management.sql`, `src/skills/skill-store.ts`, `src/skills/skill-http-api.ts`, `src/backend/backend-server.ts` | `src/skills/skill-store.test.ts`, `src/skills/skill-http-api.test.ts`, `npm run check:backend`, `npm run check:db` |
 | Agent migration and bootstrap product rules | `docs/product/agent-migration-spec.md`, `docs/product/skill-management-spec.md`, `docs/product/notification-spec.md` | `npm run check:repo`; add capability, operation, permission, and UI harness when implementation begins |
 | Public entry, routing, and navigation | `src/HomePage.tsx`, `src/App.tsx`, `docs/product/ui-design.md` | `src/App.test.tsx`, `npm run check:quick`, `npm run check:e2e` |
 | Cream Arcade design system | `docs/product/design/`, `src/ui/tokens.css`, `src/ui/` | `src/ui/ui-tokens.test.tsx`, `src/App.test.tsx`, `e2e/runtime-fleet.spec.ts`, `e2e/runtime-work-board.spec.ts`, `npm run check:repo`, `npm run check:quick`, `npm run check:e2e` |
@@ -175,8 +179,8 @@ Current harness scripts:
 | `npm run check:commit-message` | Unit-check the commit message validator used by `.githooks/commit-msg`. | Commit convention, git hook, repo workflow, or package script changes. |
 | `npm run check:repo` | Required source-of-truth paths and local Markdown links. | Docs, assets, agent context, or product spec changes. |
 | `npm run check:backend:standalone` | Standalone backend HTTP and WebSocket smoke tests. | Backend server composition, local backend entrypoint, or server lifecycle changes. |
-| `npm run check:db` | Starts local Postgres, runs migration/repository integration tests against temporary databases, and drops them. | Database schema, migration runner, Postgres repository, Docker Compose, or Postgres dependency changes. |
-| `npm run check:backend` | Focused local backend store, control channel, HTTP API, and collector POST / WebSocket harness. | Runtime snapshot API, backend API handler, collector posting, device WebSocket, inventory + work-state refresh command lifecycle, or backend persistence changes. |
+| `npm run check:db` | Starts local Postgres, runs migration/repository integration tests against temporary databases, and drops them. | Database schema, migration runner, Postgres repository, Skill repository, Docker Compose, or Postgres dependency changes. |
+| `npm run check:backend` | Focused local backend store, control channel, HTTP API, Skill API, and collector POST / WebSocket harness. | Runtime snapshot API, backend API handler, Skill import/read API, collector posting, device WebSocket, inventory + work-state refresh command lifecycle, or backend persistence changes. |
 | `npm run check:runtime` | Focused Runtime / Device Registration and work-state unit/script harness. | Runtime inventory model, work-state model, collector, installer, fixture, probe adapter, or query changes. |
 | `npm run check:quick` | TypeScript typecheck plus Vitest unit/component tests. | Catalog model, Runtime Fleet query logic, React behavior, labels, or seed data changes. |
 | `npm run check:build` | Production TypeScript/Vite build. | Frontend, dependency, Vite, TypeScript, or package changes. |

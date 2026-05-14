@@ -12,6 +12,8 @@ import { createRuntimeHttpApiHandler } from "../server/runtime-http-api";
 import { createRuntimeInventoryStore } from "../server/runtime-inventory-store";
 import { createPostgresStore, type PostgresStore } from "../server/postgres-store";
 import { createRuntimeWorkStateStore } from "../server/runtime-work-state-store";
+import { createSkillHttpApiHandler } from "../skills/skill-http-api";
+import { createPostgresSkillStore, type SkillStore } from "../skills/skill-store";
 
 /** Construction options for the standalone Agentlane backend. */
 export interface AgentlaneBackendServerOptions {
@@ -33,6 +35,8 @@ export interface AgentlaneBackendServerOptions {
   postgresStore?: PostgresStore;
   /** Optional auth repository injection for tests. */
   authStore?: AuthStore;
+  /** Optional Skill repository injection for tests. */
+  skillStore?: SkillStore;
   /** Optional email provider injection for tests. */
   emailProvider?: AuthEmailProvider;
   /** Whether Runtime Fleet / Runs read APIs require a valid user session. */
@@ -81,6 +85,10 @@ export function createAgentlaneBackendServer(
     : createPostgresAuthStore({ connectionString: options.databaseUrl });
   const authStore = options.authStore ?? ownedAuthStore;
   const authGuards = authStore ? createAuthRuntimeGuards(authStore, { pepper: options.authPepper }) : undefined;
+  const ownedSkillStore = options.skillStore
+    ? null
+    : createPostgresSkillStore({ connectionString: options.databaseUrl });
+  const skillStore = options.skillStore ?? ownedSkillStore;
   const authRequired = options.authRequired ?? process.env.AGENTLANE_AUTH_REQUIRED === "1";
   const deviceTokenRequired = options.deviceTokenRequired ?? process.env.AGENTLANE_DEVICE_TOKEN_REQUIRED === "1";
   const authHandler = authStore
@@ -100,6 +108,12 @@ export function createAgentlaneBackendServer(
     workStateStore,
     postgresStore: postgresStore ?? undefined,
   });
+  const skillHandler = authGuards && skillStore
+    ? createSkillHttpApiHandler({
+      requireUserSession: authGuards.requireUserSession,
+      skillStore,
+    })
+    : undefined;
   const webSocketServer = new WebSocketServer({ noServer: true });
   const server = createServer((request, response) => {
     const notFound = () => {
@@ -110,16 +124,24 @@ export function createAgentlaneBackendServer(
     const runRuntimeHandler = () => {
       void httpHandler(request, response, notFound);
     };
+    const runSkillHandler = () => {
+      if (skillHandler) {
+        void skillHandler(request, response, runRuntimeHandler);
+      } else {
+        runRuntimeHandler();
+      }
+    };
     if (authHandler) {
-      void authHandler(request, response, runRuntimeHandler);
+      void authHandler(request, response, runSkillHandler);
     } else {
-      runRuntimeHandler();
+      runSkillHandler();
     }
   });
   let baseUrl = "";
   let listening = false;
   let postgresClosed = false;
   let authClosed = false;
+  let skillClosed = false;
 
   server.on("upgrade", (request, socket, head) => {
     void (async () => {
@@ -184,6 +206,10 @@ export function createAgentlaneBackendServer(
       if (ownedAuthStore && !authClosed) {
         authClosed = true;
         await ownedAuthStore.close();
+      }
+      if (ownedSkillStore && !skillClosed) {
+        skillClosed = true;
+        await ownedSkillStore.close();
       }
     },
   };

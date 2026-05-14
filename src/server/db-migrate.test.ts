@@ -39,12 +39,17 @@ describeDb("database migrations", () => {
           "runtimes",
           "schema_migrations",
           "sessions",
+          "skill_assignments",
+          "skill_files",
+          "skill_sync_jobs",
+          "skill_versions",
+          "skills",
           "users",
           "work_conversations",
           "work_executions",
           "work_items",
         ]);
-        expect(await listMigrationVersions(client)).toEqual(["0001_backend_core", "0002_auth_access"]);
+        expect(await listMigrationVersions(client)).toEqual(["0001_backend_core", "0002_auth_access", "0003_skill_management"]);
       } finally {
         await client.end();
       }
