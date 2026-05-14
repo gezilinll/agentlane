@@ -133,7 +133,7 @@ describe("Catalog page", () => {
 
     expect(screen.getByRole("heading", { name: "运行资产" })).toBeInTheDocument();
     const nav = screen.getByRole("navigation", { name: "主导航" });
-    for (const label of ["总控台", "Agent Studio", "Workflow Studio", "Skill Registry", "Worker Fleet", "People", "Integrations", "Governance"]) {
+    for (const label of ["总控台", "Agent Studio", "Workflow Studio", "Worker Fleet", "People", "Integrations", "Governance"]) {
       expect(within(nav).queryByRole("button", { name: label })).not.toBeInTheDocument();
     }
 
@@ -141,6 +141,12 @@ describe("Catalog page", () => {
 
     expect(window.location.pathname).toBe("/runs");
     expect(screen.getByRole("heading", { name: "工作看板" })).toBeInTheDocument();
+
+    await user.click(within(nav).getByRole("button", { name: "Skill Registry" }));
+
+    expect(window.location.pathname).toBe("/skills");
+    expect(screen.getByRole("heading", { name: "Skill Registry" })).toBeInTheDocument();
+    expect(screen.getByText("请选择组织后管理 Skill。")).toBeInTheDocument();
 
     await user.click(within(nav).getByRole("button", { name: "对象目录" }));
 

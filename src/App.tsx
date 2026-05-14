@@ -15,22 +15,25 @@ import {
 import { HomePage } from "./HomePage";
 import { RuntimeFleetPage } from "./runtime/RuntimeFleetPage";
 import { RuntimeWorkBoardPage } from "./runtime/RuntimeWorkBoardPage";
+import { SkillRegistryPage } from "./skills/SkillRegistryPage";
 import { PixelDecorations } from "./ui/PixelDecorations";
 import { PixelIcon, type PixelIconName } from "./ui/PixelIcon";
 import { PixelLogo } from "./ui/PixelLogo";
 
-type PageKey = "catalog" | "runtime" | "runs";
+type PageKey = "catalog" | "runtime" | "runs" | "skills";
 
 const navItems: Array<{ label: string; icon: PixelIconName; page: PageKey }> = [
   { label: "对象目录", icon: "catalog", page: "catalog" },
   { label: "Runtime Fleet", icon: "server", page: "runtime" },
   { label: "Runs", icon: "play", page: "runs" },
+  { label: "Skill Registry", icon: "tool", page: "skills" },
 ] as const;
 
 const pagePathByKey: Record<PageKey, string> = {
   catalog: "/catalog",
   runtime: "/runtime",
   runs: "/runs",
+  skills: "/skills",
 };
 
 export type AppAuthMode = "disabled" | "required";
@@ -45,7 +48,9 @@ export function App({ authMode = "disabled" }: { authMode?: AppAuthMode }) {
 }
 
 function ConsoleApp() {
+  const auth = useOptionalAuthSession();
   const [activePage, setActivePage] = useState<PageKey>(() => pageFromPath(getCurrentPath()) ?? "catalog");
+  const organizationId = auth?.session.organizations[0]?.organizationId;
 
   useEffect(() => {
     const syncPageFromUrl = () => {
@@ -92,7 +97,15 @@ function ConsoleApp() {
         <AuthSessionActions />
       </aside>
 
-      {activePage === "runtime" ? <RuntimeFleetPage /> : activePage === "runs" ? <RuntimeWorkBoardPage /> : <CatalogPage />}
+      {activePage === "runtime" ? (
+        <RuntimeFleetPage />
+      ) : activePage === "runs" ? (
+        <RuntimeWorkBoardPage />
+      ) : activePage === "skills" ? (
+        <SkillRegistryPage organizationId={organizationId} />
+      ) : (
+        <CatalogPage />
+      )}
     </main>
   );
 }
@@ -104,6 +117,7 @@ function getCurrentPath(): string {
 function pageFromPath(path: string): PageKey | null {
   if (path === "/runtime") return "runtime";
   if (path === "/runs") return "runs";
+  if (path === "/skills") return "skills";
   if (path === "/catalog") return "catalog";
   return null;
 }

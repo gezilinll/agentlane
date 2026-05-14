@@ -550,15 +550,31 @@ h1 {
   width: 100%;
 }
 
-.toolbarField select {
+.toolbarField input,
+.toolbarField select,
+.toolbarField textarea {
   background: var(--agentlane-color-field);
   border: var(--agentlane-border-thin);
   border-radius: var(--agentlane-radius-none);
   color: var(--agentlane-color-ink);
-  height: 42px;
   font-family: var(--font-sans);
   padding: 0 10px;
   width: 100%;
+}
+
+.toolbarField input,
+.toolbarField select {
+  height: 42px;
+}
+
+.toolbarField select {
+  font-family: var(--font-sans);
+}
+
+.toolbarField textarea {
+  min-height: 148px;
+  padding: 10px;
+  resize: vertical;
 }
 
 .timeRangeField {
@@ -1417,6 +1433,16 @@ button.tableRow:hover,
   color: var(--agentlane-color-muted);
 }
 
+.status-passed {
+  background: var(--agentlane-color-paper);
+  color: var(--agentlane-color-green);
+}
+
+.status-blocked {
+  background: var(--agentlane-color-paper);
+  color: var(--agentlane-color-red);
+}
+
 .channelList {
   align-items: center;
   display: flex;
@@ -1439,6 +1465,125 @@ button.tableRow:hover,
 
 .emptyAsset p {
   margin: 0;
+}
+
+.skillRegistryGrid {
+  align-items: start;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(280px, 0.9fr) minmax(360px, 1.15fr);
+  min-width: 0;
+}
+
+.skillImportPanel,
+.skillListPanel,
+.skillActivityPanel,
+.skillDetailPanel {
+  min-width: 0;
+}
+
+.skillImportPanel {
+  grid-column: 1;
+}
+
+.skillListPanel {
+  grid-column: 2;
+}
+
+.skillActivityPanel {
+  grid-column: 1 / span 2;
+}
+
+.skillDetailPanel {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+}
+
+.skillForm {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.skillStatusMessage,
+.skillErrorMessage {
+  border: var(--agentlane-border-thin);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
+  padding: 10px;
+}
+
+.skillStatusMessage {
+  background: var(--agentlane-color-paper);
+  color: var(--agentlane-color-green);
+}
+
+.skillErrorMessage {
+  background: var(--agentlane-color-paper);
+  color: var(--agentlane-color-red);
+}
+
+.skillList,
+.skillActivityList {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.skillListItem {
+  background: var(--agentlane-color-paper);
+  border: var(--agentlane-border-thin);
+  color: var(--agentlane-color-ink);
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  text-align: left;
+  width: 100%;
+}
+
+.skillListItem:hover,
+.skillListItemActive {
+  background: var(--agentlane-color-surface-hover);
+  box-shadow: var(--agentlane-shadow-small);
+}
+
+.skillListItem strong,
+.skillListItem span:not(.statusBadge):not(.badge) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.skillListItem strong {
+  font-family: var(--font-sans);
+  font-size: 16px;
+}
+
+.skillListItem > span:not(.channelList) {
+  color: var(--agentlane-color-muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.skillActivityItem {
+  border: var(--agentlane-border-thin);
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+}
+
+.skillActivityItem strong {
+  font-family: var(--font-sans);
+  font-size: 15px;
+}
+
+.skillActivityItem span,
+.skillActivityItem small {
+  color: var(--agentlane-color-muted);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .emptyState {
@@ -1500,8 +1645,17 @@ button.tableRow:hover,
 
   .contentGrid,
   .runtimeFleetGrid,
-  .workBoardGrid {
+  .workBoardGrid,
+  .skillRegistryGrid {
     grid-template-columns: 1fr;
+  }
+
+  .skillImportPanel,
+  .skillListPanel,
+  .skillActivityPanel,
+  .skillDetailPanel {
+    grid-column: auto;
+    grid-row: auto;
   }
 
   .detailPanel {
@@ -1587,6 +1741,10 @@ button.tableRow:hover,
   }
 
   .workBoardGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .skillRegistryGrid {
     grid-template-columns: 1fr;
   }
 
