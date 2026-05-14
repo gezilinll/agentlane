@@ -28,6 +28,7 @@ Current source of truth:
 - `src/skills/skill-governance-store.ts`: Postgres repository for Skill resource permissions, approval requests, and target assignments.
 - `src/skills/skill-governance-http-api.ts`: Skill governance HTTP API for permission grants, publish approvals, approval decisions, and target assignment requests.
 - `src/operations/operation-store.ts`: Postgres repository for asynchronous Operations and executable Jobs.
+- `src/operations/job-runner.ts`: minimal backend job runner over OperationStore claim, lease, handler, retry, and completion semantics.
 - `src/notifications/notification-store.ts`: Postgres repository for deduplicated notification events, threads, deliveries, and cooldown state.
 - `src/HomePage.tsx`: public homepage entry for the current Agentlane value proposition and implemented capabilities.
 - `src/catalog/catalog-object.ts`: initial TypeScript source of truth for Catalog Object shape.
@@ -118,7 +119,7 @@ Current spec and harness mapping:
 | Skill package import and validation | `docs/product/skill-management-spec.md`, `src/skills/skill-package.ts` | `src/skills/skill-package.test.ts`, `npm run check:backend`, `npm run check:quick` |
 | Skill storage and API | `docs/product/skill-management-spec.md`, `db/migrations/0003_skill_management.sql`, `src/skills/skill-store.ts`, `src/skills/skill-http-api.ts`, `src/backend/backend-server.ts` | `src/skills/skill-store.test.ts`, `src/skills/skill-http-api.test.ts`, `npm run check:backend`, `npm run check:db` |
 | Skill governance permissions and approvals | `docs/product/skill-management-spec.md`, `db/migrations/0004_skill_governance.sql`, `src/skills/skill-governance-store.ts`, `src/skills/skill-governance-http-api.ts`, `src/backend/backend-server.ts` | `src/skills/skill-governance-store.test.ts`, `src/skills/skill-governance-http-api.test.ts`, `src/server/db-migrate.test.ts`, `npm run check:backend`, `npm run check:db` |
-| Operation and Job Runner persistence | `docs/product/operation-job-runner-spec.md`, `db/migrations/0005_operations_notifications.sql`, `src/operations/operation-store.ts` | `src/operations/operation-store.test.ts`, `src/server/db-migrate.test.ts`, `npm run check:backend`, `npm run check:db` |
+| Operation and Job Runner persistence | `docs/product/operation-job-runner-spec.md`, `db/migrations/0005_operations_notifications.sql`, `src/operations/operation-store.ts`, `src/operations/job-runner.ts` | `src/operations/operation-store.test.ts`, `src/operations/job-runner.test.ts`, `src/server/db-migrate.test.ts`, `npm run check:backend`, `npm run check:db` |
 | Notification persistence and dedupe | `docs/product/notification-spec.md`, `db/migrations/0005_operations_notifications.sql`, `src/notifications/notification-store.ts` | `src/notifications/notification-store.test.ts`, `src/server/db-migrate.test.ts`, `npm run check:backend`, `npm run check:db` |
 | Agent migration and bootstrap product rules | `docs/product/agent-migration-spec.md`, `docs/product/skill-management-spec.md`, `docs/product/notification-spec.md` | `npm run check:repo`; add capability, operation, permission, and UI harness when implementation begins |
 | Public entry, routing, and navigation | `src/HomePage.tsx`, `src/App.tsx`, `docs/product/ui-design.md` | `src/App.test.tsx`, `npm run check:quick`, `npm run check:e2e` |
