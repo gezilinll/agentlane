@@ -257,6 +257,7 @@ Skill 生命周期：
 资源级权限优先用于具体操作：
 
 - 查看 Skill：需要 `skill.view`，组织 owner / admin 默认拥有。
+- Skill owner 默认拥有该 Skill 的查看、编辑、发布、归档和授权管理能力。
 - 编辑 Skill 草稿：需要 `skill.edit`。
 - 发布版本：需要 `skill.publish`，没有权限时创建审核。
 - 分配 Skill 到目标：需要 `skill.view`，并且对目标有 `manage_skills` 或获得目标 owner 审核。
@@ -363,13 +364,17 @@ Skill 模块必须发出以下通知事件：
 
 Skill API：
 
-- `GET /api/skills`：列出组织 Skill。
+- `GET /api/skills`：列出当前用户在组织内可查看的 Skill。
 - `POST /api/skills/import`：导入 Markdown、ZIP、GitHub URL 或 Marketplace 来源。
-- `GET /api/skills/:skillId`：读取 Skill 详情。
-- `GET /api/skills/:skillId/versions/:versionId/files`：读取版本文件树。
+- `GET /api/skills/:skillId`：读取可查看 Skill 的详情。
+- `GET /api/skills/:skillId/versions/:versionId/files`：读取可查看版本文件树。
 - `PUT /api/skills/:skillId/draft/files/:path`：编辑草稿文件。
 - `POST /api/skills/:skillId/publish`：发布版本或创建发布审核。
 - `POST /api/skills/:skillId/archive`：归档或创建归档审核。
+
+Resource Permission API：
+
+- `POST /api/resource-permissions`：授予某用户对 Skill、Device、Runtime 或 Agent 的资源级权限。组织 owner / admin 可直接授权；普通成员需要对该资源有 `manage_access`。
 
 Assignment API：
 
@@ -419,12 +424,13 @@ UI 不展示原始 token、完整脚本风险日志、外部平台私有 API 返
 
 权限与审核：
 
-- member 无 `skill.edit` 时不能编辑草稿。
-- 有 `skill.edit` 但无 `skill.publish` 时发布会创建审核。
-- 分配到本人 Agent 可直接通过低风险路径。
-- 分配到非本人 Agent、共享目标或高风险 Skill 必须审核。
+- member 无 `skill.view` 时不能看到 Skill 列表项、详情和版本文件。
+- member 有 `skill.view` 但无 `skill.publish` 时发布会创建审核。
+- 发布审核通过后，对应 Skill Version 被标记为已发布，Skill 进入 `published`。
+- 有 `skill.view` 且对目标有 `manage_skills` 时，分配请求直接创建 approved Assignment。
+- 缺少目标 `manage_skills` 时，分配请求创建审核，不创建半激活 Assignment。
 - 审核拒绝不会留下 active Assignment。
-- 没有目标 `manage_skills` 权限时不能直接下发。
+- 组织 owner / admin 或资源 `manage_access` 持有人可以授予资源级权限。
 
 Adapter contract：
 

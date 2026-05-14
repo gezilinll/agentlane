@@ -24,6 +24,8 @@ Current source of truth:
 - `src/skills/skill-package.ts`: deterministic Skill package normalization and static validation for Markdown, ZIP, GitHub URL, and Marketplace URL imports.
 - `src/skills/skill-store.ts`: Postgres repository for organization-owned Skill copies, versions, and files.
 - `src/skills/skill-http-api.ts`: organization-scoped Skill import, list, detail, and version-file HTTP API.
+- `src/skills/skill-governance-store.ts`: Postgres repository for Skill resource permissions, approval requests, and target assignments.
+- `src/skills/skill-governance-http-api.ts`: Skill governance HTTP API for permission grants, publish approvals, approval decisions, and target assignment requests.
 - `src/HomePage.tsx`: public homepage entry for the current Agentlane value proposition and implemented capabilities.
 - `src/catalog/catalog-object.ts`: initial TypeScript source of truth for Catalog Object shape.
 - `src/catalog/catalog-seed.ts`: first reviewable seed data for the Catalog page.
@@ -112,6 +114,7 @@ Current spec and harness mapping:
 | Auth and access | `docs/product/auth-and-access-spec.md`, `src/auth/`, `db/migrations/` | `src/auth/auth-crypto.test.ts`, `src/auth/auth-store.test.ts`, `src/auth/auth-http-api.test.ts`, `src/server/runtime-http-api.test.ts`, `npm run check:backend`, `npm run check:db`, `npm run check:quick` |
 | Skill package import and validation | `docs/product/skill-management-spec.md`, `src/skills/skill-package.ts` | `src/skills/skill-package.test.ts`, `npm run check:backend`, `npm run check:quick` |
 | Skill storage and API | `docs/product/skill-management-spec.md`, `db/migrations/0003_skill_management.sql`, `src/skills/skill-store.ts`, `src/skills/skill-http-api.ts`, `src/backend/backend-server.ts` | `src/skills/skill-store.test.ts`, `src/skills/skill-http-api.test.ts`, `npm run check:backend`, `npm run check:db` |
+| Skill governance permissions and approvals | `docs/product/skill-management-spec.md`, `db/migrations/0004_skill_governance.sql`, `src/skills/skill-governance-store.ts`, `src/skills/skill-governance-http-api.ts`, `src/backend/backend-server.ts` | `src/skills/skill-governance-store.test.ts`, `src/skills/skill-governance-http-api.test.ts`, `src/server/db-migrate.test.ts`, `npm run check:backend`, `npm run check:db` |
 | Agent migration and bootstrap product rules | `docs/product/agent-migration-spec.md`, `docs/product/skill-management-spec.md`, `docs/product/notification-spec.md` | `npm run check:repo`; add capability, operation, permission, and UI harness when implementation begins |
 | Public entry, routing, and navigation | `src/HomePage.tsx`, `src/App.tsx`, `docs/product/ui-design.md` | `src/App.test.tsx`, `npm run check:quick`, `npm run check:e2e` |
 | Cream Arcade design system | `docs/product/design/`, `src/ui/tokens.css`, `src/ui/` | `src/ui/ui-tokens.test.tsx`, `src/App.test.tsx`, `e2e/runtime-fleet.spec.ts`, `e2e/runtime-work-board.spec.ts`, `npm run check:repo`, `npm run check:quick`, `npm run check:e2e` |
@@ -179,8 +182,8 @@ Current harness scripts:
 | `npm run check:commit-message` | Unit-check the commit message validator used by `.githooks/commit-msg`. | Commit convention, git hook, repo workflow, or package script changes. |
 | `npm run check:repo` | Required source-of-truth paths and local Markdown links. | Docs, assets, agent context, or product spec changes. |
 | `npm run check:backend:standalone` | Standalone backend HTTP and WebSocket smoke tests. | Backend server composition, local backend entrypoint, or server lifecycle changes. |
-| `npm run check:db` | Starts local Postgres, runs migration/repository integration tests against temporary databases, and drops them. | Database schema, migration runner, Postgres repository, Skill repository, Docker Compose, or Postgres dependency changes. |
-| `npm run check:backend` | Focused local backend store, control channel, HTTP API, Skill API, and collector POST / WebSocket harness. | Runtime snapshot API, backend API handler, Skill import/read API, collector posting, device WebSocket, inventory + work-state refresh command lifecycle, or backend persistence changes. |
+| `npm run check:db` | Starts local Postgres, runs migration/repository integration tests against temporary databases, and drops them. | Database schema, migration runner, Postgres repository, Skill repository, Skill governance repository, Docker Compose, or Postgres dependency changes. |
+| `npm run check:backend` | Focused local backend store, control channel, HTTP API, Skill API, Skill governance API, and collector POST / WebSocket harness. | Runtime snapshot API, backend API handler, Skill import/read/governance API, collector posting, device WebSocket, inventory + work-state refresh command lifecycle, or backend persistence changes. |
 | `npm run check:runtime` | Focused Runtime / Device Registration and work-state unit/script harness. | Runtime inventory model, work-state model, collector, installer, fixture, probe adapter, or query changes. |
 | `npm run check:quick` | TypeScript typecheck plus Vitest unit/component tests. | Catalog model, Runtime Fleet query logic, React behavior, labels, or seed data changes. |
 | `npm run check:build` | Production TypeScript/Vite build. | Frontend, dependency, Vite, TypeScript, or package changes. |

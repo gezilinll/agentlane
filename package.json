@@ -21,7 +21,7 @@
     "check:repo": "./scripts/check-repo.sh",
     "check:backend": "vitest run src/auth/auth-crypto.test.ts src/auth/auth-http-api.test.ts src/backend src/server src/skills src/runtime/device-collector-script.test.ts",
     "check:backend:standalone": "vitest run src/backend",
-    "check:db": "npm run db:up && AGENTLANE_RUN_DB_TESTS=1 AGENTLANE_TEST_DATABASE_URL=postgres://agentlane:agentlane@127.0.0.1:54329/postgres vitest run src/auth/auth-store.test.ts src/server/db-migrate.test.ts src/server/postgres-store.test.ts src/server/runtime-http-api-postgres.test.ts src/backend/backend-server.test.ts src/skills/skill-store.test.ts src/skills/skill-http-api.test.ts",
+    "check:db": "npm run db:up && AGENTLANE_RUN_DB_TESTS=1 AGENTLANE_TEST_DATABASE_URL=postgres://agentlane:agentlane@127.0.0.1:54329/postgres vitest run src/auth/auth-store.test.ts src/server/db-migrate.test.ts src/server/postgres-store.test.ts src/server/runtime-http-api-postgres.test.ts src/backend/backend-server.test.ts src/skills/skill-store.test.ts src/skills/skill-http-api.test.ts src/skills/skill-governance-store.test.ts src/skills/skill-governance-http-api.test.ts",
     "check:runtime": "vitest run src/runtime",
     "check:quick": "npm run typecheck && npm run test:run",
     "check:build": "npm run build",

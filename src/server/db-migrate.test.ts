@@ -28,6 +28,7 @@ describeDb("database migrations", () => {
 
         expect(tableNames).toEqual([
           "agents",
+          "approval_requests",
           "channel_bindings",
           "collector_ingestions",
           "device_tokens",
@@ -36,6 +37,7 @@ describeDb("database migrations", () => {
           "organization_invitations",
           "organization_members",
           "organizations",
+          "resource_permissions",
           "runtimes",
           "schema_migrations",
           "sessions",
@@ -49,7 +51,12 @@ describeDb("database migrations", () => {
           "work_executions",
           "work_items",
         ]);
-        expect(await listMigrationVersions(client)).toEqual(["0001_backend_core", "0002_auth_access", "0003_skill_management"]);
+        expect(await listMigrationVersions(client)).toEqual([
+          "0001_backend_core",
+          "0002_auth_access",
+          "0003_skill_management",
+          "0004_skill_governance",
+        ]);
       } finally {
         await client.end();
       }

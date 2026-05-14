@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { AuthSessionContext } from "../auth/auth-store";
+import type { AuthOrganizationMembership, AuthSessionContext } from "../auth/auth-store";
 import {
   createSkillPackageFromGithubUrl,
   createSkillPackageFromMarketplaceUrl,
@@ -8,6 +8,7 @@ import {
   SkillPackageValidationError,
   type SkillPackageSource,
 } from "./skill-package";
+import type { SkillGovernanceStore } from "./skill-governance-store";
 import type { SkillStore } from "./skill-store";
 
 const maxJsonBodyChars = 10_000_000;
@@ -22,6 +23,8 @@ export interface SkillHttpAuth {
 export interface SkillHttpApiHandlerOptions {
   /** Fetch implementation for remote imports. */
   fetch?: typeof fetch;
+  /** Optional governance repository used to enforce resource-level Skill reads. */
+  governanceStore?: SkillGovernanceStore;
   /** User-session auth guard. */
   requireUserSession: SkillHttpAuth["requireUserSession"];
   /** Skill repository. */
@@ -44,9 +47,16 @@ export function createSkillHttpApiHandler(options: SkillHttpApiHandlerOptions): 
       const session = await requireSession(request, response, options);
       if (!session) return;
       const organizationId = requestUrl.searchParams.get("organizationId") ?? "";
-      if (!ensureOrganizationMember(session, response, organizationId)) return;
+      const membership = readOrganizationMembership(session, organizationId);
+      if (!ensureOrganizationMember(response, organizationId, membership)) return;
+      const skills = await options.skillStore.listSkills({ organizationId });
+      const visibleSkills = options.governanceStore
+        ? (await Promise.all(skills.map(async (skill) => (
+          await canViewSkill(options, session, membership, skill.organizationId, skill.id) ? skill : null
+        )))).filter((skill) => skill !== null)
+        : skills;
       sendJson(response, 200, {
-        skills: await options.skillStore.listSkills({ organizationId }),
+        skills: visibleSkills,
       });
       return;
     }
@@ -56,7 +66,8 @@ export function createSkillHttpApiHandler(options: SkillHttpApiHandlerOptions): 
       if (!session) return;
       const body = await readJsonBody(request);
       const organizationId = readString(body, "organizationId");
-      if (!ensureOrganizationMember(session, response, organizationId)) return;
+      const membership = readOrganizationMembership(session, organizationId);
+      if (!ensureOrganizationMember(response, organizationId, membership)) return;
 
       try {
         const skillPackage = await createPackageFromRequest(body, options.fetch);
@@ -90,7 +101,12 @@ export function createSkillHttpApiHandler(options: SkillHttpApiHandlerOptions): 
         sendJson(response, 404, { error: "skill_not_found" });
         return;
       }
-      if (!ensureOrganizationMember(session, response, detail.skill.organizationId)) return;
+      const membership = readOrganizationMembership(session, detail.skill.organizationId);
+      if (!ensureOrganizationMember(response, detail.skill.organizationId, membership)) return;
+      if (!(await canViewSkill(options, session, membership, detail.skill.organizationId, detail.skill.id))) {
+        sendJson(response, 403, { error: "forbidden" });
+        return;
+      }
       const skillVersionId = decodeURIComponent(filesMatch[2] ?? "");
       const files = await options.skillStore.readSkillVersionFiles({ skillId, skillVersionId });
       if (files.length === 0 && !detail.versions.some((version) => version.id === skillVersionId)) {
@@ -111,7 +127,12 @@ export function createSkillHttpApiHandler(options: SkillHttpApiHandlerOptions): 
         sendJson(response, 404, { error: "skill_not_found" });
         return;
       }
-      if (!ensureOrganizationMember(session, response, detail.skill.organizationId)) return;
+      const membership = readOrganizationMembership(session, detail.skill.organizationId);
+      if (!ensureOrganizationMember(response, detail.skill.organizationId, membership)) return;
+      if (!(await canViewSkill(options, session, membership, detail.skill.organizationId, detail.skill.id))) {
+        sendJson(response, 403, { error: "forbidden" });
+        return;
+      }
       sendJson(response, 200, detail);
       return;
     }
@@ -174,16 +195,42 @@ async function requireSession(
   return session;
 }
 
-function ensureOrganizationMember(
+async function canViewSkill(
+  options: SkillHttpApiHandlerOptions,
   session: AuthSessionContext,
+  membership: AuthOrganizationMembership,
+  organizationId: string,
+  skillId: string,
+): Promise<boolean> {
+  if (!options.governanceStore) return true;
+  return options.governanceStore.hasResourcePermission({
+    organizationId,
+    organizationRole: membership.role,
+    permission: "view",
+    resourceId: skillId,
+    resourceType: "skill",
+    userId: session.user.id,
+  });
+}
+
+function readOrganizationMembership(
+  session: AuthSessionContext,
+  organizationId: string,
+): AuthOrganizationMembership | null {
+  if (!organizationId) return null;
+  return session.organizations.find((organization) => organization.organizationId === organizationId) ?? null;
+}
+
+function ensureOrganizationMember(
   response: ServerResponse,
   organizationId: string,
-): boolean {
+  membership: AuthOrganizationMembership | null,
+): membership is AuthOrganizationMembership {
   if (!organizationId) {
     sendJson(response, 400, { error: "organization_id_required" });
     return false;
   }
-  if (!session.organizations.some((organization) => organization.organizationId === organizationId)) {
+  if (!membership) {
     sendJson(response, 403, { error: "forbidden" });
     return false;
   }

@@ -12,6 +12,11 @@ import { createRuntimeHttpApiHandler } from "../server/runtime-http-api";
 import { createRuntimeInventoryStore } from "../server/runtime-inventory-store";
 import { createPostgresStore, type PostgresStore } from "../server/postgres-store";
 import { createRuntimeWorkStateStore } from "../server/runtime-work-state-store";
+import { createSkillGovernanceHttpApiHandler } from "../skills/skill-governance-http-api";
+import {
+  createPostgresSkillGovernanceStore,
+  type SkillGovernanceStore,
+} from "../skills/skill-governance-store";
 import { createSkillHttpApiHandler } from "../skills/skill-http-api";
 import { createPostgresSkillStore, type SkillStore } from "../skills/skill-store";
 
@@ -37,6 +42,8 @@ export interface AgentlaneBackendServerOptions {
   authStore?: AuthStore;
   /** Optional Skill repository injection for tests. */
   skillStore?: SkillStore;
+  /** Optional Skill governance repository injection for tests. */
+  skillGovernanceStore?: SkillGovernanceStore;
   /** Optional email provider injection for tests. */
   emailProvider?: AuthEmailProvider;
   /** Whether Runtime Fleet / Runs read APIs require a valid user session. */
@@ -89,6 +96,10 @@ export function createAgentlaneBackendServer(
     ? null
     : createPostgresSkillStore({ connectionString: options.databaseUrl });
   const skillStore = options.skillStore ?? ownedSkillStore;
+  const ownedSkillGovernanceStore = options.skillGovernanceStore
+    ? null
+    : createPostgresSkillGovernanceStore({ connectionString: options.databaseUrl });
+  const skillGovernanceStore = options.skillGovernanceStore ?? ownedSkillGovernanceStore;
   const authRequired = options.authRequired ?? process.env.AGENTLANE_AUTH_REQUIRED === "1";
   const deviceTokenRequired = options.deviceTokenRequired ?? process.env.AGENTLANE_DEVICE_TOKEN_REQUIRED === "1";
   const authHandler = authStore
@@ -110,6 +121,14 @@ export function createAgentlaneBackendServer(
   });
   const skillHandler = authGuards && skillStore
     ? createSkillHttpApiHandler({
+      governanceStore: skillGovernanceStore ?? undefined,
+      requireUserSession: authGuards.requireUserSession,
+      skillStore,
+    })
+    : undefined;
+  const skillGovernanceHandler = authGuards && skillStore && skillGovernanceStore
+    ? createSkillGovernanceHttpApiHandler({
+      governanceStore: skillGovernanceStore,
       requireUserSession: authGuards.requireUserSession,
       skillStore,
     })
@@ -131,10 +150,17 @@ export function createAgentlaneBackendServer(
         runRuntimeHandler();
       }
     };
+    const runSkillGovernanceHandler = () => {
+      if (skillGovernanceHandler) {
+        void skillGovernanceHandler(request, response, runSkillHandler);
+      } else {
+        runSkillHandler();
+      }
+    };
     if (authHandler) {
-      void authHandler(request, response, runSkillHandler);
+      void authHandler(request, response, runSkillGovernanceHandler);
     } else {
-      runSkillHandler();
+      runSkillGovernanceHandler();
     }
   });
   let baseUrl = "";
@@ -142,6 +168,7 @@ export function createAgentlaneBackendServer(
   let postgresClosed = false;
   let authClosed = false;
   let skillClosed = false;
+  let skillGovernanceClosed = false;
 
   server.on("upgrade", (request, socket, head) => {
     void (async () => {
@@ -210,6 +237,10 @@ export function createAgentlaneBackendServer(
       if (ownedSkillStore && !skillClosed) {
         skillClosed = true;
         await ownedSkillStore.close();
+      }
+      if (ownedSkillGovernanceStore && !skillGovernanceClosed) {
+        skillGovernanceClosed = true;
+        await ownedSkillGovernanceStore.close();
       }
     },
   };
