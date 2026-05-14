@@ -2,7 +2,7 @@
 
 状态：当前规则
 
-本规格定义 Agentlane 对 Skill 的组织级资产管理、导入校验、权限审核、目标分配和确定性下发规则。Skill 是组织内可复用、可版本化、可审计的能力资产，不只是某台设备或某个 runtime 上的本地文件。
+本规格定义 Agentlane 对 Skill 的组织级资产管理、导入校验、权限审核、目标分配和异步操作状态规则。Skill 是组织内可复用、可版本化、可审计的能力资产，不只是某台设备或某个 runtime 上的本地文件。
 
 ## 目标
 
@@ -10,11 +10,12 @@
 - 支持从本地 Markdown、ZIP 包、GitHub URL 和 Marketplace URL / 条目导入 Skill。
 - 支持把设备、runtime 或 agent 上已有的 Skill 提升为组织级 Skill。
 - 组织级 Skill 必须保存自己的内容副本和版本，不能只引用来源设备上的路径。
-- 支持编辑 Skill 草稿、发布版本、归档 Skill、删除草稿或未使用版本。
+- 支持发布 Skill 版本；发布权限不足或风险较高时进入审核。
 - 支持把组织级 Skill 分配到 Device、Runtime 或 Agent。
-- Skill 下发必须通过平台 API / CLI、runtime adapter、collector 文件同步或安装脚本完成，并在下发后校验结果。
+- Skill 分配和后续同步必须通过可审计的 Operation / Job Runner 表达状态；不在页面内假装同步已经完成。
 - 支持资源级权限和审核流，避免普通成员直接编辑、发布或下发到非本人管理的目标。
 - 所有平台差异必须由 adapter 转换成 Agentlane 的 Skill 语义，UI 不直接判断 OpenClaw、Multica 或 Slock 的本地目录规则。
+- UI 只能暴露已有 HTTP API、权限规则和 harness 覆盖的动作。编辑文件、归档、删除、手动同步、目标有效 Skill 查询等能力如果没有 API 与 harness，不出现在页面动作中。
 
 ## 非目标
 
@@ -361,7 +362,7 @@ Skill 模块必须发出以下通知事件：
 
 通知事件只包含摘要和跳转引用，不包含 Skill 文件正文、完整脚本、密钥或原始 adapter 返回体。
 
-## API 边界
+## 当前 HTTP API 边界
 
 Skill API：
 
@@ -369,9 +370,7 @@ Skill API：
 - `POST /api/skills/import`：导入 Markdown、ZIP、GitHub URL 或 Marketplace 来源。
 - `GET /api/skills/:skillId`：读取可查看 Skill 的详情。
 - `GET /api/skills/:skillId/versions/:versionId/files`：读取可查看版本文件树。
-- `PUT /api/skills/:skillId/draft/files/:path`：编辑草稿文件。
 - `POST /api/skills/:skillId/publish`：创建发布 Operation 或创建发布审核。
-- `POST /api/skills/:skillId/archive`：归档或创建归档审核。
 
 Resource Permission API：
 
@@ -381,13 +380,6 @@ Assignment API：
 
 - `GET /api/skill-assignments`：列出分配。
 - `POST /api/skill-assignments`：创建分配 Operation 或创建分配审核。
-- `POST /api/skill-assignments/:assignmentId/sync`：创建下发 Operation 或创建同步审核。
-- `POST /api/skill-assignments/:assignmentId/disable`：停用分配。
-
-Target API：
-
-- `GET /api/skill-targets`：列出可分配目标和 adapter capability。
-- `GET /api/skill-targets/:targetType/:targetId/effective-skills`：读取目标有效 Skill。
 
 Approval API：
 
@@ -395,21 +387,30 @@ Approval API：
 - `POST /api/approval-requests/:requestId/approve`：批准。
 - `POST /api/approval-requests/:requestId/reject`：拒绝。
 
+Operation / Notification API：
+
+- `GET /api/operations`：按组织、资源类型、资源 ID、目标或状态查询异步操作。
+- `GET /api/operations/:operationId`：读取单个异步操作和 job 明细。
+- `GET /api/notifications`：按组织读取页面内通知线程。
+- `GET /api/notifications/:threadId`：读取通知线程和投递明细。
+
+当前 Skill Registry 页面从 Runtime Fleet 查询结果中派生可分配目标，不单独暴露 Skill target HTTP API。页面不得调用不存在的编辑、归档、删除、手动同步或 effective-skill API。
+
 ## UI 规则
 
 Skill Registry 页面必须支持：
 
-- 按名称、来源、owner、状态、风险、目标支持度搜索和筛选。
-- 查看 Skill 详情、版本、文件树、校验结果、分配目标和最近同步结果。
-- 导入 Markdown、ZIP、GitHub URL 和 Marketplace。
-- 编辑草稿文件。
+- 在用户已选组织后读取组织 Skill、分配、待处理审核、相关 Operation、通知和 Runtime Fleet 目标。
+- 查看 Skill 详情、版本、文件树、校验结果、分配目标、相关 Operation 和待处理审核。
+- 导入 Markdown、GitHub URL 和 Marketplace URL；ZIP 导入由后端统一包校验支持，但页面没有上传控件时不展示 ZIP 入口。
 - 发布版本或提交发布审核。
-- 选择目标并创建分配。
-- 查看某个目标为什么不支持下发。
-- 触发下发并查看同步结果。
-- 归档 Skill。
+- 选择 Device、Runtime 或 Agent 目标并创建分配 Operation 或提交分配审核。
+- 最新版本未发布时，分配按钮必须禁用并明确提示先发布。
+- 目标 ID 可能包含 `:`、`/` 或其他分隔符，页面传参必须编码和解码，不能截断。
+- 页面内通知展示状态摘要和跳转语义，不展示完整原始日志。
 
 UI 不展示原始 token、完整脚本风险日志、外部平台私有 API 返回体或调试字段。
+UI 不展示未实现入口。没有 API 与 harness 的编辑、归档、删除、手动同步和 target support 原因入口不出现在页面中。
 
 ## Harness
 
@@ -443,9 +444,15 @@ Adapter contract：
 
 UI：
 
-- Skill Registry 覆盖导入、查看校验、编辑草稿、发布审核、分配、同步和归档的核心路径。
-- 不支持目标展示明确原因。
+- 无组织上下文时不请求 Skill API，并提示先选择组织。
+- Skill Registry 覆盖导入、查看详情、查看版本文件、发布 / 发布审核、分配 / 分配审核、Operation 状态和通知展示。
+- Markdown 导入调用正式 Skill API，不绕过后端校验。
+- GitHub URL 和 Marketplace URL 导入进入同一 `POST /api/skills/import` 路径。
+- 发布和分配动作返回 Operation 或 Approval 后，页面刷新相关 Operation、通知、分配和审批状态。
+- 最新版本未发布时不能创建分配。
+- 包含 `:` 的 target ID 在选择和提交分配时不丢失。
 - 风险提示和审核状态可见。
+- 页面导航通过 `/skills` 进入，并纳入 Console 路由 harness。
 
 ## 验收标准
 
@@ -455,3 +462,4 @@ UI：
 - 下发只通过确定性 adapter / collector / CLI / 文件同步完成。
 - 不支持下发的目标不会出现“让 Agent 自己安装”的入口。
 - OpenClaw、Multica、Slock 的平台差异在 adapter 层处理，UI 只消费 Agentlane Skill 模型。
+- 页面只呈现当前 API 和 harness 证明过的动作，不保留临时 mock、调试字段或超前按钮。
