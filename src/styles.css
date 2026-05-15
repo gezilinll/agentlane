@@ -745,6 +745,11 @@ h1 {
   border-color: var(--agentlane-color-line);
 }
 
+.compactButton {
+  height: 30px;
+  padding: 0 10px;
+}
+
 .quickRangeButton {
   border: 0;
   color: var(--agentlane-color-ink);
@@ -1584,6 +1589,13 @@ button.tableRow:hover,
   color: var(--agentlane-color-muted);
   font-size: 13px;
   line-height: 1.45;
+}
+
+.skillInlineActions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: 8px;
 }
 
 .emptyState {

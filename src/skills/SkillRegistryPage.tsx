@@ -157,6 +157,7 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
   const [sourceUrl, setSourceUrl] = useState("");
   const [filename, setFilename] = useState("SKILL.md");
   const [markdownContent, setMarkdownContent] = useState("");
+  const [zipFile, setZipFile] = useState<File | null>(null);
   const [selectedTargetValue, setSelectedTargetValue] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -261,12 +262,13 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
     setStatusMessage("");
     setErrorMessage("");
     try {
-      const body = createImportBody({
+      const body = await createImportBody({
         filename,
         markdownContent,
         organizationId,
         sourceType,
         sourceUrl,
+        zipFile,
       });
       const result = await fetchJson<{ skill?: SkillSummary }>("/api/skills/import", {
         body: JSON.stringify(body),
@@ -339,6 +341,28 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
     }
   }
 
+  async function handleApprovalDecision(approval: ApprovalRequest, decision: "approve" | "reject") {
+    setIsSubmitting(true);
+    setStatusMessage("");
+    setErrorMessage("");
+    try {
+      await fetchJson<{ approvalRequest?: ApprovalRequest; operation?: Operation }>(
+        `/api/approval-requests/${encodeURIComponent(approval.id)}/${decision}`,
+        {
+          body: JSON.stringify({ resolutionReason: "" }),
+          headers: { "content-type": "application/json" },
+          method: "POST",
+        },
+      );
+      setStatusMessage(decision === "approve" ? "审批已批准。" : "审批已拒绝。");
+      await refreshActivity();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "处理审批失败");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   if (!organizationId) {
     return (
       <section className="workspace">
@@ -375,7 +399,7 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
           <div className="runtimePanelHeader">
             <div>
               <h2>导入 Skill</h2>
-              <p>支持 Markdown、GitHub URL 和 Marketplace URL 导入。</p>
+              <p>支持 Markdown、ZIP、GitHub URL 和 Marketplace URL 导入。</p>
             </div>
           </div>
           <div className="skillForm">
@@ -383,6 +407,7 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
               <span className="controlLabel">导入来源</span>
               <select value={sourceType} onChange={(event) => setSourceType(event.target.value)}>
                 <option value="markdown">Markdown</option>
+                <option value="zip">ZIP 包</option>
                 <option value="github_url">GitHub URL</option>
                 <option value="marketplace_url">Marketplace URL</option>
               </select>
@@ -398,6 +423,16 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
                   <textarea value={markdownContent} onChange={(event) => setMarkdownContent(event.target.value)} placeholder="# Skill name" />
                 </label>
               </>
+            ) : sourceType === "zip" ? (
+              <label className="toolbarField">
+                <span className="controlLabel">ZIP 包</span>
+                <input
+                  accept=".zip,application/zip"
+                  type="file"
+                  onChange={(event) => setZipFile(event.currentTarget.files?.[0] ?? null)}
+                />
+                {zipFile ? <small className="mutedText">{zipFile.name}</small> : null}
+              </label>
             ) : (
               <label className="toolbarField">
                 <span className="controlLabel">来源 URL</span>
@@ -477,6 +512,7 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
           selectedTargetValue={selectedTargetValue}
           targets={targets}
           onAssign={() => void handleAssign()}
+          onApprovalDecision={(approval, decision) => void handleApprovalDecision(approval, decision)}
           onPublish={() => void handlePublish()}
           onTargetChange={setSelectedTargetValue}
           isSubmitting={isSubmitting}
@@ -494,6 +530,7 @@ function SkillDetailPanel({
   isSubmitting,
   latestVersion,
   onAssign,
+  onApprovalDecision,
   onPublish,
   onTargetChange,
   operations,
@@ -510,6 +547,7 @@ function SkillDetailPanel({
   selectedTargetValue: string;
   targets: SkillTargetOption[];
   onAssign: () => void;
+  onApprovalDecision: (approval: ApprovalRequest, decision: "approve" | "reject") => void;
   onPublish: () => void;
   onTargetChange: (value: string) => void;
 }) {
@@ -616,7 +654,27 @@ function SkillDetailPanel({
           <ul>
             {approvals.map((approval) => (
               <li key={approval.id}>
-                {approval.action} · {approval.riskLevel} · {approval.riskSummary}
+                <span>{approvalActionLabel(approval.action)} · {approval.riskLevel} · {approval.riskSummary}</span>
+                {approval.status === "pending" ? (
+                  <span className="skillInlineActions">
+                    <button
+                      className="secondaryButton compactButton"
+                      disabled={isSubmitting}
+                      type="button"
+                      onClick={() => onApprovalDecision(approval, "approve")}
+                    >
+                      批准
+                    </button>
+                    <button
+                      className="secondaryButton compactButton"
+                      disabled={isSubmitting}
+                      type="button"
+                      onClick={() => onApprovalDecision(approval, "reject")}
+                    >
+                      拒绝
+                    </button>
+                  </span>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -645,12 +703,13 @@ async function fetchJson<T>(input: RequestInfo | URL, init?: RequestInit): Promi
   return payload as T;
 }
 
-function createImportBody(input: {
+async function createImportBody(input: {
   filename: string;
   markdownContent: string;
   organizationId: string;
   sourceType: string;
   sourceUrl: string;
+  zipFile: File | null;
 }) {
   if (input.sourceType === "github_url" || input.sourceType === "marketplace_url") {
     return {
@@ -658,6 +717,17 @@ function createImportBody(input: {
       source: {
         type: input.sourceType,
         url: input.sourceUrl,
+      },
+    };
+  }
+  if (input.sourceType === "zip") {
+    if (!input.zipFile) throw new Error("请选择 ZIP 包");
+    return {
+      organizationId: input.organizationId,
+      source: {
+        contentBase64: await fileToBase64(input.zipFile),
+        filename: input.zipFile.name,
+        type: "zip",
       },
     };
   }
@@ -669,6 +739,15 @@ function createImportBody(input: {
       type: "markdown",
     },
   };
+}
+
+async function fileToBase64(file: File): Promise<string> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += 0x8000) {
+    binary += String.fromCharCode(...bytes.slice(index, index + 0x8000));
+  }
+  return btoa(binary);
 }
 
 function runtimeFleetTargets(payload: RuntimeFleetResponse): SkillTargetOption[] {
@@ -714,6 +793,14 @@ function targetLabel(targetType: AssignmentTargetType): string {
   if (targetType === "agent") return "Agent";
   if (targetType === "runtime") return "Runtime";
   return "Device";
+}
+
+function approvalActionLabel(action: string): string {
+  if (action === "publish_skill") return "发布 Skill";
+  if (action === "assign_skill") return "分配 Skill";
+  if (action === "delete_skill") return "删除 Skill";
+  if (action === "manage_permissions") return "管理权限";
+  return action;
 }
 
 function formatDateTime(value: string): string {

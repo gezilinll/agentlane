@@ -98,8 +98,26 @@ const runtimeFleetResponse = {
   ],
 };
 
+const pendingApprovalsResponse = {
+  approvalRequests: [
+    {
+      id: "approval_1",
+      action: "assign_skill",
+      skillId: "skill_cost",
+      targetType: "agent",
+      targetId: "gezilinll-claw:openclaw:gateway-local:agent:main",
+      riskLevel: "medium",
+      riskSummary: "需要目标 owner 审批后才能分配到 main。",
+      status: "pending",
+      createdAt: "2026-05-14T08:18:00.000Z",
+    },
+  ],
+};
+type ApprovalsResponse = {
+  approvalRequests: typeof pendingApprovalsResponse.approvalRequests;
+};
 const emptyAssignmentsResponse = { assignments: [] };
-const emptyApprovalsResponse = { approvalRequests: [] };
+const emptyApprovalsResponse: ApprovalsResponse = { approvalRequests: [] };
 const operationsResponse = {
   operations: [
     {
@@ -139,8 +157,12 @@ const notificationsResponse = {
   ],
 };
 
-function installSkillRegistryFetchMock(options: { detail?: typeof skillDetailResponse } = {}) {
+function installSkillRegistryFetchMock(options: {
+  approvals?: ApprovalsResponse;
+  detail?: typeof skillDetailResponse;
+} = {}) {
   const detailResponse = options.detail ?? skillDetailResponse;
+  const approvalsResponse = options.approvals ?? emptyApprovalsResponse;
   const calls: Array<{ body?: unknown; method: string; url: string }> = [];
   globalThis.fetch = vi.fn(async (input, init) => {
     const url = input.toString();
@@ -179,6 +201,29 @@ function installSkillRegistryFetchMock(options: { detail?: typeof skillDetailRes
       },
       }, 202);
     }
+    if (url.includes("/api/approval-requests/approval_1/approve") && method === "POST") {
+      return jsonResponse({
+        approvalRequest: {
+          ...pendingApprovalsResponse.approvalRequests[0],
+          status: "approved",
+        },
+        operation: {
+          ...operationsResponse.operations[0],
+          id: "op_assign_approved",
+          status: "queued",
+          summary: "分配 Skill：Cost Review",
+          type: "skill_assign",
+        },
+      });
+    }
+    if (url.includes("/api/approval-requests/approval_1/reject") && method === "POST") {
+      return jsonResponse({
+        approvalRequest: {
+          ...pendingApprovalsResponse.approvalRequests[0],
+          status: "rejected",
+        },
+      });
+    }
     if (url.includes("/api/skills/skill_cost/versions/skillver_cost_1/files")) {
       return jsonResponse({ files: detailResponse.files });
     }
@@ -188,7 +233,7 @@ function installSkillRegistryFetchMock(options: { detail?: typeof skillDetailRes
     if (url.includes("/api/skills?")) return jsonResponse(skillListResponse);
     if (url.includes("/api/runtime-fleet")) return jsonResponse(runtimeFleetResponse);
     if (url.includes("/api/skill-assignments")) return jsonResponse(emptyAssignmentsResponse);
-    if (url.includes("/api/approval-requests")) return jsonResponse(emptyApprovalsResponse);
+    if (url.includes("/api/approval-requests")) return jsonResponse(approvalsResponse);
     if (url.includes("/api/operations")) return jsonResponse(operationsResponse);
     if (url.includes("/api/notifications")) return jsonResponse(notificationsResponse);
     return jsonResponse({ error: "unexpected request" }, 500);
@@ -252,6 +297,31 @@ describe("SkillRegistryPage", () => {
     });
   });
 
+  it("imports ZIP Skill packages as base64 instead of pretending they are Markdown", async () => {
+    const user = userEvent.setup();
+    const calls = installSkillRegistryFetchMock();
+    render(<SkillRegistryPage organizationId="org_1" />);
+
+    await screen.findByRole("heading", { name: "Cost Review" });
+    await user.selectOptions(screen.getByLabelText("导入来源"), "zip");
+    await user.upload(
+      screen.getByLabelText("ZIP 包"),
+      new File(["zip-bytes"], "cost-skill.zip", { type: "application/zip" }),
+    );
+    await user.click(screen.getByRole("button", { name: "导入 Skill" }));
+
+    await waitFor(() => expect(screen.getByText("Imported Skill 已导入。")).toBeInTheDocument());
+    const importCall = calls.find((call) => call.url.includes("/api/skills/import") && call.method === "POST");
+    expect(importCall?.body).toMatchObject({
+      organizationId: "org_1",
+      source: {
+        contentBase64: "emlwLWJ5dGVz",
+        filename: "cost-skill.zip",
+        type: "zip",
+      },
+    });
+  });
+
   it("queues publish and assignment operations instead of pretending synchronous writes", async () => {
     const user = userEvent.setup();
     const calls = installSkillRegistryFetchMock();
@@ -299,5 +369,21 @@ describe("SkillRegistryPage", () => {
     await user.selectOptions(screen.getByLabelText("分配目标"), screen.getByRole("option", { name: "Agent · main" }));
 
     expect(screen.getByRole("button", { name: "发布后可分配" })).toBeDisabled();
+  });
+
+  it("lets reviewers approve pending Skill governance requests from the detail panel", async () => {
+    const user = userEvent.setup();
+    const calls = installSkillRegistryFetchMock({ approvals: pendingApprovalsResponse });
+    render(<SkillRegistryPage organizationId="org_1" />);
+
+    await screen.findByRole("heading", { name: "Cost Review" });
+    expect(screen.getByText(/需要目标 owner 审批后才能分配到 main。/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "批准" }));
+
+    await waitFor(() => expect(screen.getByText("审批已批准。")).toBeInTheDocument());
+    expect(calls.find((call) => call.url.includes("/api/approval-requests/approval_1/approve"))).toMatchObject({
+      body: { resolutionReason: "" },
+      method: "POST",
+    });
   });
 });

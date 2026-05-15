@@ -402,9 +402,10 @@ Skill Registry 页面必须支持：
 
 - 在用户已选组织后读取组织 Skill、分配、待处理审核、相关 Operation、通知和 Runtime Fleet 目标。
 - 查看 Skill 详情、版本、文件树、校验结果、分配目标、相关 Operation 和待处理审核。
-- 导入 Markdown、GitHub URL 和 Marketplace URL；ZIP 导入由后端统一包校验支持，但页面没有上传控件时不展示 ZIP 入口。
+- 导入 Markdown、ZIP、GitHub URL 和 Marketplace URL。ZIP 文件由页面转成 base64 后进入同一个 `POST /api/skills/import` 校验链路。
 - 发布版本或提交发布审核。
 - 选择 Device、Runtime 或 Agent 目标并创建分配 Operation 或提交分配审核。
+- 待处理审核必须能在 Skill 详情内批准或拒绝；处理后刷新相关 Operation、通知、分配和审批状态。
 - 最新版本未发布时，分配按钮必须禁用并明确提示先发布。
 - 目标 ID 可能包含 `:`、`/` 或其他分隔符，页面传参必须编码和解码，不能截断。
 - 页面内通知展示状态摘要和跳转语义，不展示完整原始日志。
@@ -447,8 +448,9 @@ UI：
 - 无组织上下文时不请求 Skill API，并提示先选择组织。
 - Skill Registry 覆盖导入、查看详情、查看版本文件、发布 / 发布审核、分配 / 分配审核、Operation 状态和通知展示。
 - Markdown 导入调用正式 Skill API，不绕过后端校验。
+- ZIP 导入把文件名和 base64 内容提交到正式 Skill API，不伪装成 Markdown。
 - GitHub URL 和 Marketplace URL 导入进入同一 `POST /api/skills/import` 路径。
-- 发布和分配动作返回 Operation 或 Approval 后，页面刷新相关 Operation、通知、分配和审批状态。
+- 发布、分配和审批动作返回 Operation 或 Approval 后，页面刷新相关 Operation、通知、分配和审批状态。
 - 最新版本未发布时不能创建分配。
 - 包含 `:` 的 target ID 在选择和提交分配时不丢失。
 - 风险提示和审核状态可见。
