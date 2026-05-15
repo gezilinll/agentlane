@@ -174,6 +174,45 @@ export function createSkillGovernanceHttpApiHandler(
       return;
     }
 
+    const syncAssignmentMatch = requestUrl.pathname.match(/^\/api\/skill-assignments\/([^/]+)\/sync$/);
+    if (request.method === "POST" && syncAssignmentMatch) {
+      const session = await requireSession(request, response, options);
+      if (!session) return;
+      const assignmentId = decodeURIComponent(syncAssignmentMatch[1] ?? "");
+      const assignment = await findReadableAssignment(options, session, assignmentId);
+      if (assignment === "forbidden") {
+        sendJson(response, 403, { error: "forbidden" });
+        return;
+      }
+      if (!assignment) {
+        sendJson(response, 404, { error: "skill_assignment_not_found" });
+        return;
+      }
+      if (assignment.status === "disabled" || assignment.status === "pending_review") {
+        sendJson(response, 409, { error: "skill_assignment_not_syncable" });
+        return;
+      }
+      const detail = await options.skillStore.readSkillDetail({ skillId: assignment.skillId });
+      if (!detail) {
+        sendJson(response, 404, { error: "skill_not_found" });
+        return;
+      }
+      const operationStore = requireOperationStore(response, options);
+      if (!operationStore) return;
+      const operation = await createSkillSyncOperation(operationStore, {
+        assignmentId: assignment.id,
+        organizationId: assignment.organizationId,
+        requestedByUserId: session.user.id,
+        skillId: assignment.skillId,
+        skillName: detail.skill.name,
+        skillVersionId: assignment.skillVersionId,
+        targetId: assignment.targetId,
+        targetType: assignment.targetType,
+      });
+      sendJson(response, 202, { operation });
+      return;
+    }
+
     const approveMatch = requestUrl.pathname.match(/^\/api\/approval-requests\/([^/]+)\/(approve|reject)$/);
     if (request.method === "POST" && approveMatch) {
       const session = await requireSession(request, response, options);
@@ -408,6 +447,47 @@ async function createSkillAssignOperation(
   return operation;
 }
 
+async function createSkillSyncOperation(
+  operationStore: OperationStore,
+  input: {
+    assignmentId: string;
+    organizationId: string;
+    requestedByUserId: string;
+    skillId: string;
+    skillName: string;
+    skillVersionId: string;
+    targetId: string;
+    targetType: SkillAssignmentTargetType;
+  },
+): Promise<OperationRow> {
+  const operation = await operationStore.createOperation({
+    metadata: {
+      assignmentId: input.assignmentId,
+      skillId: input.skillId,
+      skillVersionId: input.skillVersionId,
+      targetId: input.targetId,
+      targetType: input.targetType,
+    },
+    organizationId: input.organizationId,
+    requestedByUserId: input.requestedByUserId,
+    resourceId: input.skillId,
+    resourceType: "skill",
+    summary: `同步 Skill：${input.skillName}`,
+    targetId: input.targetId,
+    targetType: input.targetType,
+    type: "skill_sync",
+  });
+  await operationStore.enqueueJob({
+    operationId: operation.id,
+    organizationId: input.organizationId,
+    payload: {
+      assignmentId: input.assignmentId,
+    },
+    type: "skill_sync",
+  });
+  return operation;
+}
+
 function approvalNeedsOperation(request: ApprovalRequestRow): boolean {
   return request.action === "publish_skill" || request.action === "assign_skill";
 }
@@ -451,6 +531,40 @@ async function findPendingApproval(
     const match = pending.find((request) => request.id === requestId);
     if (!match) continue;
     if (canResolveApproval(membership.role, match.requiredRole)) return match;
+    return "forbidden";
+  }
+  return null;
+}
+
+async function findReadableAssignment(
+  options: SkillGovernanceHttpApiHandlerOptions,
+  session: AuthSessionContext,
+  assignmentId: string,
+): Promise<Awaited<ReturnType<SkillGovernanceStore["readSkillAssignment"]>> | "forbidden" | null> {
+  if (!assignmentId) return null;
+  for (const membership of session.organizations) {
+    const assignment = await options.governanceStore.readSkillAssignment({
+      assignmentId,
+      organizationId: membership.organizationId,
+    });
+    if (!assignment) continue;
+    const canViewSkill = await options.governanceStore.hasResourcePermission({
+      organizationId: assignment.organizationId,
+      organizationRole: membership.role,
+      permission: "view",
+      resourceId: assignment.skillId,
+      resourceType: "skill",
+      userId: session.user.id,
+    });
+    const canManageTarget = await options.governanceStore.hasResourcePermission({
+      organizationId: assignment.organizationId,
+      organizationRole: membership.role,
+      permission: "manage_skills",
+      resourceId: assignment.targetId,
+      resourceType: assignment.targetType,
+      userId: session.user.id,
+    });
+    if (canViewSkill && canManageTarget) return assignment;
     return "forbidden";
   }
   return null;

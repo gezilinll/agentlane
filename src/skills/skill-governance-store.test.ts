@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createPostgresAuthStore } from "../auth/auth-store";
+import { createPostgresOperationStore } from "../operations/operation-store";
 import {
   createTemporaryPostgresDatabase,
   runMigrationsScript,
@@ -194,6 +195,115 @@ compatibility: openclaw
         });
       } finally {
         await Promise.all([authStore.close(), skillStore.close(), governanceStore.close()]);
+      }
+    } finally {
+      await database.drop();
+    }
+  });
+
+  it("tracks Skill sync jobs and mirrors terminal status onto the assignment", async () => {
+    const database = await createTemporaryPostgresDatabase();
+    try {
+      runMigrationsScript(database.url);
+      const authStore = createPostgresAuthStore({ connectionString: database.url });
+      const skillStore = createPostgresSkillStore({ connectionString: database.url });
+      const governanceStore = createPostgresSkillGovernanceStore({ connectionString: database.url });
+      const operationStore = createPostgresOperationStore({ connectionString: database.url });
+      try {
+        const owner = await authStore.upsertUserForEmail("sync-owner@example.com");
+        const organization = await authStore.createOrganization({
+          createdByUserId: owner.id,
+          name: "Sync Team",
+          slug: "sync-team",
+        });
+        const imported = await skillStore.importSkillVersion({
+          createdByUserId: owner.id,
+          organizationId: organization.id,
+          package: createSkillPackageFromMarkdown({
+            content: `---
+name: Sync Guard
+description: Shared sync rules.
+license: MIT
+compatibility: codex
+---
+
+# Sync Guard
+`,
+            source: { type: "upload_md" },
+          }),
+        });
+        await governanceStore.publishSkillVersion({
+          publishedByUserId: owner.id,
+          skillId: imported.skill.id,
+          skillVersionId: imported.version.id,
+        });
+        const assignment = await governanceStore.createSkillAssignment({
+          approvedByUserId: owner.id,
+          createdByUserId: owner.id,
+          organizationId: organization.id,
+          skillId: imported.skill.id,
+          skillVersionId: imported.version.id,
+          status: "approved",
+          targetId: "gezilinll-claw:codex:local:agent:main",
+          targetType: "agent",
+        });
+        const operation = await operationStore.createOperation({
+          organizationId: organization.id,
+          requestedByUserId: owner.id,
+          resourceId: imported.skill.id,
+          resourceType: "skill",
+          summary: "同步 Skill：Sync Guard",
+          targetId: assignment.targetId,
+          targetType: assignment.targetType,
+          type: "skill_sync",
+        });
+        const operationJob = await operationStore.enqueueJob({
+          operationId: operation.id,
+          organizationId: organization.id,
+          payload: { assignmentId: assignment.id },
+          type: "skill_sync",
+        });
+
+        const syncJob = await governanceStore.createSkillSyncJob({
+          action: "sync",
+          assignmentId: assignment.id,
+          jobId: operationJob.id,
+          operationId: operation.id,
+          organizationId: organization.id,
+          packageHash: imported.version.packageHash,
+          targetId: assignment.targetId,
+          targetType: assignment.targetType,
+        });
+        await governanceStore.updateSkillSyncJobCommand({
+          commandId: "cmd-sync-1",
+          syncJobId: syncJob.id,
+        });
+        await governanceStore.finishSkillSyncJob({
+          status: "succeeded",
+          syncJobId: syncJob.id,
+        });
+
+        await expect(governanceStore.readSkillAssignment({
+          assignmentId: assignment.id,
+          organizationId: organization.id,
+        })).resolves.toMatchObject({
+          id: assignment.id,
+          lastSyncJobId: syncJob.id,
+          status: "synced",
+        });
+        await expect(governanceStore.listSkillSyncJobs({
+          assignmentId: assignment.id,
+          organizationId: organization.id,
+        })).resolves.toMatchObject([
+          {
+            commandId: "cmd-sync-1",
+            operationId: operation.id,
+            status: "succeeded",
+            targetId: assignment.targetId,
+          },
+        ]);
+      } finally {
+        await Promise.all([authStore.close(), skillStore.close(), governanceStore.close(), operationStore.close()]);
       }
     } finally {
       await database.drop();

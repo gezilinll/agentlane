@@ -1,4 +1,5 @@
 import { execFileSync, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
@@ -1477,6 +1478,93 @@ describe("device collector scripts", () => {
     }
   });
 
+  it("writes Skill sync command files into the configured sync root", async () => {
+    const controlServer = await startSkillSyncControlServer();
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-skill-sync-home-"));
+    const configDir = mkdtempSync(path.join(tmpdir(), "lorume-skill-sync-config-"));
+    const skillSyncRoot = path.join(fakeHome, "synced-skills");
+    const configPath = path.join(configDir, "config.json");
+    writeFileSync(configPath, JSON.stringify({
+      intervalMs: 100000,
+      serverUrl: controlServer.baseUrl,
+      skillSyncRoot,
+    }));
+    const child = spawn(process.execPath, [
+      collectorScript,
+      "--fixture",
+      fixturePath,
+      "--config",
+      configPath,
+      "--interval-ms",
+      "100000",
+    ], {
+      env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    try {
+      const result = await controlServer.skillSyncResult;
+      const writtenSkillPath = path.join(skillSyncRoot, "shared-skill", "SKILL.md");
+
+      expect(result.commandResult).toMatchObject({
+        commandId: "cmd-skill-sync-1",
+        deviceId: "fixture-mac",
+        status: "succeeded",
+        type: "command.result",
+        result: {
+          skillSlug: "shared-skill",
+          writtenFiles: 1,
+        },
+      });
+      expect(readFileSync(writtenSkillPath, "utf8")).toBe("# Shared Skill\n");
+    } finally {
+      child.kill();
+      controlServer.close();
+    }
+  });
+
+  it("rejects Skill sync command files with invalid hashes", async () => {
+    const controlServer = await startSkillSyncControlServer({ contentHash: "not-a-sha256" });
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-skill-sync-invalid-home-"));
+    const configDir = mkdtempSync(path.join(tmpdir(), "lorume-skill-sync-invalid-config-"));
+    const skillSyncRoot = path.join(fakeHome, "synced-skills");
+    const configPath = path.join(configDir, "config.json");
+    writeFileSync(configPath, JSON.stringify({
+      intervalMs: 100000,
+      serverUrl: controlServer.baseUrl,
+      skillSyncRoot,
+    }));
+    const child = spawn(process.execPath, [
+      collectorScript,
+      "--fixture",
+      fixturePath,
+      "--config",
+      configPath,
+      "--interval-ms",
+      "100000",
+    ], {
+      env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    try {
+      const result = await controlServer.skillSyncResult;
+
+      expect(result.commandResult).toMatchObject({
+        commandId: "cmd-skill-sync-1",
+        deviceId: "fixture-mac",
+        error: "skill.sync file hash invalid: SKILL.md",
+        status: "failed",
+        type: "command.result",
+      });
+      expect(existsSync(path.join(skillSyncRoot, "shared-skill", "SKILL.md"))).toBe(false);
+    } finally {
+      child.kill();
+      controlServer.close();
+    }
+  });
+
+
   it("discovers OpenClaw channel bindings from local config without requiring gateway health", () => {
     const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-home-"));
     const configDir = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-config-"));
@@ -2211,5 +2299,103 @@ async function startControlServer(options: {
       server?.close();
     },
     refreshResult,
+  };
+}
+
+async function startSkillSyncControlServer(options: { contentHash?: string } = {}): Promise<{
+  baseUrl: string;
+  close: () => void;
+  skillSyncResult: Promise<{
+    commandResult: Record<string, unknown>;
+    hello: Record<string, unknown>;
+  }>;
+}> {
+  let webSocketServer: WebSocketServer | undefined;
+  let server: Server | undefined;
+  let helloMessage: Record<string, unknown> | undefined;
+  const content = "# Shared Skill\n";
+
+  const skillSyncResult = new Promise<{
+    commandResult: Record<string, unknown>;
+    hello: Record<string, unknown>;
+  }>((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error("collector skill sync timed out")), 5000);
+
+    server = createServer((request, response) => {
+      if (request.method === "POST" && ["/api/device-snapshots", "/api/runtime-work-state-snapshots"].includes(request.url ?? "")) {
+        request.resume();
+        response.writeHead(201, { "content-type": "application/json" });
+        response.end(JSON.stringify({ ok: true }));
+        return;
+      }
+      response.writeHead(404);
+      response.end();
+    });
+
+    webSocketServer = new WebSocketServer({ noServer: true });
+    server.on("upgrade", (request, socket, head) => {
+      const url = new URL(request.url ?? "/", "http://127.0.0.1");
+      if (url.pathname !== "/api/device-control/ws") {
+        socket.destroy();
+        return;
+      }
+      webSocketServer?.handleUpgrade(request, socket, head, (webSocket) => {
+        webSocketServer?.emit("connection", webSocket, request);
+      });
+    });
+    webSocketServer.on("connection", (webSocket) => {
+      webSocket.on("message", (data) => {
+        const message = JSON.parse(data.toString()) as Record<string, unknown>;
+        if (message.type === "hello") {
+          helloMessage = message;
+          webSocket.send(JSON.stringify({
+            commandId: "cmd-skill-sync-1",
+            deviceId: message.deviceId,
+            payload: {
+              assignmentId: "assignment_1",
+              files: [
+                {
+                  content,
+                  contentHash: options.contentHash ?? createHash("sha256").update(content).digest("hex"),
+                  path: "SKILL.md",
+                  sizeBytes: content.length,
+                },
+              ],
+              organizationId: "org_1",
+              packageHash: "sha256:package",
+              skillId: "skill_1",
+              skillSlug: "shared-skill",
+              skillVersionId: "version_1",
+              targetId: "fixture-mac",
+              targetType: "device",
+            },
+            type: "skill.sync",
+          }));
+        }
+        if (message.type === "command.result" && message.commandId === "cmd-skill-sync-1") {
+          clearTimeout(timeout);
+          resolve({
+            commandResult: message,
+            hello: helloMessage ?? {},
+          });
+        }
+      });
+    });
+  });
+
+  if (!server) throw new Error("failed to create skill sync control server");
+  await new Promise<void>((resolve) => {
+    server?.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("missing test server address");
+
+  return {
+    baseUrl: `http://127.0.0.1:${address.port}`,
+    close() {
+      webSocketServer?.close();
+      server?.close();
+    },
+    skillSyncResult,
   };
 }

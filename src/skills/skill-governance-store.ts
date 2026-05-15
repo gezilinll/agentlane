@@ -29,6 +29,12 @@ export type SkillAssignmentStatus =
   | "unsupported"
   | "disabled";
 
+/** Deterministic Skill sync action applied to one target assignment. */
+export type SkillSyncAction = "sync" | "remove" | "verify";
+
+/** Persisted Skill sync lifecycle state. */
+export type SkillSyncJobStatus = "queued" | "running" | "succeeded" | "failed" | "unsupported";
+
 /** Approval action supported by the current Skill governance backend. */
 export type ApprovalAction = "publish_skill" | "assign_skill" | "sync_skill" | "archive_skill" | "delete_skill";
 
@@ -128,6 +134,40 @@ export interface SkillAssignmentRow {
   createdAt: Date;
   /** Last update timestamp. */
   updatedAt: Date;
+}
+
+/** Persisted Skill sync job row. */
+export interface SkillSyncJobRow {
+  /** Sync job id. */
+  id: string;
+  /** Related assignment id, when this job came from an assignment. */
+  assignmentId?: string | null;
+  /** Owning organization id. */
+  organizationId: string;
+  /** Sync action. */
+  action: SkillSyncAction;
+  /** Target type. */
+  targetType: SkillAssignmentTargetType;
+  /** Target id. */
+  targetId: string;
+  /** Current sync status. */
+  status: SkillSyncJobStatus;
+  /** Device command id once dispatched. */
+  commandId?: string | null;
+  /** Immutable package hash expected on target. */
+  packageHash?: string | null;
+  /** Related Operation id. */
+  operationId?: string | null;
+  /** Related Operation Job id. */
+  jobId?: string | null;
+  /** Start timestamp. */
+  startedAt?: Date | null;
+  /** Finish timestamp. */
+  finishedAt?: Date | null;
+  /** User-facing failure summary. */
+  errorSummary?: string | null;
+  /** Creation timestamp. */
+  createdAt: Date;
 }
 
 /** Input used to grant a resource permission. */
@@ -232,6 +272,60 @@ export interface CreateSkillAssignmentInput {
   approvedByUserId?: string | null;
 }
 
+/** Input used to read one assignment. */
+export interface ReadSkillAssignmentInput {
+  /** Assignment id. */
+  assignmentId: string;
+  /** Optional organization guard. */
+  organizationId?: string;
+}
+
+/** Input used to create one sync job and mark the assignment syncing. */
+export interface CreateSkillSyncJobInput {
+  /** Related assignment id. */
+  assignmentId?: string | null;
+  /** Organization scope. */
+  organizationId: string;
+  /** Sync action. */
+  action: SkillSyncAction;
+  /** Target type. */
+  targetType: SkillAssignmentTargetType;
+  /** Target id. */
+  targetId: string;
+  /** Related Operation id. */
+  operationId?: string | null;
+  /** Related Operation Job id. */
+  jobId?: string | null;
+  /** Immutable package hash expected on target. */
+  packageHash?: string | null;
+}
+
+/** Input used to attach the device command id to one sync job. */
+export interface UpdateSkillSyncJobCommandInput {
+  /** Sync job id. */
+  syncJobId: string;
+  /** Device command id. */
+  commandId: string;
+}
+
+/** Input used to finish one sync job. */
+export interface FinishSkillSyncJobInput {
+  /** Sync job id. */
+  syncJobId: string;
+  /** Terminal status. */
+  status: Extract<SkillSyncJobStatus, "succeeded" | "failed" | "unsupported">;
+  /** Optional failure summary. */
+  errorSummary?: string | null;
+}
+
+/** Input used to list sync jobs. */
+export interface ListSkillSyncJobsInput {
+  /** Organization scope. */
+  organizationId: string;
+  /** Optional assignment filter. */
+  assignmentId?: string;
+}
+
 /** Input used to list approvals. */
 export interface ListApprovalRequestsInput {
   /** Organization scope. */
@@ -268,8 +362,18 @@ export interface SkillGovernanceStore {
   resolveApprovalRequest: (input: ResolveApprovalRequestInput) => Promise<ApprovalRequestRow | null>;
   /** Create or update a Skill assignment. */
   createSkillAssignment: (input: CreateSkillAssignmentInput) => Promise<SkillAssignmentRow>;
+  /** Read one Skill assignment. */
+  readSkillAssignment: (input: ReadSkillAssignmentInput) => Promise<SkillAssignmentRow | null>;
   /** List Skill assignments. */
   listSkillAssignments: (input: ListSkillAssignmentsInput) => Promise<SkillAssignmentRow[]>;
+  /** Create one Skill sync job and move the assignment to syncing when linked. */
+  createSkillSyncJob: (input: CreateSkillSyncJobInput) => Promise<SkillSyncJobRow>;
+  /** Attach a device command id to a Skill sync job. */
+  updateSkillSyncJobCommand: (input: UpdateSkillSyncJobCommandInput) => Promise<SkillSyncJobRow | null>;
+  /** Finish one Skill sync job and mirror terminal state to its assignment. */
+  finishSkillSyncJob: (input: FinishSkillSyncJobInput) => Promise<SkillSyncJobRow | null>;
+  /** List Skill sync jobs for an organization or assignment. */
+  listSkillSyncJobs: (input: ListSkillSyncJobsInput) => Promise<SkillSyncJobRow[]>;
   /** Close owned database connections. */
   close: () => Promise<void>;
 }
@@ -471,6 +575,19 @@ export function createPostgresSkillGovernanceStore(
     async createSkillAssignment(input) {
       return createSkillAssignment(pool, input);
     },
+    async readSkillAssignment(input) {
+      const params: unknown[] = [input.assignmentId];
+      const organizationFilter = input.organizationId ? "AND organization_id = $2" : "";
+      if (input.organizationId) params.push(input.organizationId);
+      const result = await pool.query<SkillAssignmentRow>(`
+        SELECT ${skillAssignmentColumns}
+        FROM skill_assignments
+        WHERE id = $1
+          ${organizationFilter}
+        LIMIT 1
+      `, params);
+      return result.rows[0] ?? null;
+    },
     async listSkillAssignments(input) {
       const result = await pool.query<SkillAssignmentRow>(`
         SELECT ${skillAssignmentColumns}
@@ -479,6 +596,34 @@ export function createPostgresSkillGovernanceStore(
           AND status <> 'disabled'
         ORDER BY updated_at DESC, created_at DESC
       `, [input.organizationId]);
+      return result.rows;
+    },
+    async createSkillSyncJob(input) {
+      return createSkillSyncJob(pool, input);
+    },
+    async updateSkillSyncJobCommand(input) {
+      const result = await pool.query<SkillSyncJobRow>(`
+        UPDATE skill_sync_jobs
+        SET command_id = $2
+        WHERE id = $1
+        RETURNING ${skillSyncJobColumns}
+      `, [input.syncJobId, input.commandId]);
+      return result.rows[0] ?? null;
+    },
+    async finishSkillSyncJob(input) {
+      return finishSkillSyncJob(pool, input);
+    },
+    async listSkillSyncJobs(input) {
+      const params: unknown[] = [input.organizationId];
+      const assignmentFilter = input.assignmentId ? "AND assignment_id = $2" : "";
+      if (input.assignmentId) params.push(input.assignmentId);
+      const result = await pool.query<SkillSyncJobRow>(`
+        SELECT ${skillSyncJobColumns}
+        FROM skill_sync_jobs
+        WHERE organization_id = $1
+          ${assignmentFilter}
+        ORDER BY created_at DESC
+      `, params);
       return result.rows;
     },
     close() {
@@ -524,6 +669,24 @@ const skillAssignmentColumns = `
   updated_at AS "updatedAt"
 `;
 
+const skillSyncJobColumns = `
+  id,
+  assignment_id AS "assignmentId",
+  organization_id AS "organizationId",
+  action,
+  target_type AS "targetType",
+  target_id AS "targetId",
+  status,
+  command_id AS "commandId",
+  package_hash AS "packageHash",
+  operation_id AS "operationId",
+  job_id AS "jobId",
+  started_at AS "startedAt",
+  finished_at AS "finishedAt",
+  error_summary AS "errorSummary",
+  created_at AS "createdAt"
+`;
+
 async function publishSkillVersion(
   client: Pick<pg.Pool | PoolClient, "query">,
   input: PublishSkillVersionInput,
@@ -563,6 +726,7 @@ async function createSkillAssignment(
       status = EXCLUDED.status,
       created_by_user_id = EXCLUDED.created_by_user_id,
       approved_by_user_id = EXCLUDED.approved_by_user_id,
+      last_sync_job_id = NULL,
       updated_at = now()
     RETURNING ${skillAssignmentColumns}
   `, [
@@ -577,6 +741,91 @@ async function createSkillAssignment(
     input.approvedByUserId ?? null,
   ]);
   return result.rows[0];
+}
+
+async function createSkillSyncJob(
+  pool: pg.Pool,
+  input: CreateSkillSyncJobInput,
+): Promise<SkillSyncJobRow> {
+  return withTransaction(pool, async (client) => {
+    const result = await client.query<SkillSyncJobRow>(`
+      INSERT INTO skill_sync_jobs (
+        id,
+        assignment_id,
+        organization_id,
+        action,
+        target_type,
+        target_id,
+        status,
+        package_hash,
+        operation_id,
+        job_id,
+        started_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, 'running', $7, $8, $9, now())
+      RETURNING ${skillSyncJobColumns}
+    `, [
+      createId("syncjob"),
+      input.assignmentId ?? null,
+      input.organizationId,
+      input.action,
+      input.targetType,
+      input.targetId,
+      input.packageHash ?? null,
+      input.operationId ?? null,
+      input.jobId ?? null,
+    ]);
+    const syncJob = result.rows[0];
+    if (input.assignmentId) {
+      await client.query(`
+        UPDATE skill_assignments
+        SET status = 'syncing', last_sync_job_id = $1, updated_at = now()
+        WHERE id = $2
+          AND organization_id = $3
+      `, [syncJob.id, input.assignmentId, input.organizationId]);
+    }
+    return syncJob;
+  });
+}
+
+async function finishSkillSyncJob(
+  pool: pg.Pool,
+  input: FinishSkillSyncJobInput,
+): Promise<SkillSyncJobRow | null> {
+  return withTransaction(pool, async (client) => {
+    const result = await client.query<SkillSyncJobRow>(`
+      UPDATE skill_sync_jobs
+      SET
+        status = $2,
+        finished_at = now(),
+        error_summary = $3
+      WHERE id = $1
+      RETURNING ${skillSyncJobColumns}
+    `, [
+      input.syncJobId,
+      input.status,
+      input.errorSummary ?? null,
+    ]);
+    const syncJob = result.rows[0] ?? null;
+    if (!syncJob?.assignmentId) return syncJob;
+    await client.query(`
+      UPDATE skill_assignments
+      SET status = $2, updated_at = now()
+      WHERE id = $1
+        AND last_sync_job_id = $3
+    `, [
+      syncJob.assignmentId,
+      syncStatusToAssignmentStatus(input.status),
+      syncJob.id,
+    ]);
+    return syncJob;
+  });
+}
+
+function syncStatusToAssignmentStatus(status: FinishSkillSyncJobInput["status"]): SkillAssignmentStatus {
+  if (status === "succeeded") return "synced";
+  if (status === "unsupported") return "unsupported";
+  return "failed";
 }
 
 async function isSkillOwner(

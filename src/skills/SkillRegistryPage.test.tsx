@@ -116,7 +116,31 @@ const pendingApprovalsResponse = {
 type ApprovalsResponse = {
   approvalRequests: typeof pendingApprovalsResponse.approvalRequests;
 };
-const emptyAssignmentsResponse = { assignments: [] };
+type AssignmentsResponse = {
+  assignments: Array<{
+    id: string;
+    skillId: string;
+    skillVersionId: string;
+    status: string;
+    targetId: string;
+    targetType: string;
+    updatedAt: string;
+  }>;
+};
+const emptyAssignmentsResponse: AssignmentsResponse = { assignments: [] };
+const approvedAssignmentsResponse = {
+  assignments: [
+    {
+      id: "assignment_1",
+      skillId: "skill_cost",
+      skillVersionId: "skillver_cost_1",
+      targetType: "agent",
+      targetId: "gezilinll-claw:openclaw:gateway-local:agent:main",
+      status: "approved",
+      updatedAt: "2026-05-14T08:19:00.000Z",
+    },
+  ],
+};
 const emptyApprovalsResponse: ApprovalsResponse = { approvalRequests: [] };
 const operationsResponse = {
   operations: [
@@ -159,10 +183,12 @@ const notificationsResponse = {
 
 function installSkillRegistryFetchMock(options: {
   approvals?: ApprovalsResponse;
+  assignments?: AssignmentsResponse;
   detail?: typeof skillDetailResponse;
 } = {}) {
   const detailResponse = options.detail ?? skillDetailResponse;
   const approvalsResponse = options.approvals ?? emptyApprovalsResponse;
+  const assignmentsResponse = options.assignments ?? emptyAssignmentsResponse;
   const calls: Array<{ body?: unknown; method: string; url: string }> = [];
   globalThis.fetch = vi.fn(async (input, init) => {
     const url = input.toString();
@@ -186,6 +212,19 @@ function installSkillRegistryFetchMock(options: {
           id: "op_publish_2",
           status: "queued",
           summary: "发布 Skill：Cost Review",
+        },
+      }, 202);
+    }
+    if (url.includes("/api/skill-assignments/assignment_1/sync") && method === "POST") {
+      return jsonResponse({
+        operation: {
+          ...operationsResponse.operations[0],
+          id: "op_sync_1",
+          status: "queued",
+          summary: "同步 Skill：Cost Review",
+          targetId: "gezilinll-claw:openclaw:gateway-local:agent:main",
+          targetType: "agent",
+          type: "skill_sync",
         },
       }, 202);
     }
@@ -232,7 +271,7 @@ function installSkillRegistryFetchMock(options: {
     }
     if (url.includes("/api/skills?")) return jsonResponse(skillListResponse);
     if (url.includes("/api/runtime-fleet")) return jsonResponse(runtimeFleetResponse);
-    if (url.includes("/api/skill-assignments")) return jsonResponse(emptyAssignmentsResponse);
+    if (url.includes("/api/skill-assignments")) return jsonResponse(assignmentsResponse);
     if (url.includes("/api/approval-requests")) return jsonResponse(approvalsResponse);
     if (url.includes("/api/operations")) return jsonResponse(operationsResponse);
     if (url.includes("/api/notifications")) return jsonResponse(notificationsResponse);
@@ -383,6 +422,20 @@ describe("SkillRegistryPage", () => {
     await waitFor(() => expect(screen.getByText("审批已批准。")).toBeInTheDocument());
     expect(calls.find((call) => call.url.includes("/api/approval-requests/approval_1/approve"))).toMatchObject({
       body: { resolutionReason: "" },
+      method: "POST",
+    });
+  });
+
+  it("queues sync operations for approved Skill assignments", async () => {
+    const user = userEvent.setup();
+    const calls = installSkillRegistryFetchMock({ assignments: approvedAssignmentsResponse });
+    render(<SkillRegistryPage organizationId="org_1" />);
+
+    await screen.findByRole("heading", { name: "Cost Review" });
+    await user.click(screen.getByRole("button", { name: "同步到目标" }));
+
+    await waitFor(() => expect(screen.getByText("同步任务已排队。")).toBeInTheDocument());
+    expect(calls.find((call) => call.url.includes("/api/skill-assignments/assignment_1/sync"))).toMatchObject({
       method: "POST",
     });
   });

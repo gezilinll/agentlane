@@ -113,7 +113,9 @@ Job 状态：
 
 - Skill 发布：有权限时创建 `skill_publish` Operation / Job，Job 成功后把 Skill Version 标记为 published。
 - Skill 分配：有权限时创建 `skill_assign` Operation / Job，Job 成功后创建或更新 approved Assignment。
-- Skill 下发：approved Assignment 触发 `skill_sync` Operation / Job，由 adapter / collector / CLI / 文件同步执行。
+- Skill 下发：approved Assignment 触发 `skill_sync` Operation / Job，由 Job Runner 读取 Assignment、Skill Version 和文件内容，创建 Skill Sync Job，再通过 device control channel 下发 `skill.sync` 命令。
+- `skill_sync` Job 不直接在 HTTP 请求内写设备；它等待 collector 回报 command 终态，成功后把 Assignment 标记为 `synced`，失败、超时或不支持时标记为 `failed` 或 `unsupported`。
+- `skill_sync` Job 的 payload 只保存 `assignmentId`；目标、版本、文件和 package hash 必须从数据库读取，避免前端提交过期或伪造的文件内容。
 - 缺权限时仍创建 Approval Request，不创建半激活 Assignment。
 - 审核通过后再创建对应 Operation / Job。
 
@@ -142,6 +144,8 @@ Job 状态：
 - 不支持 Job 会让 Operation 进入 `unsupported`。
 - 需要人工处理的 Job 会让 Operation 进入 `requires_manual_step`，并保留用户可理解的手动处理说明。
 - Operation 状态变化能创建通知事件。
+- `skill_sync` Job 会创建 Skill Sync Job、记录 device command id，并把 command 终态镜像回 Skill Assignment。
+- `skill_sync` command 超时会进入失败路径，不在页面中表现为已完成。
 
 ## 验收标准
 

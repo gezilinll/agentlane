@@ -29,8 +29,8 @@ export interface RuntimeDeviceConnection {
   lastError?: string;
 }
 
-/** Runtime control command supported by Lorume v1. */
-export type RuntimeCommandType = "inventory.refresh";
+/** Runtime control command supported by Lorume. */
+export type RuntimeCommandType = "inventory.refresh" | "skill.sync";
 
 /** Runtime command lifecycle status. */
 export type RuntimeCommandStatus =

@@ -4,6 +4,7 @@ import { PixelIcon } from "../ui/PixelIcon";
 type SkillStatus = "draft" | "published" | "archived";
 type ValidationStatus = "passed" | "warning" | "blocked";
 type AssignmentTargetType = "device" | "runtime" | "agent";
+type AssignmentStatus = "pending_review" | "approved" | "syncing" | "synced" | "failed" | "unsupported" | "disabled";
 type OperationStatus =
   | "queued"
   | "running"
@@ -71,7 +72,7 @@ interface SkillAssignment {
   skillVersionId: string;
   targetType: AssignmentTargetType;
   targetId: string;
-  status: string;
+  status: AssignmentStatus;
   updatedAt: string;
 }
 
@@ -139,6 +140,16 @@ const operationStatusLabels: Record<OperationStatus, string> = {
   requires_manual_step: "需人工处理",
   running: "执行中",
   succeeded: "完成",
+  unsupported: "不支持",
+};
+
+const assignmentStatusLabels: Record<AssignmentStatus, string> = {
+  approved: "待同步",
+  disabled: "已停用",
+  failed: "同步失败",
+  pending_review: "待审批",
+  synced: "已同步",
+  syncing: "同步中",
   unsupported: "不支持",
 };
 
@@ -363,6 +374,25 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
     }
   }
 
+  async function handleSyncAssignment(assignment: SkillAssignment) {
+    setIsSubmitting(true);
+    setStatusMessage("");
+    setErrorMessage("");
+    try {
+      await fetchJson<{ operation?: Operation }>(`/api/skill-assignments/${encodeURIComponent(assignment.id)}/sync`, {
+        body: JSON.stringify({}),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      });
+      setStatusMessage("同步任务已排队。");
+      await refreshActivity();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "同步 Skill 失败");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   if (!organizationId) {
     return (
       <section className="workspace">
@@ -514,6 +544,7 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
           onAssign={() => void handleAssign()}
           onApprovalDecision={(approval, decision) => void handleApprovalDecision(approval, decision)}
           onPublish={() => void handlePublish()}
+          onSyncAssignment={(assignment) => void handleSyncAssignment(assignment)}
           onTargetChange={setSelectedTargetValue}
           isSubmitting={isSubmitting}
         />
@@ -532,6 +563,7 @@ function SkillDetailPanel({
   onAssign,
   onApprovalDecision,
   onPublish,
+  onSyncAssignment,
   onTargetChange,
   operations,
   selectedTargetValue,
@@ -549,6 +581,7 @@ function SkillDetailPanel({
   onAssign: () => void;
   onApprovalDecision: (approval: ApprovalRequest, decision: "approve" | "reject") => void;
   onPublish: () => void;
+  onSyncAssignment: (assignment: SkillAssignment) => void;
   onTargetChange: (value: string) => void;
 }) {
   if (!detail) {
@@ -624,7 +657,20 @@ function SkillDetailPanel({
           <ul>
             {assignments.map((assignment) => (
               <li key={assignment.id}>
-                {targetLabel(assignment.targetType)} · {assignment.targetId} · {assignment.status}
+                <span>
+                  {targetLabel(assignment.targetType)} · {assignment.targetId} ·{" "}
+                  {assignmentStatusLabels[assignment.status] ?? assignment.status}
+                </span>
+                <span className="skillInlineActions">
+                  <button
+                    className="secondaryButton compactButton"
+                    disabled={!canSyncAssignment(assignment.status) || isSubmitting}
+                    type="button"
+                    onClick={() => onSyncAssignment(assignment)}
+                  >
+                    同步到目标
+                  </button>
+                </span>
               </li>
             ))}
           </ul>
@@ -793,6 +839,10 @@ function targetLabel(targetType: AssignmentTargetType): string {
   if (targetType === "agent") return "Agent";
   if (targetType === "runtime") return "Runtime";
   return "Device";
+}
+
+function canSyncAssignment(status: AssignmentStatus): boolean {
+  return status === "approved" || status === "synced" || status === "failed" || status === "unsupported";
 }
 
 function approvalActionLabel(action: string): string {

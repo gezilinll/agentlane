@@ -129,6 +129,55 @@ describe("runtime control channel", () => {
 
     expect(() => channel.requestInventoryRefresh("missing-device")).toThrow(/not connected/i);
   });
+
+  it("dispatches Skill sync commands with target and file payloads", () => {
+    const store = createStore();
+    const channel = createRuntimeControlChannel({
+      store,
+      createCommandId: () => "cmd-sync-1",
+      now: () => new Date("2026-05-14T10:00:00.000Z"),
+    });
+    const socket = new MemorySocket();
+
+    channel.attach(socket);
+    channel.receive(socket, JSON.stringify({ type: "hello", deviceId: "fixture-mac" }));
+
+    const command = channel.requestSkillSync("fixture-mac", {
+      assignmentId: "assignment_1",
+      files: [
+        {
+          content: "# Shared Skill\n",
+          contentHash: "sha256:file",
+          path: "SKILL.md",
+          sizeBytes: 15,
+        },
+      ],
+      organizationId: "org_1",
+      packageHash: "sha256:package",
+      skillId: "skill_1",
+      skillSlug: "shared-skill",
+      skillVersionId: "version_1",
+      targetId: "fixture-mac:codex:local:agent:main",
+      targetType: "agent",
+    });
+
+    expect(command).toMatchObject({
+      commandId: "cmd-sync-1",
+      deviceId: "fixture-mac",
+      status: "sent",
+      type: "skill.sync",
+    });
+    expect(socket.sent).toContainEqual(expect.objectContaining({
+      commandId: "cmd-sync-1",
+      deviceId: "fixture-mac",
+      payload: expect.objectContaining({
+        assignmentId: "assignment_1",
+        skillSlug: "shared-skill",
+        targetType: "agent",
+      }),
+      type: "skill.sync",
+    }));
+  });
 });
 
 function createStore() {

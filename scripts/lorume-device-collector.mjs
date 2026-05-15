@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { homedir, hostname, arch, platform } from "node:os";
 import path from "node:path";
 
@@ -2227,6 +2228,11 @@ async function handleControlMessage(socket, rawMessage, config, args, seenComman
     return;
   }
 
+  if (message.type === "skill.sync") {
+    await handleSkillSyncCommand(socket, message, config, args, seenCommandIds);
+    return;
+  }
+
   if (message.type !== "inventory.refresh") return;
   if (!message.commandId) {
     sendControlMessage(socket, { type: "error", error: "inventory.refresh missing commandId" });
@@ -2271,6 +2277,119 @@ async function handleControlMessage(socket, rawMessage, config, args, seenComman
       error: error instanceof Error ? error.message : String(error),
     });
   }
+}
+
+async function handleSkillSyncCommand(socket, message, config, args, seenCommandIds) {
+  if (!message.commandId) {
+    sendControlMessage(socket, { type: "error", error: "skill.sync missing commandId" });
+    return;
+  }
+  const deviceId = message.deviceId || config.deviceId || args.deviceId;
+  if (seenCommandIds.has(message.commandId)) {
+    sendControlMessage(socket, {
+      type: "command.result",
+      commandId: message.commandId,
+      deviceId,
+      status: "succeeded",
+      result: { duplicate: true },
+    });
+    return;
+  }
+
+  seenCommandIds.add(message.commandId);
+  sendControlMessage(socket, {
+    type: "command.accepted",
+    commandId: message.commandId,
+    deviceId,
+  });
+
+  try {
+    const result = writeSkillSyncPayload(config, message.payload);
+    sendControlMessage(socket, {
+      type: "command.result",
+      commandId: message.commandId,
+      deviceId,
+      status: "succeeded",
+      result,
+    });
+  } catch (error) {
+    sendControlMessage(socket, {
+      type: "command.result",
+      commandId: message.commandId,
+      deviceId,
+      status: "failed",
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+function writeSkillSyncPayload(config, payload) {
+  if (!payload || typeof payload !== "object") throw new Error("skill.sync payload required");
+  const skillSlug = sanitizeId(payload.skillSlug || payload.skillId);
+  const files = Array.isArray(payload.files) ? payload.files : [];
+  if (!files.length) throw new Error("skill.sync files required");
+
+  const root = path.resolve(config.skillSyncRoot || path.join(homeDir(), ".lorume", "skills"));
+  const targetDir = path.join(root, skillSlug);
+  const tempDir = path.join(root, `.${skillSlug}.${process.pid}.${Date.now()}.tmp`);
+  mkdirSync(root, { recursive: true });
+  rmSync(tempDir, { force: true, recursive: true });
+  mkdirSync(tempDir, { recursive: true });
+
+  try {
+    for (const file of files) {
+      writeSkillSyncFile(tempDir, file);
+    }
+    rmSync(targetDir, { force: true, recursive: true });
+    renameSync(tempDir, targetDir);
+  } catch (error) {
+    rmSync(tempDir, { force: true, recursive: true });
+    throw error;
+  }
+
+  return {
+    assignmentId: payload.assignmentId,
+    skillSlug,
+    targetPath: targetDir,
+    writtenFiles: files.length,
+  };
+}
+
+function writeSkillSyncFile(root, file) {
+  if (!file || typeof file !== "object") throw new Error("skill.sync file payload must be an object");
+  const relativePath = normalizeSkillSyncRelativePath(file.path);
+  const content = typeof file.content === "string" ? file.content : "";
+  const sizeBytes = Buffer.byteLength(content, "utf8");
+  if (!Number.isFinite(file.sizeBytes) || Number(file.sizeBytes) !== sizeBytes) {
+    throw new Error(`skill.sync file size mismatch: ${relativePath}`);
+  }
+  const expectedHash = normalizeSha256(file.contentHash, relativePath);
+  const actualHash = createHash("sha256").update(content).digest("hex");
+  if (actualHash !== expectedHash) throw new Error(`skill.sync file hash mismatch: ${relativePath}`);
+
+  const absolutePath = path.join(root, relativePath);
+  const rootWithSeparator = `${path.resolve(root)}${path.sep}`;
+  if (!path.resolve(absolutePath).startsWith(rootWithSeparator)) {
+    throw new Error(`skill.sync file path escapes target: ${relativePath}`);
+  }
+  mkdirSync(path.dirname(absolutePath), { recursive: true });
+  writeFileSync(absolutePath, content);
+}
+
+function normalizeSkillSyncRelativePath(value) {
+  if (typeof value !== "string" || !value.trim()) throw new Error("skill.sync file path required");
+  const normalized = path.posix.normalize(value.replaceAll("\\", "/"));
+  if (normalized === "." || normalized.startsWith("/") || normalized.startsWith("../") || normalized.includes("/../")) {
+    throw new Error(`skill.sync unsafe file path: ${value}`);
+  }
+  return normalized;
+}
+
+function normalizeSha256(value, relativePath) {
+  if (typeof value !== "string") throw new Error(`skill.sync file hash required: ${relativePath}`);
+  const hash = value.startsWith("sha256:") ? value.slice("sha256:".length) : value;
+  if (!/^[a-f0-9]{64}$/i.test(hash)) throw new Error(`skill.sync file hash invalid: ${relativePath}`);
+  return hash.toLowerCase();
 }
 
 function startControlChannel(config, args, refresh) {

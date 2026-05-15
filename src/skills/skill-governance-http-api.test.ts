@@ -346,6 +346,96 @@ compatibility: openclaw
     }
   });
 
+  it("queues Skill sync operations for approved assignments", async () => {
+    const database = await createTemporaryPostgresDatabase();
+    try {
+      runMigrationsScript(database.url);
+      const authStore = createPostgresAuthStore({ connectionString: database.url });
+      const skillStore = createPostgresSkillStore({ connectionString: database.url });
+      const governanceStore = createPostgresSkillGovernanceStore({ connectionString: database.url });
+      const operationStore = createPostgresOperationStore({ connectionString: database.url });
+      try {
+        const owner = await authStore.upsertUserForEmail("sync-api-owner@example.com");
+        const organization = await authStore.createOrganization({
+          createdByUserId: owner.id,
+          name: "Sync API Team",
+          slug: "sync-api-team",
+        });
+        const imported = await skillStore.importSkillVersion({
+          createdByUserId: owner.id,
+          organizationId: organization.id,
+          package: createSkillPackageFromMarkdown({
+            content: `---
+name: API Sync Skill
+description: Sync through API.
+license: MIT
+compatibility: codex
+---
+
+# API Sync Skill
+`,
+            source: { type: "upload_md" },
+          }),
+        });
+        await governanceStore.publishSkillVersion({
+          publishedByUserId: owner.id,
+          skillId: imported.skill.id,
+          skillVersionId: imported.version.id,
+        });
+        const assignment = await governanceStore.createSkillAssignment({
+          approvedByUserId: owner.id,
+          createdByUserId: owner.id,
+          organizationId: organization.id,
+          skillId: imported.skill.id,
+          skillVersionId: imported.version.id,
+          status: "approved",
+          targetId: "gezilinll-claw:codex:local:agent:main",
+          targetType: "agent",
+        });
+        const currentSession: AuthSessionContext = {
+          id: "ses_owner",
+          organizations: await authStore.listOrganizationsForUser(owner.id),
+          user: owner,
+        };
+        const { baseUrl } = await startGovernanceApi({
+          governanceStore,
+          operationStore,
+          requireUserSession: async () => currentSession,
+          skillStore,
+        });
+
+        const syncResponse = await postJson(`${baseUrl}/api/skill-assignments/${encodeURIComponent(assignment.id)}/sync`, {});
+        const syncPayload = await syncResponse.json();
+        const operations = await operationStore.listOperations({
+          organizationId: organization.id,
+          targetId: assignment.targetId,
+          targetType: assignment.targetType,
+        });
+
+        expect(syncResponse.status).toBe(202);
+        expect(syncPayload).toMatchObject({
+          operation: expect.objectContaining({
+            resourceId: imported.skill.id,
+            status: "queued",
+            targetId: assignment.targetId,
+            type: "skill_sync",
+          }),
+        });
+        expect(operations).toEqual([
+          expect.objectContaining({
+            id: syncPayload.operation.id,
+            metadata: expect.objectContaining({ assignmentId: assignment.id }),
+            type: "skill_sync",
+          }),
+        ]);
+      } finally {
+        await Promise.all([authStore.close(), skillStore.close(), governanceStore.close(), operationStore.close()]);
+      }
+    } finally {
+      await database.drop();
+    }
+  });
+
   it("requires the configured resolver role for approval decisions", async () => {
     const database = await createTemporaryPostgresDatabase();
     try {

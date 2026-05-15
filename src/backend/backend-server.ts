@@ -128,7 +128,11 @@ export function createLorumeBackendServer(
     ?? Number(process.env.LORUME_OPERATION_RUNNER_INTERVAL_MS ?? 1_000);
   const operationRunner = operationRunnerEnabled && operationStore && skillGovernanceStore
     ? createOperationJobRunner({
-      handlers: createSkillOperationJobHandlers({ governanceStore: skillGovernanceStore }),
+      handlers: createSkillOperationJobHandlers({
+        controlChannel,
+        governanceStore: skillGovernanceStore,
+        skillStore: skillStore ?? undefined,
+      }),
       notificationStore: notificationStore ?? undefined,
       operationStore,
       runnerId: process.env.LORUME_OPERATION_RUNNER_ID ?? "lorume-backend",
