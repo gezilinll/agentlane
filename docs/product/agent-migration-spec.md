@@ -2,11 +2,11 @@
 
 状态：当前规则
 
-本规格定义 Agentlane 帮助用户注册设备、识别 runtime、准备运行环境、复制 Agent 能力和安装 Skill 的产品边界。Agent 迁移不是单纯复制一个文件夹，也不是 Skill 管理的别名；它是围绕 Device、Runtime、Agent、Skill、Channel 和权限的一组可验证操作。
+本规格定义 Lorume 帮助用户注册设备、识别 runtime、准备运行环境、复制 Agent 能力和安装 Skill 的产品边界。Agent 迁移不是单纯复制一个文件夹，也不是 Skill 管理的别名；它是围绕 Device、Runtime、Agent、Skill、Channel 和权限的一组可验证操作。
 
 ## 目标
 
-- 引导用户把自己的设备注册到 Agentlane，并持续上报设备、runtime、agent 和工作态。
+- 引导用户把自己的设备注册到 Lorume，并持续上报设备、runtime、agent 和工作态。
 - 在设备注册后识别可用 runtime，例如 OpenClaw、Codex、Multica、Slock、Claude Code。
 - 帮助用户把一个已有 Agent 的可迁移配置安装到另一台设备 / runtime 上。
 - 迁移过程只执行 runtime 官方 API / CLI、adapter、collector 安装脚本和确定性文件同步等已知 recipe。
@@ -20,7 +20,7 @@
 - 不承诺所有设备都能零干预完成 runtime 安装。
 - 不根据目标设备的复杂环境自动推断定制安装方案。
 - 不把 SSH 作为产品连接方式。SSH 只允许作为开发测试时投递安装命令的辅助通道。
-- 不在 Agentlane 内提供聊天入口。
+- 不在 Lorume 内提供聊天入口。
 - 不接管 DingTalk、Telegram、Slack、Slock、Multica 等渠道的消息路由。
 - 不引入长期可复用的迁移资产对象。
 - 不为每个平台复制一套 UI 语义。平台差异必须由 adapter 能力声明和操作记录表达。
@@ -29,11 +29,11 @@
 
 ### Device Bootstrap
 
-Device Bootstrap 是把一台机器接入 Agentlane 的过程。
+Device Bootstrap 是把一台机器接入 Lorume 的过程。
 
 职责：
 
-- 安装或更新 Agentlane Collector。
+- 安装或更新 Lorume Collector。
 - 建立 outbound WebSocket 控制面。
 - 上报设备身份、OS、arch、collector version 和最近错误。
 - 探测本机 runtime、agent 和 channel 关联。
@@ -80,7 +80,7 @@ Skill Installation 由 Skill Management 负责。Agent Migration 只引用 Skill
 
 ## 操作模型
 
-Agentlane 使用 Operation 记录过程，不引入长期可复用的迁移资产对象。系统只在用户发起一次迁移或安装时创建一次操作记录。
+Lorume 使用 Operation 记录过程，不引入长期可复用的迁移资产对象。系统只在用户发起一次迁移或安装时创建一次操作记录。
 
 当前代码层有一个确定性的迁移计划模型 `src/migration/agent-migration-plan.ts`。它根据来源 Agent、目标设备在线状态、目标 runtime kind 和期望 Channel 生成当次计划，返回 `ready`、`unsupported` 或 `requires_manual_step`，用于在创建 Operation 前判断是否存在已知 recipe。这个计划不是持久化业务对象，也不是可复用模板。
 
@@ -171,14 +171,14 @@ Operation 表示一次用户触发或系统触发的设备、runtime、agent 或
 
 Device Bootstrap 的产品流程：
 
-1. 用户在 Agentlane 复制设备注册命令。
+1. 用户在 Lorume 复制设备注册命令。
 2. 用户在目标设备执行命令。
-3. Collector 安装并连接 Agentlane。
+3. Collector 安装并连接 Lorume。
 4. Collector 上报设备和 runtime 探测结果。
-5. Agentlane 展示已安装、可安装、不可安装或需要手动处理的 runtime。
+5. Lorume 展示已安装、可安装、不可安装或需要手动处理的 runtime。
 6. 用户选择 runtime setup 动作。
 7. Collector 只执行 adapter 已知 recipe。
-8. Agentlane 展示执行日志、健康状态、失败原因和下一步可操作项。
+8. Lorume 展示执行日志、健康状态、失败原因和下一步可操作项。
 
 可行性约束：
 
@@ -222,7 +222,7 @@ Adapter 必须声明以下能力：
 - 支持 daemon、runtime 和 agent 探测。
 - Agent 创建、导出和导入优先使用 Multica 自己的平台能力。
 - Skill 同步使用 Multica Skill / agent 关联模型。
-- Channel 由 Multica 自己的平台对象表达；Agentlane 不把 Multica 当成 Channel。
+- Channel 由 Multica 自己的平台对象表达；Lorume 不把 Multica 当成 Channel。
 
 ### Slock
 
@@ -258,8 +258,8 @@ Adapter 必须声明以下能力：
 ```mermaid
 flowchart LR
   User["User"]
-  UI["Agentlane UI"]
-  API["Agentlane Backend"]
+  UI["Lorume UI"]
+  API["Lorume Backend"]
   Collector["Device Collector"]
   Adapter["Runtime Adapter"]
   Runtime["Runtime"]

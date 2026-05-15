@@ -14,7 +14,7 @@ export type RuntimeWorkStateAdapterResult = Pick<
   "workItems" | "conversations" | "executions" | "capabilities" | "warnings"
 >;
 
-/** Map an OpenClaw task/session report into Agentlane work-state objects. */
+/** Map an OpenClaw task/session report into Lorume work-state objects. */
 export function mapOpenClawWorkState(input: {
   observedAt: string;
   deviceId: string;
@@ -261,7 +261,7 @@ export function mapOpenClawWorkState(input: {
   };
 }
 
-/** Map a Multica issue/task report into Agentlane work-state objects. */
+/** Map a Multica issue/task report into Lorume work-state objects. */
 export function mapMulticaWorkState(input: {
   observedAt: string;
   deviceId: string;
@@ -338,7 +338,7 @@ export function mapMulticaWorkState(input: {
   };
 }
 
-/** Map a Slock task board report into Agentlane work-state objects. */
+/** Map a Slock task board report into Lorume work-state objects. */
 export function mapSlockWorkState(input: {
   observedAt: string;
   deviceId: string;
@@ -933,7 +933,7 @@ function multicaCapability(collectedAt: string): RuntimeObservationCapability {
       support: "supported",
       strategies: ["cli", "native_api"],
       evidence: ["multica issue list exposes issue lifecycle fields."],
-      limitations: ["Backlog is normalized to todo until Agentlane adds a separate backlog stage."],
+      limitations: ["Backlog is normalized to todo until Lorume adds a separate backlog stage."],
     },
     conversations: {
       support: "partial",

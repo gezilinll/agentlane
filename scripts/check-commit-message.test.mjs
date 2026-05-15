@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { extractCommitSubject, validateCommitMessage } from "./check-commit-message.mjs";
 
 describe("commit message convention", () => {
-  it("accepts the Agentlane conventional commit subset", () => {
+  it("accepts the Lorume conventional commit subset", () => {
     expect(validateCommitMessage("feat(runtime): add device heartbeat").valid).toBe(true);
     expect(validateCommitMessage("fix(runs): 修复工作看板分页").valid).toBe(true);
     expect(validateCommitMessage("docs: update backend deployment notes").valid).toBe(true);

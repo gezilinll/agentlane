@@ -8,7 +8,7 @@ describe("dev e2e server configuration", () => {
 
     expect(source).toContain("inventorySnapshotPath");
     expect(source).toContain("workStateSnapshotPath");
-    expect(source).toContain('path.join(repoRoot, ".agentlane", "e2e")');
+    expect(source).toContain('path.join(repoRoot, ".lorume", "e2e")');
     expect(source).toContain('path.join(e2eSnapshotRoot, "runtime-inventory", "latest.json")');
     expect(source).toContain('path.join(e2eSnapshotRoot, "runtime-work-state", "latest.json")');
   });

@@ -8,7 +8,7 @@ export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)
 
 /** Whether Postgres-backed tests should run in the current process. */
 export function shouldRunPostgresTests(): boolean {
-  return process.env.AGENTLANE_RUN_DB_TESTS === "1";
+  return process.env.LORUME_RUN_DB_TESTS === "1";
 }
 
 /** Temporary database allocated for one DB integration test. */
@@ -24,7 +24,7 @@ export interface TemporaryPostgresDatabase {
 /** Create an isolated database under the local test Postgres instance. */
 export async function createTemporaryPostgresDatabase(): Promise<TemporaryPostgresDatabase> {
   const adminUrl = getAdminDatabaseUrl();
-  const databaseName = `agentlane_test_${process.pid}_${Date.now()}_${Math.round(Math.random() * 1_000_000)}`;
+  const databaseName = `lorume_test_${process.pid}_${Date.now()}_${Math.round(Math.random() * 1_000_000)}`;
   const adminClient = await connectWithRetry(adminUrl.toString());
   try {
     await adminClient.query(`CREATE DATABASE ${quoteIdentifier(databaseName)}`);
@@ -83,7 +83,7 @@ async function dropTestDatabase(databaseName: string): Promise<void> {
 }
 
 function getAdminDatabaseUrl(): URL {
-  const databaseUrl = new URL(process.env.AGENTLANE_TEST_DATABASE_URL ?? "postgres://agentlane:agentlane@127.0.0.1:54329/postgres");
+  const databaseUrl = new URL(process.env.LORUME_TEST_DATABASE_URL ?? "postgres://lorume:lorume@127.0.0.1:54329/postgres");
   databaseUrl.pathname = "/postgres";
   return databaseUrl;
 }

@@ -132,7 +132,7 @@ describe("runtime control channel", () => {
 });
 
 function createStore() {
-  const dataDir = mkdtempSync(path.join(tmpdir(), "agentlane-control-store-"));
+  const dataDir = mkdtempSync(path.join(tmpdir(), "lorume-control-store-"));
   return createRuntimeInventoryStore({
     snapshotPath: path.join(dataDir, "latest.json"),
     staleAfterMs: 24 * 60 * 60 * 1000,

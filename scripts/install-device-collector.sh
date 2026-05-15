@@ -6,13 +6,13 @@ usage() {
 Usage: install-device-collector.sh [options]
 
 Options:
-  --source-dir <path>     Local Agentlane repo/source path that contains scripts/agentlane-device-collector.mjs
-  --install-dir <path>    Install directory (default: ~/.agentlane/collector)
-  --server-url <url>      Optional Agentlane server URL
-  --ws-url <url>          Optional Agentlane device control WebSocket URL
+  --source-dir <path>     Local Lorume repo/source path that contains scripts/lorume-device-collector.mjs
+  --install-dir <path>    Install directory (default: ~/.lorume/collector)
+  --server-url <url>      Optional Lorume server URL
+  --ws-url <url>          Optional Lorume device control WebSocket URL
   --device-id <id>        Device id to register
   --device-name <name>    Human-readable device name
-  --device-token <token>  Agentlane device token for ingestion and control
+  --device-token <token>  Lorume device token for ingestion and control
   --slock-server-url <url> Optional Slock server URL for task-board discovery
   --interval-ms <ms>      Collector interval for service mode (default: 60000)
   --once                  Run a one-time collection after install
@@ -23,7 +23,7 @@ EOF
 }
 
 SOURCE_DIR=""
-INSTALL_DIR="$HOME/.agentlane/collector"
+INSTALL_DIR="$HOME/.lorume/collector"
 SERVER_URL=""
 WS_URL=""
 DEVICE_ID=""
@@ -101,7 +101,7 @@ if [[ -z "$SOURCE_DIR" ]]; then
   SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 fi
 
-SOURCE_COLLECTOR="$SOURCE_DIR/scripts/agentlane-device-collector.mjs"
+SOURCE_COLLECTOR="$SOURCE_DIR/scripts/lorume-device-collector.mjs"
 if [[ ! -f "$SOURCE_COLLECTOR" ]]; then
   echo "Collector script not found: $SOURCE_COLLECTOR" >&2
   exit 1
@@ -141,12 +141,12 @@ find_node() {
 
 NODE_BIN="$(find_node || true)"
 if [[ -z "$NODE_BIN" ]]; then
-  echo "node is required to run the Agentlane device collector" >&2
+  echo "node is required to run the Lorume device collector" >&2
   exit 1
 fi
 
 mkdir -p "$INSTALL_DIR"
-install -m 0755 "$SOURCE_COLLECTOR" "$INSTALL_DIR/agentlane-device-collector.mjs"
+install -m 0755 "$SOURCE_COLLECTOR" "$INSTALL_DIR/lorume-device-collector.mjs"
 
 "$NODE_BIN" - "$INSTALL_DIR/config.json" "$INSTALL_DIR" "$SERVER_URL" "$WS_URL" "$DEVICE_ID" "$DEVICE_NAME" "$DEVICE_TOKEN" "$SLOCK_SERVER_URL" "$INTERVAL_MS" <<'NODE'
 const fs = require("node:fs");
@@ -167,11 +167,11 @@ fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
 NODE
 
 CONFIG_PATH="$INSTALL_DIR/config.json"
-COLLECTOR_PATH="$INSTALL_DIR/agentlane-device-collector.mjs"
+COLLECTOR_PATH="$INSTALL_DIR/lorume-device-collector.mjs"
 
 install_macos_service() {
   local plist_dir="$HOME/Library/LaunchAgents"
-  local plist_path="$plist_dir/ai.agentlane.collector.plist"
+  local plist_path="$plist_dir/ai.lorume.collector.plist"
   mkdir -p "$plist_dir"
   cat > "$plist_path" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -179,7 +179,7 @@ install_macos_service() {
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>ai.agentlane.collector</string>
+  <string>ai.lorume.collector</string>
   <key>ProgramArguments</key>
   <array>
     <string>$NODE_BIN</string>
@@ -206,11 +206,11 @@ EOF
 
 install_linux_service() {
   local service_dir="$HOME/.config/systemd/user"
-  local service_path="$service_dir/agentlane-collector.service"
+  local service_path="$service_dir/lorume-collector.service"
   mkdir -p "$service_dir"
   cat > "$service_path" <<EOF
 [Unit]
-Description=Agentlane Device Collector
+Description=Lorume Device Collector
 
 [Service]
 ExecStart=$NODE_BIN $COLLECTOR_PATH --config $CONFIG_PATH --interval-ms $INTERVAL_MS
@@ -221,7 +221,7 @@ RestartSec=5
 WantedBy=default.target
 EOF
   systemctl --user daemon-reload
-  systemctl --user enable --now agentlane-collector.service
+  systemctl --user enable --now lorume-collector.service
 }
 
 if [[ "$ONCE" == "true" ]]; then

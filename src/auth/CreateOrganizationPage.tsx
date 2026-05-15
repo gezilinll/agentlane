@@ -19,7 +19,7 @@ export function CreateOrganizationPage({ error, onSubmit }: CreateOrganizationPa
     <AuthLayout
       title="创建组织"
       subtitle="先创建一个组织空间，再注册设备、分配成员并管理 Agent 运行资产。"
-      notice="组织是 Agentlane 权限、邀请、设备 token 与运行资产的管理边界。"
+      notice="组织是 Lorume 权限、邀请、设备 token 与运行资产的管理边界。"
     >
       <form
         className="auth-form"

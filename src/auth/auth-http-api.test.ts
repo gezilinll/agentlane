@@ -34,15 +34,15 @@ describe("auth HTTP API", () => {
     });
     expect(loginResponse.status).toBe(200);
     const cookie = loginResponse.headers.get("set-cookie") ?? "";
-    expect(cookie).toContain("agentlane_session=");
+    expect(cookie).toContain("lorume_session=");
     await expect(loginResponse.json()).resolves.toMatchObject({
       user: { email: "zhangliang@gaoding.com" },
       organizations: [],
     });
 
     const createOrgResponse = await postJson(`${baseUrl}/api/organizations`, {
-      name: "Agentlane Team",
-      slug: "agentlane-team",
+      name: "Lorume Team",
+      slug: "lorume-team",
     }, cookie);
     expect(createOrgResponse.status).toBe(201);
     const orgBody = await createOrgResponse.json() as { organization: { id: string } };
@@ -50,7 +50,7 @@ describe("auth HTTP API", () => {
     const meResponse = await fetch(`${baseUrl}/api/me`, { headers: { cookie } });
     await expect(meResponse.json()).resolves.toMatchObject({
       user: { email: "zhangliang@gaoding.com" },
-      organizations: [expect.objectContaining({ role: "owner", slug: "agentlane-team" })],
+      organizations: [expect.objectContaining({ role: "owner", slug: "lorume-team" })],
     });
 
     const inviteResponse = await postJson(`${baseUrl}/api/organizations/${orgBody.organization.id}/invitations`, {
@@ -90,7 +90,7 @@ describe("auth HTTP API", () => {
     await postJson(`${baseUrl}/api/auth/email-code`, { email: "owner@gaoding.com" });
     const ownerLogin = await postJson(`${baseUrl}/api/auth/login`, { email: "owner@gaoding.com", code: "246810" });
     const ownerCookie = ownerLogin.headers.get("set-cookie") ?? "";
-    const orgResponse = await postJson(`${baseUrl}/api/organizations`, { name: "Agentlane" }, ownerCookie);
+    const orgResponse = await postJson(`${baseUrl}/api/organizations`, { name: "Lorume" }, ownerCookie);
     const orgBody = await orgResponse.json() as { organization: { id: string } };
     await postJson(`${baseUrl}/api/organizations/${orgBody.organization.id}/invitations`, {
       email: "expected@gaoding.com",

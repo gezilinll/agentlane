@@ -8,7 +8,7 @@ import type {
 } from "./auth-store";
 
 const maxJsonBodyChars = 1_000_000;
-const sessionCookieName = "agentlane_session";
+const sessionCookieName = "lorume_session";
 
 /** Email provider contract for login codes. */
 export interface AuthEmailProvider {
@@ -49,7 +49,7 @@ export function createAuthHttpApiHandler(options: AuthHttpApiHandlerOptions): Au
   const createInvitationToken = options.createInvitationToken ?? (() => createSecretToken("agt_inv"));
 
   return async function authHttpApiHandler(request, response, next) {
-    const requestUrl = new URL(request.url || "/", "http://agentlane.local");
+    const requestUrl = new URL(request.url || "/", "http://lorume.local");
 
     if (request.method === "POST" && requestUrl.pathname === "/api/auth/email-code") {
       const body = await readJsonBody(request);

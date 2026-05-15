@@ -2,7 +2,7 @@
 
 状态：当前规则
 
-本规格定义 Agentlane 对 Skill 的组织级资产管理、导入校验、权限审核、目标分配和异步操作状态规则。Skill 是组织内可复用、可版本化、可审计的能力资产，不只是某台设备或某个 runtime 上的本地文件。
+本规格定义 Lorume 对 Skill 的组织级资产管理、导入校验、权限审核、目标分配和异步操作状态规则。Skill 是组织内可复用、可版本化、可审计的能力资产，不只是某台设备或某个 runtime 上的本地文件。
 
 ## 目标
 
@@ -14,7 +14,7 @@
 - 支持把组织级 Skill 分配到 Device、Runtime 或 Agent。
 - Skill 分配和后续同步必须通过可审计的 Operation / Job Runner 表达状态；不在页面内假装同步已经完成。
 - 支持资源级权限和审核流，避免普通成员直接编辑、发布或下发到非本人管理的目标。
-- 所有平台差异必须由 adapter 转换成 Agentlane 的 Skill 语义，UI 不直接判断 OpenClaw、Multica 或 Slock 的本地目录规则。
+- 所有平台差异必须由 adapter 转换成 Lorume 的 Skill 语义，UI 不直接判断 OpenClaw、Multica 或 Slock 的本地目录规则。
 - UI 只能暴露已有 HTTP API、权限规则和 harness 覆盖的动作。编辑文件、归档、删除、手动同步、目标有效 Skill 查询等能力如果没有 API 与 harness，不出现在页面动作中。
 
 ## 非目标
@@ -170,7 +170,7 @@ Approval Request 表示一次需要人工批准的动作。审核必须保存结
 
 ## Skill 包格式
 
-Agentlane 接受以下导入形态：
+Lorume 接受以下导入形态：
 
 - 单个 Markdown 文件：文件内容被规范化为 `SKILL.md`。
 - ZIP 包：包根目录或首层目录必须包含唯一 `SKILL.md`。
@@ -191,7 +191,7 @@ Skill 包可以包含任意安全的相对目录和文件，例如：
 - `tests/`
 - runtime 特定配置文件。
 
-Agentlane 不约束 Skill 包的目录命名风格。中文目录名、空格和用户自定义目录都可以存在，只要系统能确定唯一 Skill 根目录，并且所有文件都留在该根目录内。
+Lorume 不约束 Skill 包的目录命名风格。中文目录名、空格和用户自定义目录都可以存在，只要系统能确定唯一 Skill 根目录，并且所有文件都留在该根目录内。
 
 ## 导入与校验
 
@@ -463,5 +463,5 @@ UI：
 - 高风险或权限不足的发布 / 分配 / 下发会进入审核。
 - 下发只通过确定性 adapter / collector / CLI / 文件同步完成。
 - 不支持下发的目标不会出现“让 Agent 自己安装”的入口。
-- OpenClaw、Multica、Slock 的平台差异在 adapter 层处理，UI 只消费 Agentlane Skill 模型。
+- OpenClaw、Multica、Slock 的平台差异在 adapter 层处理，UI 只消费 Lorume Skill 模型。
 - 页面只呈现当前 API 和 harness 证明过的动作，不保留临时 mock、调试字段或超前按钮。

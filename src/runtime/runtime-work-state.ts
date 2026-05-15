@@ -33,10 +33,10 @@ export const EXECUTION_STATUSES = [
 /** Runtime execution state for a concrete attempt, run, or task invocation. */
 export type RuntimeExecutionStatus = (typeof EXECUTION_STATUSES)[number];
 
-/** Agentlane-owned project-management stage for unified work queues. */
+/** Lorume-owned project-management stage for unified work queues. */
 export const WORK_STAGE_IDS = ["pending", "processing", "review", "closed", "attention"] as const;
 
-/** Agentlane-owned project-management stage for unified work queues. */
+/** Lorume-owned project-management stage for unified work queues. */
 export type RuntimeWorkStageId = (typeof WORK_STAGE_IDS)[number];
 
 /** Confidence level for a stage derived from platform-specific evidence. */
@@ -61,17 +61,17 @@ export type RuntimeObservationSupport = "supported" | "partial" | "unsupported" 
 
 /** Human, agent, runtime, or system participant referenced by a work item or conversation. */
 export interface RuntimeWorkParticipant {
-  /** Participant kind in Agentlane-owned terms. */
+  /** Participant kind in Lorume-owned terms. */
   kind: "human" | "agent" | "runtime" | "system" | "unknown";
   /** Human-readable participant label such as @agent-name or OpenClaw Gateway. */
   label: string;
-  /** Optional Agentlane object id when the participant has already been normalized. */
+  /** Optional Lorume object id when the participant has already been normalized. */
   objectId?: string;
   /** Optional external id from the source platform. */
   externalId?: string;
 }
 
-/** Input used by adapters or view models to derive an Agentlane work stage. */
+/** Input used by adapters or view models to derive an Lorume work stage. */
 export interface RuntimeWorkStageDerivationInput {
   /** Source adapter that provided the strongest available evidence. */
   source: RuntimeSource;
@@ -81,9 +81,9 @@ export interface RuntimeWorkStageDerivationInput {
   executionStatus?: RuntimeExecutionStatus;
 }
 
-/** Derived Agentlane work stage plus an explanation of evidence quality. */
+/** Derived Lorume work stage plus an explanation of evidence quality. */
 export interface RuntimeWorkStageDerivation {
-  /** Agentlane-owned stage used by unified work queues. */
+  /** Lorume-owned stage used by unified work queues. */
   stage: RuntimeWorkStageId;
   /** Whether the stage is directly proven, partially inferred, or unsupported for this source. */
   confidence: RuntimeWorkStageConfidence;
@@ -91,7 +91,7 @@ export interface RuntimeWorkStageDerivation {
   reasons: string[];
 }
 
-/** Derive the unified Agentlane work stage from platform-specific work and execution evidence. */
+/** Derive the unified Lorume work stage from platform-specific work and execution evidence. */
 export function deriveRuntimeWorkStage(input: RuntimeWorkStageDerivationInput): RuntimeWorkStageDerivation {
   if (input.source === "openclaw") return deriveOpenClawStage(input);
   if (input.source === "multica") return deriveMulticaStage(input);
@@ -101,7 +101,7 @@ export function deriveRuntimeWorkStage(input: RuntimeWorkStageDerivationInput): 
 
 /** Normalized business work item such as a Slock board card, Multica issue, or external task. */
 export interface RuntimeWorkItem {
-  /** Stable Agentlane work item id. */
+  /** Stable Lorume work item id. */
   id: string;
   /** Source adapter that discovered this work item. */
   source: RuntimeSource;
@@ -113,7 +113,7 @@ export interface RuntimeWorkItem {
   description?: string;
   /** Business lifecycle status after adapter normalization. */
   status: RuntimeWorkItemStatus;
-  /** Optional materialized Agentlane stage when a trusted backend query has already derived it. */
+  /** Optional materialized Lorume stage when a trusted backend query has already derived it. */
   stage?: RuntimeWorkStageId;
   /** Channel, board, project, or platform surface where this work item is visible. */
   channel?: ChannelBinding;
@@ -121,9 +121,9 @@ export interface RuntimeWorkItem {
   assignee?: RuntimeWorkParticipant;
   /** Work item creator when the source platform exposes one. */
   creator?: RuntimeWorkParticipant;
-  /** Agentlane agent id currently associated with the work item, if known. */
+  /** Lorume agent id currently associated with the work item, if known. */
   agentId?: string;
-  /** Agentlane runtime id currently associated with the work item, if known. */
+  /** Lorume runtime id currently associated with the work item, if known. */
   runtimeId?: string;
   /** Optional conversation or thread id attached to this work item. */
   conversationId?: string;
@@ -131,7 +131,7 @@ export interface RuntimeWorkItem {
   createdAt?: string;
   /** ISO timestamp when the work item was last updated, if the source exposes it. */
   updatedAt?: string;
-  /** ISO timestamp when Agentlane last observed this work item. */
+  /** ISO timestamp when Lorume last observed this work item. */
   lastSeenAt?: string;
   /** External platform references that produced this work item. */
   sourceRefs?: ExternalRuntimeRef[];
@@ -139,7 +139,7 @@ export interface RuntimeWorkItem {
 
 /** Normalized conversation or session object such as a Slock DM, channel thread, or OpenClaw session. */
 export interface RuntimeConversation {
-  /** Stable Agentlane conversation id. */
+  /** Stable Lorume conversation id. */
   id: string;
   /** Source adapter that discovered this conversation. */
   source: RuntimeSource;
@@ -151,11 +151,11 @@ export interface RuntimeConversation {
   channel?: ChannelBinding;
   /** Optional human-readable conversation title. */
   title?: string;
-  /** Agentlane work item id linked to this conversation, if known. */
+  /** Lorume work item id linked to this conversation, if known. */
   workItemId?: string;
-  /** Agentlane agent id linked to this conversation, if known. */
+  /** Lorume agent id linked to this conversation, if known. */
   agentId?: string;
-  /** Agentlane runtime id linked to this conversation, if known. */
+  /** Lorume runtime id linked to this conversation, if known. */
   runtimeId?: string;
   /** Participants known to be part of this conversation. */
   participants?: RuntimeWorkParticipant[];
@@ -163,7 +163,7 @@ export interface RuntimeConversation {
   startedAt?: string;
   /** ISO timestamp for the latest known message or session activity. */
   lastActivityAt?: string;
-  /** ISO timestamp when Agentlane last observed this conversation. */
+  /** ISO timestamp when Lorume last observed this conversation. */
   lastSeenAt?: string;
   /** External platform references that produced this conversation. */
   sourceRefs?: ExternalRuntimeRef[];
@@ -171,19 +171,19 @@ export interface RuntimeConversation {
 
 /** Concrete runtime execution attempt such as an OpenClaw run, Multica task, or observed Slock activity. */
 export interface RuntimeExecution {
-  /** Stable Agentlane execution id. */
+  /** Stable Lorume execution id. */
   id: string;
   /** Source adapter that discovered this execution. */
   source: RuntimeSource;
   /** External execution id from the source platform. */
   externalId: string;
-  /** Agentlane runtime id responsible for the execution. */
+  /** Lorume runtime id responsible for the execution. */
   runtimeId: string;
-  /** Agentlane agent id responsible for the execution, if known. */
+  /** Lorume agent id responsible for the execution, if known. */
   agentId?: string;
-  /** Agentlane work item id linked to this execution, if known. */
+  /** Lorume work item id linked to this execution, if known. */
   workItemId?: string;
-  /** Agentlane conversation id linked to this execution, if known. */
+  /** Lorume conversation id linked to this execution, if known. */
   conversationId?: string;
   /** Runtime execution state after adapter normalization. */
   status: RuntimeExecutionStatus;
@@ -193,7 +193,7 @@ export interface RuntimeExecution {
   startedAt?: string;
   /** ISO timestamp when the execution ended, if known. */
   endedAt?: string;
-  /** ISO timestamp when Agentlane last observed this execution. */
+  /** ISO timestamp when Lorume last observed this execution. */
   lastSeenAt?: string;
   /** Optional short failure or degradation summary. */
   error?: string;
@@ -203,7 +203,7 @@ export interface RuntimeExecution {
 
 /** Capability details for one observation surface such as work items or executions. */
 export interface RuntimeObservationSurfaceCapability {
-  /** Whether this surface can satisfy Agentlane's target data needs. */
+  /** Whether this surface can satisfy Lorume's target data needs. */
   support: RuntimeObservationSupport;
   /** Strategies that can collect this surface for the platform. */
   strategies: RuntimeObservationStrategy[];
@@ -231,7 +231,7 @@ export interface RuntimeObservationCapability {
 export interface RuntimeWorkStateSnapshot {
   /** ISO timestamp when the full work state snapshot was observed. */
   observedAt: string;
-  /** Agentlane device id that produced the snapshot. */
+  /** Lorume device id that produced the snapshot. */
   deviceId: string;
   /** Normalized business work items observed from all participating adapters. */
   workItems: RuntimeWorkItem[];

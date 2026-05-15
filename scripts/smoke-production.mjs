@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-const baseUrl = new URL(process.env.AGENTLANE_BASE_URL || "https://agentlane.gezilinll.com");
-const deviceId = process.env.AGENTLANE_DEVICE_ID || "gezilinll-claw";
-const timeoutMs = Number(process.env.AGENTLANE_SMOKE_TIMEOUT_MS || 10_000);
+const baseUrl = new URL(process.env.LORUME_BASE_URL || "https://lorume.com");
+const deviceId = process.env.LORUME_DEVICE_ID || "gezilinll-claw";
+const timeoutMs = Number(process.env.LORUME_SMOKE_TIMEOUT_MS || 10_000);
 
 const checks = [
   {

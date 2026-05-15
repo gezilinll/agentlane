@@ -1,6 +1,6 @@
 # Icons And Assets
 
-Agentlane 的 icon、logo 和装饰资产必须使用统一像素语言。视觉一致性优先于快速拼凑。
+Lorume 的 icon、logo 和装饰资产必须使用统一像素语言。视觉一致性优先于快速拼凑。
 
 ## Brand Mark
 

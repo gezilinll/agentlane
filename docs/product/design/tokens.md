@@ -1,6 +1,6 @@
 # Design Tokens
 
-Agentlane 的视觉实现必须通过 token 和共享 UI primitive 进入页面。业务组件不直接散落一次性色值、字体、阴影、边框和间距。
+Lorume 的视觉实现必须通过 token 和共享 UI primitive 进入页面。业务组件不直接散落一次性色值、字体、阴影、边框和间距。
 
 ## Source
 

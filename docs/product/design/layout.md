@@ -1,6 +1,6 @@
 # Layout
 
-Agentlane 布局同时服务品牌表达和工具效率。Brand/Identity 页面可以更有构图感，Console 页面必须稳定、紧凑、可扫描。
+Lorume 布局同时服务品牌表达和工具效率。Brand/Identity 页面可以更有构图感，Console 页面必须稳定、紧凑、可扫描。
 
 ## Spacing
 

@@ -7,7 +7,7 @@ export type RuntimeDeviceConnectionStatus = "online" | "stale" | "offline";
 
 /** Latest known connection metadata for one registered device. */
 export interface RuntimeDeviceConnection {
-  /** Stable Agentlane device id. */
+  /** Stable Lorume device id. */
   deviceId: string;
   /** Connection status computed independently from runtime health. */
   status: RuntimeDeviceConnectionStatus;
@@ -29,7 +29,7 @@ export interface RuntimeDeviceConnection {
   lastError?: string;
 }
 
-/** Runtime control command supported by Agentlane v1. */
+/** Runtime control command supported by Lorume v1. */
 export type RuntimeCommandType = "inventory.refresh";
 
 /** Runtime command lifecycle status. */
@@ -51,9 +51,9 @@ export interface RuntimeCommand {
   type: RuntimeCommandType;
   /** Current lifecycle state. */
   status: RuntimeCommandStatus;
-  /** ISO timestamp when Agentlane created the command. */
+  /** ISO timestamp when Lorume created the command. */
   createdAt: string;
-  /** ISO timestamp when Agentlane sent the command to the device. */
+  /** ISO timestamp when Lorume sent the command to the device. */
   sentAt?: string;
   /** ISO timestamp when the device accepted the command. */
   acceptedAt?: string;
@@ -65,7 +65,7 @@ export interface RuntimeCommand {
   error?: string;
 }
 
-/** Runtime inventory persistence options for the local Agentlane backend. */
+/** Runtime inventory persistence options for the local Lorume backend. */
 export interface RuntimeInventoryStoreOptions {
   /** Absolute or repository-relative path for the latest snapshot JSON file. */
   snapshotPath?: string;
@@ -95,7 +95,7 @@ export interface RuntimeInventoryStore {
   updateRuntimeCommand: (commandId: string, patch: Partial<RuntimeCommand>) => RuntimeCommand;
 }
 
-const defaultSnapshotPath = path.resolve(".agentlane", "runtime-inventory", "latest.json");
+const defaultSnapshotPath = path.resolve(".lorume", "runtime-inventory", "latest.json");
 const defaultStaleAfterMs = 90_000;
 
 /** Create a file-backed store for the latest runtime inventory snapshot. */
@@ -103,7 +103,7 @@ export function createRuntimeInventoryStore(
   options: RuntimeInventoryStoreOptions = {},
 ): RuntimeInventoryStore {
   const snapshotPath = path.resolve(
-    options.snapshotPath || process.env.AGENTLANE_RUNTIME_INVENTORY_PATH || defaultSnapshotPath,
+    options.snapshotPath || process.env.LORUME_RUNTIME_INVENTORY_PATH || defaultSnapshotPath,
   );
   const staleAfterMs = options.staleAfterMs ?? defaultStaleAfterMs;
   const deviceConnections = new Map<string, RuntimeDeviceConnection>();
@@ -174,7 +174,7 @@ export function createRuntimeInventoryStore(
   };
 }
 
-/** Validate the small contract Agentlane needs before accepting a collector snapshot. */
+/** Validate the small contract Lorume needs before accepting a collector snapshot. */
 export function validateRuntimeInventorySnapshot(value: unknown): value is RuntimeInventorySnapshot {
   if (!isRecord(value)) return false;
   if (typeof value.observedAt !== "string") return false;

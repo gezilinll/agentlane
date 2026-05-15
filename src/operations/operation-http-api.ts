@@ -36,7 +36,7 @@ export type OperationHttpApiHandler = (
 /** Create user-visible Operation query routes. */
 export function createOperationHttpApiHandler(options: OperationHttpApiHandlerOptions): OperationHttpApiHandler {
   return async function operationHttpApiHandler(request, response, next) {
-    const requestUrl = new URL(request.url || "/", "http://agentlane.local");
+    const requestUrl = new URL(request.url || "/", "http://lorume.local");
 
     if (request.method === "GET" && requestUrl.pathname === "/api/operations") {
       const session = await requireSession(request, response, options);

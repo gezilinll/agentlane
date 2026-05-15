@@ -19,7 +19,7 @@ interface AuthProviderProps {
   client?: AuthClient;
 }
 
-/** Session gate for the Agentlane console. */
+/** Session gate for the Lorume console. */
 export function AuthProvider({ children, client }: AuthProviderProps) {
   const authClient = useMemo(() => client ?? createAuthClient(), [client]);
   const [session, setSession] = useState<AuthSessionContext | null>(null);
@@ -62,7 +62,7 @@ export function AuthProvider({ children, client }: AuthProviderProps) {
 
   if (isLoading) {
     return (
-      <AuthLayout title="连接 Agentlane" subtitle="正在确认当前会话，请稍等片刻。">
+      <AuthLayout title="连接 Lorume" subtitle="正在确认当前会话，请稍等片刻。">
         <p className="auth-copy">加载中...</p>
       </AuthLayout>
     );

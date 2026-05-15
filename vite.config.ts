@@ -1,7 +1,7 @@
 import { configDefaults, defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
-const backendUrl = process.env.AGENTLANE_BACKEND_URL ?? "http://127.0.0.1:4173";
+const backendUrl = process.env.LORUME_BACKEND_URL ?? "http://127.0.0.1:4173";
 
 export default defineConfig({
   plugins: [react()],

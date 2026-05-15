@@ -13,21 +13,21 @@ describe("Cream Arcade UI primitives", () => {
   it("renders the pixel logo with an accessible brand label", () => {
     render(<PixelLogo />);
 
-    expect(screen.getByLabelText("Agentlane")).toBeInTheDocument();
-    expect(screen.getByText("Agentlane")).toHaveClass("pixel-logo__wordmark");
+    expect(screen.getByLabelText("Lorume")).toBeInTheDocument();
+    expect(screen.getByText("Lorume")).toHaveClass("pixel-logo__wordmark");
     const mark = screen.getByTestId("pixel-logo-mark").querySelector("svg");
     expect(mark).toHaveClass("pixel-logo__svg");
-    expect(mark).toHaveAttribute("data-logo-mark", "agentlane-brain-circuit");
-    expect(mark).toHaveAttribute("data-logo-version", "streamline-brain");
+    expect(mark).toHaveAttribute("data-logo-mark", "lorume-neural-lumen");
+    expect(mark).toHaveAttribute("data-logo-version", "lorume-v1");
   });
 
   it("keeps the browser tab metadata aligned with the shared brand mark", () => {
     const favicon = readFileSync("public/favicon.svg", "utf8");
     const indexHtml = readFileSync("index.html", "utf8");
 
-    expect(favicon).toContain('data-logo-mark="agentlane-brain-circuit"');
-    expect(favicon).toContain('data-logo-version="streamline-brain"');
-    expect(indexHtml).toContain("<title>Agentlane</title>");
+    expect(favicon).toContain('data-logo-mark="lorume-neural-lumen"');
+    expect(favicon).toContain('data-logo-version="lorume-v1"');
+    expect(indexHtml).toContain("<title>Lorume</title>");
   });
 
   it("defines the current Pixel, Sans, and Mono font roles in shared tokens", () => {
@@ -84,7 +84,7 @@ describe("Cream Arcade UI primitives", () => {
   it("composes an auth layout with brand, content, preview, and notice regions", () => {
     render(
       <AuthLayout
-        title="登录 Agentlane"
+        title="登录 Lorume"
         subtitle="使用团队邮箱接收验证码"
         preview={<div>Runtime Fleet</div>}
         notice="登录后可统一管理组织内 Device、Runtime、Agent 与工作看板。"
@@ -93,12 +93,12 @@ describe("Cream Arcade UI primitives", () => {
       </AuthLayout>,
     );
 
-    expect(screen.getByRole("banner")).toContainElement(screen.getByLabelText("Agentlane"));
+    expect(screen.getByRole("banner")).toContainElement(screen.getByLabelText("Lorume"));
     expect(screen.getByTestId("auth-pixel-decorations")).toBeInTheDocument();
     expect(screen.getByTestId("auth-pixel-decorations").querySelector('[data-pixel-sprite="pink"]')).toBeInTheDocument();
     expect(screen.getByTestId("auth-pixel-decorations").querySelector('[data-pixel-sprite="blue"]')).toBeInTheDocument();
     expect(screen.getByTestId("auth-pixel-decorations").querySelector('[data-pixel-icon="heart"]')).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "登录 Agentlane" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "登录 Lorume" })).toBeInTheDocument();
     expect(screen.getByText("Runtime Fleet")).toBeInTheDocument();
     expect(screen.getByText(/Device、Runtime、Agent/)).toBeInTheDocument();
   });

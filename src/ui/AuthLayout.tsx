@@ -42,7 +42,7 @@ export function AuthLayout({ children, notice, preview, subtitle, title }: AuthL
       ) : null}
       <footer className="auth-layout__footer">
         <PixelIcon name="heart" size={14} />
-        © 2026 Agentlane. All rights reserved.
+        © 2026 Lorume. All rights reserved.
         <PixelIcon name="heart" size={14} />
       </footer>
     </div>

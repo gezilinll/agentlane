@@ -26,7 +26,7 @@ export function HomePage() {
             把分散的 Agent 变成可运营的工作网络。
           </h1>
           <p className="homeLead">
-            Agentlane 统一管理组织里的 Device、Runtime、Agent、Channel 与工作项状态，让 OpenClaw、Multica、Slock、Codex 等运行资产进入同一个可观测、可治理、可复用的控制面。
+            Lorume 统一管理组织里的 Device、Runtime、Agent、Channel 与工作项状态，让 OpenClaw、Multica、Slock、Codex 等运行资产进入同一个可观测、可治理、可复用的控制面。
           </p>
           <div className="homeActions">
             <a className="homeButton homeButton--primary" href="/login">
@@ -44,9 +44,9 @@ export function HomePage() {
           </div>
         </div>
 
-        <div className="homeConsole" aria-label="Agentlane 控制台预览">
+        <div className="homeConsole" aria-label="Lorume 控制台预览">
           <div className="homeConsole__bar">
-            <span># Agentlane / Work Board</span>
+            <span># Lorume / Work Board</span>
             <span aria-hidden="true">•••</span>
           </div>
           <div className="homeConsole__body">

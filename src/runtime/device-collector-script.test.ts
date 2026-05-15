@@ -8,7 +8,7 @@ import { WebSocketServer } from "ws";
 import { describe, expect, it } from "vitest";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const collectorScript = path.join(repoRoot, "scripts", "agentlane-device-collector.mjs");
+const collectorScript = path.join(repoRoot, "scripts", "lorume-device-collector.mjs");
 const installerScript = path.join(repoRoot, "scripts", "install-device-collector.sh");
 const fixturePath = path.join(repoRoot, "fixtures", "runtime", "collector-snapshot.sample.json");
 
@@ -30,7 +30,7 @@ describe("device collector scripts", () => {
   });
 
   it("installs the collector from a local source path and runs a once check", () => {
-    const installDir = mkdtempSync(path.join(tmpdir(), "agentlane-collector-"));
+    const installDir = mkdtempSync(path.join(tmpdir(), "lorume-collector-"));
 
     const output = execFileSync("bash", [
       installerScript,
@@ -43,7 +43,7 @@ describe("device collector scripts", () => {
       "--device-name",
       "Test Device",
       "--ws-url",
-      "ws://agentlane.local/api/device-control/ws",
+      "ws://lorume.local/api/device-control/ws",
       "--slock-server-url",
       "https://api.slock.ai",
       "--once",
@@ -53,7 +53,7 @@ describe("device collector scripts", () => {
     ], { encoding: "utf8" });
 
     const configPath = path.join(installDir, "config.json");
-    const installedCollector = path.join(installDir, "agentlane-device-collector.mjs");
+    const installedCollector = path.join(installDir, "lorume-device-collector.mjs");
     const config = JSON.parse(readFileSync(configPath, "utf8"));
     const snapshot = JSON.parse(output.slice(output.indexOf("{")));
 
@@ -61,7 +61,7 @@ describe("device collector scripts", () => {
     expect(config).toMatchObject({
       deviceId: "test-device",
       deviceName: "Test Device",
-      wsUrl: "ws://agentlane.local/api/device-control/ws",
+      wsUrl: "ws://lorume.local/api/device-control/ws",
       slockServerUrl: "https://api.slock.ai",
     });
     expect(snapshot.device.id).toBe("test-device");
@@ -69,7 +69,7 @@ describe("device collector scripts", () => {
   });
 
   it("posts during installer once mode when a server url is configured", async () => {
-    const installDir = mkdtempSync(path.join(tmpdir(), "agentlane-collector-"));
+    const installDir = mkdtempSync(path.join(tmpdir(), "lorume-collector-"));
     const { server, receivedSnapshot, baseUrl } = await startSnapshotServer();
 
     try {
@@ -99,8 +99,8 @@ describe("device collector scripts", () => {
   });
 
   it("uses config device identity during live once collection", () => {
-    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-empty-home-"));
-    const configDir = mkdtempSync(path.join(tmpdir(), "agentlane-collector-config-"));
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-empty-home-"));
+    const configDir = mkdtempSync(path.join(tmpdir(), "lorume-collector-config-"));
     const configPath = path.join(configDir, "config.json");
     writeFileSync(configPath, JSON.stringify({
       deviceId: "config-device",
@@ -116,7 +116,7 @@ describe("device collector scripts", () => {
       "--print-only",
     ], {
       encoding: "utf8",
-      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
+      env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
     });
 
     const snapshot = JSON.parse(output);
@@ -125,7 +125,7 @@ describe("device collector scripts", () => {
     expect(snapshot.device.name).toBe("Config Device");
   });
 
-  it("posts a once snapshot to the Agentlane backend when server url is configured", async () => {
+  it("posts a once snapshot to the Lorume backend when server url is configured", async () => {
     const { server, receivedSnapshot, baseUrl } = await startSnapshotServer();
 
     try {
@@ -147,8 +147,8 @@ describe("device collector scripts", () => {
     }
   });
 
-  it("posts inventory snapshots with the configured Agentlane device token", async () => {
-    const configDir = mkdtempSync(path.join(tmpdir(), "agentlane-token-config-"));
+  it("posts inventory snapshots with the configured Lorume device token", async () => {
+    const configDir = mkdtempSync(path.join(tmpdir(), "lorume-token-config-"));
     const configPath = path.join(configDir, "config.json");
     const { server, receivedSnapshot, baseUrl } = await startSnapshotServer({
       expectedAuthorization: "Bearer device-token-test",
@@ -201,7 +201,7 @@ describe("device collector scripts", () => {
   });
 
   it("does not fabricate runtime work-state when live probes are unavailable", () => {
-    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-work-state-empty-home-"));
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-work-state-empty-home-"));
 
     const output = execFileSync(process.execPath, [
       collectorScript,
@@ -211,7 +211,7 @@ describe("device collector scripts", () => {
       "--print-only",
     ], {
       encoding: "utf8",
-      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
+      env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
     });
 
     const snapshot = JSON.parse(output);
@@ -233,8 +233,8 @@ describe("device collector scripts", () => {
   });
 
   it("maps live OpenClaw DingTalk message context into work items linked to executions", () => {
-    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-work-home-"));
-    const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-work-bin-"));
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-work-home-"));
+    const fakeBin = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-work-bin-"));
     writeOpenClawDingTalkState(fakeHome, {
       conversationId: "group-live",
       groupTitle: "研发值班群",
@@ -294,7 +294,7 @@ describe("device collector scripts", () => {
       "--print-only",
     ], {
       encoding: "utf8",
-      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
+      env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
     });
 
     const snapshot = JSON.parse(output);
@@ -329,11 +329,11 @@ describe("device collector scripts", () => {
   }, 10_000);
 
   it("uses unlinked OpenClaw DingTalk message context as conversation evidence only", () => {
-    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-map-home-"));
-    const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-map-bin-"));
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-map-home-"));
+    const fakeBin = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-map-bin-"));
     writeOpenClawDingTalkTargetDirectory(fakeHome, {
       conversationId: "group-map",
-      groupTitle: "Agentlane 研发群",
+      groupTitle: "Lorume 研发群",
       lastSeenAt: "2026-05-09T08:10:00.000Z",
     });
     const stateDir = path.join(fakeHome, ".openclaw", "agents", "default", "sessions", "dingtalk-state");
@@ -368,7 +368,7 @@ describe("device collector scripts", () => {
       "--print-only",
     ], {
       encoding: "utf8",
-      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
+      env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
     });
 
     const snapshot = JSON.parse(output);
@@ -379,15 +379,15 @@ describe("device collector scripts", () => {
     }));
     expect(snapshot.conversations).toContainEqual(expect.objectContaining({
       source: "openclaw",
-      title: "Agentlane 研发群",
-      channel: { kind: "dingtalk", label: "Agentlane 研发群", externalId: "group-map" },
+      title: "Lorume 研发群",
+      channel: { kind: "dingtalk", label: "Lorume 研发群", externalId: "group-map" },
       participants: [{ kind: "human", label: "张良", externalId: "100854680226406967" }],
     }));
   });
 
   it("maps live OpenClaw DingTalk direct session ids to readable channel labels", () => {
-    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-direct-home-"));
-    const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-direct-bin-"));
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-direct-home-"));
+    const fakeBin = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-direct-bin-"));
     const stateDir = path.join(fakeHome, ".openclaw", "agents", "default", "sessions", "dingtalk-state");
     mkdirSync(stateDir, { recursive: true });
     writeFileSync(path.join(stateDir, "targets.directory.account-default.json"), JSON.stringify({
@@ -440,7 +440,7 @@ describe("device collector scripts", () => {
       "--print-only",
     ], {
       encoding: "utf8",
-      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
+      env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
     });
 
     const snapshot = JSON.parse(output);
@@ -465,8 +465,8 @@ describe("device collector scripts", () => {
   });
 
   it("maps live OpenClaw DingTalk task sessions into work items when message context is empty", () => {
-    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-origin-home-"));
-    const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-origin-bin-"));
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-origin-home-"));
+    const fakeBin = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-origin-bin-"));
     writeOpenClawDingTalkTargetDirectory(fakeHome, {
       conversationId: "Group-Origin",
       groupTitle: "研发值班群",
@@ -530,7 +530,7 @@ describe("device collector scripts", () => {
       "--print-only",
     ], {
       encoding: "utf8",
-      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
+      env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
     });
 
     const snapshot = JSON.parse(output);
@@ -559,8 +559,8 @@ describe("device collector scripts", () => {
   });
 
   it("maps OpenClaw DingTalk trajectory runs when session JSONL is unavailable", () => {
-    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-trajectory-home-"));
-    const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-trajectory-bin-"));
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-trajectory-home-"));
+    const fakeBin = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-trajectory-bin-"));
     writeOpenClawDingTalkTargetDirectory(fakeHome, {
       conversationId: "group-trajectory",
       groupTitle: "研发值班群",
@@ -602,7 +602,7 @@ describe("device collector scripts", () => {
       "--print-only",
     ], {
       encoding: "utf8",
-      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
+      env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
     });
 
     const snapshot = JSON.parse(output);
@@ -631,8 +631,8 @@ describe("device collector scripts", () => {
   });
 
   it("links OpenClaw trajectory runs to DingTalk message context from session runtime metadata", () => {
-    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-trajectory-link-home-"));
-    const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-trajectory-link-bin-"));
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-trajectory-link-home-"));
+    const fakeBin = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-trajectory-link-bin-"));
     const conversationId = "cidOQk/D4niJC8l2j8FlIA5Wg==";
     const sessionKey = `agent:main:dingtalk:group:${conversationId}`;
 
@@ -676,7 +676,7 @@ describe("device collector scripts", () => {
       "--print-only",
     ], {
       encoding: "utf8",
-      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
+      env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
     });
 
     const snapshot = JSON.parse(output);
@@ -704,8 +704,8 @@ describe("device collector scripts", () => {
   });
 
   it("upgrades linked OpenClaw DingTalk messages to direct chat when trajectory session metadata proves DM", () => {
-    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-trajectory-direct-link-home-"));
-    const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-trajectory-direct-link-bin-"));
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-trajectory-direct-link-home-"));
+    const fakeBin = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-trajectory-direct-link-bin-"));
     const messageConversationId = "cidrYPQCCFAqjoPOplBhOADv8iE20fEdIk0LAOIWK8thfg=";
     const directConversationId = "0403085742945013";
     const sessionKey = `agent:main:dingtalk:direct:${directConversationId}`;
@@ -751,7 +751,7 @@ describe("device collector scripts", () => {
       "--print-only",
     ], {
       encoding: "utf8",
-      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
+      env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
     });
 
     const snapshot = JSON.parse(output);
@@ -779,8 +779,8 @@ describe("device collector scripts", () => {
   });
 
   it("links direct OpenClaw trajectory runs to DingTalk message context by sender when message id is missing", () => {
-    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-trajectory-direct-sender-link-home-"));
-    const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-trajectory-direct-sender-link-bin-"));
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-trajectory-direct-sender-link-home-"));
+    const fakeBin = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-trajectory-direct-sender-link-bin-"));
     const directConversationId = "0403085742945013";
     const sessionKey = `agent:main:dingtalk:direct:${directConversationId}`;
 
@@ -824,7 +824,7 @@ describe("device collector scripts", () => {
       "--print-only",
     ], {
       encoding: "utf8",
-      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
+      env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
     });
 
     const snapshot = JSON.parse(output);
@@ -852,8 +852,8 @@ describe("device collector scripts", () => {
   });
 
   it("links OpenClaw trajectory runs to DingTalk message context by prompt and session when runtime metadata is missing", () => {
-    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-trajectory-fallback-link-home-"));
-    const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-trajectory-fallback-link-bin-"));
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-trajectory-fallback-link-home-"));
+    const fakeBin = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-trajectory-fallback-link-bin-"));
     const conversationId = "cidOQk/D4niJC8l2j8FlIA5Wg==";
     const sessionKey = `agent:main:dingtalk:group:${conversationId}`;
 
@@ -890,7 +890,7 @@ describe("device collector scripts", () => {
       "--print-only",
     ], {
       encoding: "utf8",
-      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
+      env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
     });
 
     const snapshot = JSON.parse(output);
@@ -913,8 +913,8 @@ describe("device collector scripts", () => {
   });
 
   it("keeps OpenClaw execution ids unique when the platform repeats run ids", () => {
-    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-duplicate-home-"));
-    const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-duplicate-bin-"));
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-duplicate-home-"));
+    const fakeBin = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-duplicate-bin-"));
     writeFakeOpenClaw(fakeBin, {
       health: { ok: true, agents: [{ id: "main" }] },
       status: { gateway: { url: "ws://127.0.0.1:18789", reachable: true } },
@@ -934,7 +934,7 @@ describe("device collector scripts", () => {
       "--print-only",
     ], {
       encoding: "utf8",
-      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
+      env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
     });
 
     const snapshot = JSON.parse(output);
@@ -949,8 +949,8 @@ describe("device collector scripts", () => {
   });
 
   it("parses large OpenClaw JSON probe output without treating it as unavailable", () => {
-    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-large-home-"));
-    const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-large-bin-"));
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-large-home-"));
+    const fakeBin = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-large-bin-"));
     writeLargeOutputOpenClaw(fakeBin);
 
     const output = execFileSync(process.execPath, [
@@ -961,7 +961,7 @@ describe("device collector scripts", () => {
       "--print-only",
     ], {
       encoding: "utf8",
-      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
+      env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
     });
 
     const snapshot = JSON.parse(output);
@@ -975,7 +975,7 @@ describe("device collector scripts", () => {
   });
 
   it("runs OpenClaw shims with an augmented probe PATH", () => {
-    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-shim-home-"));
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-shim-home-"));
     const fakeBin = path.join(fakeHome, ".local", "share", "fnm", "node-versions", "v-test", "installation", "bin");
     mkdirSync(fakeBin, { recursive: true });
     writeShimmedOpenClaw(fakeBin);
@@ -988,7 +988,7 @@ describe("device collector scripts", () => {
       "--print-only",
     ], {
       encoding: "utf8",
-      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
+      env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
     });
 
     const snapshot = JSON.parse(output);
@@ -1002,8 +1002,8 @@ describe("device collector scripts", () => {
   });
 
   it("maps live Multica issue and agent task probes into work items and executions", () => {
-    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-multica-work-home-"));
-    const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-multica-work-bin-"));
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-multica-work-home-"));
+    const fakeBin = mkdtempSync(path.join(tmpdir(), "lorume-multica-work-bin-"));
     writeFakeMultica(fakeBin, {
       runtimes: [{ id: "runtime-openclaw", provider: "openclaw", name: "Openclaw runtime", status: "online" }],
       agents: [{ id: "agent-1", name: "CMO", runtime_id: "runtime-openclaw", status: "idle" }],
@@ -1049,7 +1049,7 @@ describe("device collector scripts", () => {
       "--print-only",
     ], {
       encoding: "utf8",
-      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
+      env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
     });
 
     const snapshot = JSON.parse(output);
@@ -1077,7 +1077,7 @@ describe("device collector scripts", () => {
   });
 
   it("does not invent Slock board state when only workspace agent files are present", () => {
-    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-slock-work-home-"));
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-slock-work-home-"));
     const agentDir = path.join(fakeHome, ".slock", "agents", "tester");
     mkdirSync(agentDir, { recursive: true });
     writeFileSync(path.join(agentDir, "MEMORY.md"), "# tester\n");
@@ -1090,7 +1090,7 @@ describe("device collector scripts", () => {
       "--print-only",
     ], {
       encoding: "utf8",
-      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
+      env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
     });
 
     const snapshot = JSON.parse(output);
@@ -1106,12 +1106,12 @@ describe("device collector scripts", () => {
   });
 
   it("maps Slock internal agent API task board into work items without requiring a local CLI", async () => {
-    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-slock-api-home-"));
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-slock-api-home-"));
     const agentDir = path.join(fakeHome, ".slock", "agents", "tester", ".slock");
     mkdirSync(agentDir, { recursive: true });
     writeFileSync(path.join(agentDir, "agent-token"), "test-agent-token");
     const { server, baseUrl } = await startSlockInternalApiServer();
-    const configDir = mkdtempSync(path.join(tmpdir(), "agentlane-slock-api-config-"));
+    const configDir = mkdtempSync(path.join(tmpdir(), "lorume-slock-api-config-"));
     const configPath = path.join(configDir, "config.json");
     writeFileSync(configPath, JSON.stringify({
       deviceId: "slock-api-device",
@@ -1126,7 +1126,7 @@ describe("device collector scripts", () => {
         configPath,
         "--print-only",
       ], {
-        env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
+        env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
       });
 
       const snapshot = JSON.parse(output);
@@ -1158,12 +1158,12 @@ describe("device collector scripts", () => {
   });
 
   it("uses the default Slock server URL when local agent tokens exist and config omits it", async () => {
-    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-slock-default-api-home-"));
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-slock-default-api-home-"));
     const agentDir = path.join(fakeHome, ".slock", "agents", "tester", ".slock");
     mkdirSync(agentDir, { recursive: true });
     writeFileSync(path.join(agentDir, "agent-token"), "test-agent-token");
     const { server, baseUrl } = await startSlockInternalApiServer();
-    const configDir = mkdtempSync(path.join(tmpdir(), "agentlane-slock-default-api-config-"));
+    const configDir = mkdtempSync(path.join(tmpdir(), "lorume-slock-default-api-config-"));
     const configPath = path.join(configDir, "config.json");
     writeFileSync(configPath, JSON.stringify({ deviceId: "slock-default-api-device" }));
 
@@ -1177,7 +1177,7 @@ describe("device collector scripts", () => {
       ], {
         env: {
           ...process.env,
-          AGENTLANE_COLLECTOR_HOME: fakeHome,
+          LORUME_COLLECTOR_HOME: fakeHome,
           SLOCK_DEFAULT_SERVER_URL: baseUrl,
           PATH: "/usr/bin:/bin",
         },
@@ -1195,7 +1195,7 @@ describe("device collector scripts", () => {
   });
 
   it("retries transient Slock task-board API failures before recording warnings", async () => {
-    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-slock-retry-home-"));
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-slock-retry-home-"));
     const agentDir = path.join(fakeHome, ".slock", "agents", "tester", ".slock");
     mkdirSync(agentDir, { recursive: true });
     writeFileSync(path.join(agentDir, "agent-token"), "test-agent-token");
@@ -1239,7 +1239,7 @@ describe("device collector scripts", () => {
     });
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("missing test server address");
-    const configDir = mkdtempSync(path.join(tmpdir(), "agentlane-slock-retry-config-"));
+    const configDir = mkdtempSync(path.join(tmpdir(), "lorume-slock-retry-config-"));
     const configPath = path.join(configDir, "config.json");
     writeFileSync(configPath, JSON.stringify({
       deviceId: "slock-retry-device",
@@ -1254,7 +1254,7 @@ describe("device collector scripts", () => {
         configPath,
         "--print-only",
       ], {
-        env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
+        env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
       });
 
       const snapshot = JSON.parse(output);
@@ -1272,7 +1272,7 @@ describe("device collector scripts", () => {
   });
 
   it("does not warn when another Slock agent context collects the same channel", async () => {
-    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-slock-cross-context-home-"));
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-slock-cross-context-home-"));
     for (const agentName of ["agent-fails", "agent-succeeds"]) {
       const agentDir = path.join(fakeHome, ".slock", "agents", agentName, ".slock");
       mkdirSync(agentDir, { recursive: true });
@@ -1314,7 +1314,7 @@ describe("device collector scripts", () => {
     });
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("missing test server address");
-    const configDir = mkdtempSync(path.join(tmpdir(), "agentlane-slock-cross-context-config-"));
+    const configDir = mkdtempSync(path.join(tmpdir(), "lorume-slock-cross-context-config-"));
     const configPath = path.join(configDir, "config.json");
     writeFileSync(configPath, JSON.stringify({
       deviceId: "slock-cross-context-device",
@@ -1329,7 +1329,7 @@ describe("device collector scripts", () => {
         configPath,
         "--print-only",
       ], {
-        env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
+        env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
       });
 
       const snapshot = JSON.parse(output);
@@ -1344,8 +1344,8 @@ describe("device collector scripts", () => {
     }
   });
 
-  it("posts a runtime work-state once snapshot to the Agentlane backend when server url is configured", async () => {
-    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-work-state-post-home-"));
+  it("posts a runtime work-state once snapshot to the Lorume backend when server url is configured", async () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-work-state-post-home-"));
     const { server, receivedSnapshot, baseUrl } = await startWorkStateServer();
 
     try {
@@ -1356,7 +1356,7 @@ describe("device collector scripts", () => {
         "fixture-device",
         "--server-url",
         baseUrl,
-      ], { env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" } });
+      ], { env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" } });
       const snapshot = await receivedSnapshot;
 
       expect(output).toBe("");
@@ -1368,9 +1368,9 @@ describe("device collector scripts", () => {
     }
   });
 
-  it("posts runtime work-state snapshots with the configured Agentlane device token", async () => {
-    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-work-state-token-home-"));
-    const configDir = mkdtempSync(path.join(tmpdir(), "agentlane-work-state-token-config-"));
+  it("posts runtime work-state snapshots with the configured Lorume device token", async () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-work-state-token-home-"));
+    const configDir = mkdtempSync(path.join(tmpdir(), "lorume-work-state-token-config-"));
     const configPath = path.join(configDir, "config.json");
     const { server, receivedSnapshot, baseUrl } = await startWorkStateServer({
       expectedAuthorization: "Bearer device-token-test",
@@ -1388,7 +1388,7 @@ describe("device collector scripts", () => {
         "fixture-device",
         "--config",
         configPath,
-      ], { env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" } });
+      ], { env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" } });
       const snapshot = await receivedSnapshot;
 
       expect(output).toBe("");
@@ -1400,7 +1400,7 @@ describe("device collector scripts", () => {
 
   it("connects to the control channel and refreshes inventory plus work-state in daemon mode", async () => {
     const controlServer = await startControlServer();
-    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-control-home-"));
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-control-home-"));
     const child = spawn(process.execPath, [
       collectorScript,
       "--fixture",
@@ -1411,7 +1411,7 @@ describe("device collector scripts", () => {
       "100000",
     ], {
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
+      env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
     });
 
     try {
@@ -1440,12 +1440,12 @@ describe("device collector scripts", () => {
     }
   });
 
-  it("uses the configured Agentlane device token for control refreshes", async () => {
+  it("uses the configured Lorume device token for control refreshes", async () => {
     const controlServer = await startControlServer({
       expectedHelloDeviceToken: "device-token-test",
     });
-    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-control-token-home-"));
-    const configDir = mkdtempSync(path.join(tmpdir(), "agentlane-control-token-config-"));
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-control-token-home-"));
+    const configDir = mkdtempSync(path.join(tmpdir(), "lorume-control-token-config-"));
     const configPath = path.join(configDir, "config.json");
     writeFileSync(configPath, JSON.stringify({
       serverUrl: controlServer.baseUrl,
@@ -1462,7 +1462,7 @@ describe("device collector scripts", () => {
       "100000",
     ], {
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
+      env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
     });
 
     try {
@@ -1478,8 +1478,8 @@ describe("device collector scripts", () => {
   });
 
   it("discovers OpenClaw channel bindings from local config without requiring gateway health", () => {
-    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-home-"));
-    const configDir = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-config-"));
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-home-"));
+    const configDir = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-config-"));
     const openclawDir = path.join(fakeHome, ".openclaw");
     mkdirSync(openclawDir, { recursive: true });
     writeFileSync(path.join(openclawDir, "openclaw.json"), JSON.stringify({
@@ -1498,7 +1498,7 @@ describe("device collector scripts", () => {
       "--print-only",
     ], {
       encoding: "utf8",
-      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
+      env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
     });
 
     const snapshot = JSON.parse(output);
@@ -1513,8 +1513,8 @@ describe("device collector scripts", () => {
   });
 
   it("maps OpenClaw historical sessions without treating them as active sessions", () => {
-    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-home-"));
-    const fakeBin = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-bin-"));
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-home-"));
+    const fakeBin = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-bin-"));
     writeFakeOpenClaw(fakeBin, {
       health: { ok: true, channels: { dingtalk: { enabled: true } } },
       status: {
@@ -1538,7 +1538,7 @@ describe("device collector scripts", () => {
       "--print-only",
     ], {
       encoding: "utf8",
-      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
+      env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: `${fakeBin}:/usr/bin:/bin` },
     });
 
     const snapshot = JSON.parse(output);
@@ -1554,7 +1554,7 @@ describe("device collector scripts", () => {
   });
 
   it("maps Slock workspace-only agents as unknown instead of active", () => {
-    const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-slock-home-"));
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-slock-home-"));
     const agentDir = path.join(fakeHome, ".slock", "agents", "tester");
     mkdirSync(agentDir, { recursive: true });
     writeFileSync(path.join(agentDir, "MEMORY.md"), "# tester\n");
@@ -1567,7 +1567,7 @@ describe("device collector scripts", () => {
       "--print-only",
     ], {
       encoding: "utf8",
-      env: { ...process.env, AGENTLANE_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
+      env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
     });
 
     const snapshot = JSON.parse(output);
@@ -1643,13 +1643,13 @@ exec "${process.execPath}" "${script}" "$@"
 }
 
 function writeShimmedOpenClaw(fakeBin: string): void {
-  const interpreter = path.join(fakeBin, "agentlane-node-shim");
+  const interpreter = path.join(fakeBin, "lorume-node-shim");
   const executable = path.join(fakeBin, "openclaw");
   writeFileSync(interpreter, `#!/bin/sh
 exec "${process.execPath}" "$@"
 `);
   chmodSync(interpreter, 0o755);
-  writeFileSync(executable, `#!/usr/bin/env agentlane-node-shim
+  writeFileSync(executable, `#!/usr/bin/env lorume-node-shim
 const command = process.argv[2];
 if (command === "health") {
   console.log(JSON.stringify({ ok: true, agents: [{ id: "main" }] }));

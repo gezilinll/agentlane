@@ -514,7 +514,7 @@ describe("runtime work state adapters", () => {
     });
   });
 
-  it("maps Slock official board status variants to Agentlane work item states", () => {
+  it("maps Slock official board status variants to Lorume work item states", () => {
     const result = mapSlockWorkState({
       ...slockWorkStateFixture,
       tasks: [

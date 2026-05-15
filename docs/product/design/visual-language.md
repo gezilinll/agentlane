@@ -1,10 +1,10 @@
 # Visual Language
 
-Agentlane 的视觉语言是 **Cream Arcade**：奶油底、黑色硬边、像素细节、极客工具感和克制游戏感。
+Lorume 的视觉语言是 **Cream Arcade**：奶油底、黑色硬边、像素细节、极客工具感和克制游戏感。
 
 ## North Star
 
-Agentlane 应像一台给 Agent Network 使用的复古控制台：
+Lorume 应像一台给 Agent Network 使用的复古控制台：
 
 - 有游戏化记忆点，但不是游戏。
 - 有命令行和机器感，但不是开发者玩具。

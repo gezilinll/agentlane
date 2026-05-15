@@ -25,7 +25,7 @@ describe("auth pages", () => {
 
     render(<App authMode="required" />);
 
-    expect(await screen.findByRole("heading", { name: "登录 Agentlane" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "登录 Lorume" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "对象目录" })).not.toBeInTheDocument();
   });
 
@@ -41,7 +41,7 @@ describe("auth pages", () => {
 
     render(<App authMode="required" />);
 
-    expect(await screen.findByRole("heading", { name: "登录 Agentlane" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "登录 Lorume" })).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.queryByText("Not Found")).not.toBeInTheDocument();
   });
@@ -58,7 +58,7 @@ describe("auth pages", () => {
 
     render(<App authMode="required" />);
 
-    expect(await screen.findByRole("heading", { name: "登录 Agentlane" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "登录 Lorume" })).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent("backend unavailable");
   });
 
@@ -73,7 +73,7 @@ describe("auth pages", () => {
       if (url.endsWith("/api/auth/email-code")) return jsonResponse({ ok: true, email: "zhangliang@gaoding.com" }, 202);
       if (url.endsWith("/api/auth/login")) {
         return jsonResponse(sessionResponse({
-          organizations: [{ organizationId: "org_1", id: "mem_1", name: "Agentlane Team", role: "owner", slug: "agentlane" }],
+          organizations: [{ organizationId: "org_1", id: "mem_1", name: "Lorume Team", role: "owner", slug: "lorume" }],
         }));
       }
       return jsonResponse({ error: "unexpected request" }, 500);
@@ -152,7 +152,7 @@ describe("auth pages", () => {
       const url = input.toString();
       if (url.endsWith("/api/me")) {
         return jsonResponse(sessionResponse({
-          organizations: [{ organizationId: "org_1", id: "mem_1", name: "Agentlane Team", role: "owner", slug: "agentlane" }],
+          organizations: [{ organizationId: "org_1", id: "mem_1", name: "Lorume Team", role: "owner", slug: "lorume" }],
         }));
       }
       if (url.endsWith("/api/auth/logout")) return new Response(null, { status: 204 });
@@ -165,7 +165,7 @@ describe("auth pages", () => {
     await user.click(screen.getByRole("button", { name: "退出登录" }));
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "登录 Agentlane" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "登录 Lorume" })).toBeInTheDocument();
     });
   });
 });

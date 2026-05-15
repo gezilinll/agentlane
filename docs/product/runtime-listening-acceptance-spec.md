@@ -2,23 +2,23 @@
 
 版本：TinySpec v0.9
 
-本文定义 Agentlane v1 对 OpenClaw、Multica、Slock 三个平台“真实监听到位”的验收口径。它不是 UI 设计稿，也不是平台能力承诺；它是 adapter、collector、Runs 看板和后续任务管理共同遵循的质量门槛。
+本文定义 Lorume v1 对 OpenClaw、Multica、Slock 三个平台“真实监听到位”的验收口径。它不是 UI 设计稿，也不是平台能力承诺；它是 adapter、collector、Runs 看板和后续任务管理共同遵循的质量门槛。
 
 ## 分层原则
 
-Agentlane 的工作态模型按产品归属分层，而不是按采集来源分层。
+Lorume 的工作态模型按产品归属分层，而不是按采集来源分层。
 
 - Device 是设备连接与承载层，只回答“哪台设备在线、collector 是否连着、有哪些 Runtime 注册在这台设备上”。Device 不生成任务卡，也不拥有泳道。
 - Runtime 是执行环境层，只回答“这个执行环境是否可用、离线、闲置或工作中”。Runtime 可以是采集入口，但任务、会话和泳道不归 Runtime 所有。
 - Agent 是工作主体层，负责承接用户请求和任务。项目管理级泳道只归 Agent：待处理、处理中、待验收、已关闭、需关注。
 - WorkItem、Conversation、Execution 是 Agent 工作态的三类证据：WorkItem 表达业务任务，Conversation 表达用户上下文，Execution 表达一次运行尝试。它们可以从 Runtime adapter 采集，但必须在 adapter / query 层关联到 Agent 工作模型。
-- OpenClaw CLI、Slock task board、Slock activity、Multica issue/run 等都是采集策略，不是 Agentlane 产品语义。只有能帮助判断 Agent 工作项、Agent 执行态或 Runtime 粗粒度忙闲时，才应该进入统一模型。
+- OpenClaw CLI、Slock task board、Slock activity、Multica issue/run 等都是采集策略，不是 Lorume 产品语义。只有能帮助判断 Agent 工作项、Agent 执行态或 Runtime 粗粒度忙闲时，才应该进入统一模型。
 
 ## 目标
 
 Agent Work Board / Runs 看板必须让用户找到“自己发给 Agent 的那条任务”，并知道是谁发起、哪个 Agent 承接、来自哪个群组或渠道、当前处于什么阶段、是否正在执行或失败。
 
-每个平台 adapter 必须优先输出 Agentlane 统一字段：
+每个平台 adapter 必须优先输出 Lorume 统一字段：
 
 | 字段 | 含义 | 前端缺失时 |
 |---|---|---|
@@ -37,7 +37,7 @@ TypeScript source of truth 是 `src/runtime/runtime-listening-acceptance.ts`，h
 
 ## 平台定位
 
-| 平台 | Agentlane 定位 | Runs 卡片来源 | 关键风险 |
+| 平台 | Lorume 定位 | Runs 卡片来源 | 关键风险 |
 |---|---|---|---|
 | OpenClaw | execution source + linked message-backed work item source | DingTalk message context 只有在被 task、trajectory、requester session、task origin 或上游 WorkItem 关联时才生成任务卡；裸 execution 和未关联入站消息不能单独生成任务卡 | 必须优先用 `message_id` 把 trajectory/task execution 回连到同一条 channel message，避免重复卡片和 creator 丢失 |
 | Multica | work item + execution source | Multica issue / task 可生成任务卡 | 需要确认真实 API 中 creator、assignee、chat session、runs 字段稳定 |
@@ -45,7 +45,7 @@ TypeScript source of truth 是 `src/runtime/runtime-listening-acceptance.ts`，h
 
 ## 泳道映射规则
 
-WorkStage 仍然是 Agentlane 自己的 Agent 工作阶段，不直接等同任何平台状态，也不归 Device 或 Runtime 所有。
+WorkStage 仍然是 Lorume 自己的 Agent 工作阶段，不直接等同任何平台状态，也不归 Device 或 Runtime 所有。
 
 OpenClaw：
 
@@ -69,11 +69,11 @@ Slock：
 - task `todo` -> `pending`
 - task `in_progress` -> `processing`
 - task `in_review` -> `review`
-- task `done/cancelled/closed` -> `closed`，其中 Slock 官方 `closed` 在 Agentlane work item 中归一为 `cancelled`
+- task `done/cancelled/closed` -> `closed`，其中 Slock 官方 `closed` 在 Lorume work item 中归一为 `cancelled`
 - task `blocked/unknown` -> `attention`
 - Slock task board 官方状态是 `todo/in_progress/in_review/done/closed`，必须以这些字段作为 WorkItem 阶段来源。
-- Slock task `in_progress` 是 v1 Runs 的直接阶段证据，足以让 Agentlane 的 Agent WorkStage 进入 `processing`，并让归属 Runtime 的粗粒度运行状态进入 `working`。
-- Slock Activity 官方运行态包括 `Working`、`Thinking`、`Sending message`、`Idle` 等。这类状态只作为未来更细实时忙闲证据，不是 v1 工作看板和 Runtime `working` 的前置条件，也不应原样展示为 Agentlane 产品状态。
+- Slock task `in_progress` 是 v1 Runs 的直接阶段证据，足以让 Lorume 的 Agent WorkStage 进入 `processing`，并让归属 Runtime 的粗粒度运行状态进入 `working`。
+- Slock Activity 官方运行态包括 `Working`、`Thinking`、`Sending message`、`Idle` 等。这类状态只作为未来更细实时忙闲证据，不是 v1 工作看板和 Runtime `working` 的前置条件，也不应原样展示为 Lorume 产品状态。
 - execution 状态若要从 Slock 补齐，必须来自 `agent:activity`、event、observer 或 proxy 证据；不能由 `server active` 推断。但 executionStatus 暂时为 `unknown` 不阻塞 task board 进入 Runs。
 
 ## 验收标准
@@ -103,4 +103,4 @@ Slock：
 - Adapter 采集策略变化时，必须同步更新本 spec、`runtime-work-state-probe.md` 和对应 harness。
 - 真实设备验证结果只能沉淀为当前规则、字段约束或脱敏 fixture；不要保留临时排查步骤、个人机器路径、原始 token 或过程性 checklist。
 - `RuntimeListeningAcceptanceReport` 是验收入口：OpenClaw、Multica、Slock 的 readiness、字段覆盖和 gaps 必须由归一化 snapshot 推导，不能由前端临时解释平台原始字段。
-- 新增平台或新增 channel 时，先在 adapter 层转成 Agentlane 的 Runtime、Channel、WorkItem、Conversation、Execution，再让页面消费统一模型。
+- 新增平台或新增 channel 时，先在 adapter 层转成 Lorume 的 Runtime、Channel、WorkItem、Conversation、Execution，再让页面消费统一模型。

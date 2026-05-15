@@ -19,7 +19,7 @@ import {
   type RuntimeFleetFilters,
 } from "./runtime-inventory-query";
 import {
-  type AgentlaneRuntime,
+  type LorumeRuntime,
   type ManagedRuntimeAgent,
   type RuntimeHealthStatus,
   type RuntimeInventorySnapshot,
@@ -46,7 +46,7 @@ const remoteRefreshMaxPolls = 300;
 interface RuntimeFleetQueryResponse {
   observedAt: string | null;
   devices: RuntimeInventorySnapshot["device"][];
-  runtimes: AgentlaneRuntime[];
+  runtimes: LorumeRuntime[];
   agents: ManagedRuntimeAgent[];
 }
 
@@ -563,9 +563,9 @@ function RuntimeTable({
   deviceName: string;
   snapshot: RuntimeInventorySnapshot;
   workStateSnapshot: RuntimeWorkStateSnapshot | null;
-  runtimes: AgentlaneRuntime[];
+  runtimes: LorumeRuntime[];
   selectedId?: string;
-  onSelect: (runtime: AgentlaneRuntime) => void;
+  onSelect: (runtime: LorumeRuntime) => void;
 }) {
   return (
     <section className="tablePanel runtimeAssetPanel" aria-label="Runtime 列表">
@@ -642,7 +642,7 @@ function AgentTable({
   onSelect,
 }: {
   agents: ManagedRuntimeAgent[];
-  runtimes: AgentlaneRuntime[];
+  runtimes: LorumeRuntime[];
   snapshot: RuntimeInventorySnapshot;
   workStateSnapshot: RuntimeWorkStateSnapshot | null;
   selectedId?: string;

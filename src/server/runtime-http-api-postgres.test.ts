@@ -161,7 +161,7 @@ describeDb("runtime HTTP API with Postgres store", () => {
 });
 
 async function startRuntimeApi(postgresStore: PostgresStore) {
-  const dataDir = mkdtempSync(path.join(tmpdir(), "agentlane-runtime-api-postgres-"));
+  const dataDir = mkdtempSync(path.join(tmpdir(), "lorume-runtime-api-postgres-"));
   const store = createRuntimeInventoryStore({
     snapshotPath: path.join(dataDir, "latest.json"),
   });

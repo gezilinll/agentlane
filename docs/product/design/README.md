@@ -1,6 +1,6 @@
-# Agentlane Design Specs
+# Lorume Design Specs
 
-本目录是 Agentlane 当前设计系统与页面体验的 source of truth。所有 UI 变更都应先判断涉及哪个设计维度，再更新对应规范和实现。
+本目录是 Lorume 当前设计系统与页面体验的 source of truth。所有 UI 变更都应先判断涉及哪个设计维度，再更新对应规范和实现。
 
 ## Reading Order
 

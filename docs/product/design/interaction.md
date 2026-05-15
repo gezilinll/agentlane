@@ -1,6 +1,6 @@
 # Interaction
 
-Agentlane 交互优先让用户知道当前状态、下一步动作和操作结果。
+Lorume 交互优先让用户知道当前状态、下一步动作和操作结果。
 
 ## Required States
 

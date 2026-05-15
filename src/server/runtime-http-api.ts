@@ -36,7 +36,7 @@ export type RuntimeHttpApiHandler = (
 /** Create the local Runtime Fleet HTTP API used by Vite and backend tests. */
 export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOptions): RuntimeHttpApiHandler {
   return async function runtimeHttpApiHandler(request, response, next) {
-    const requestUrl = new URL(request.url || "/", "http://agentlane.local");
+    const requestUrl = new URL(request.url || "/", "http://lorume.local");
 
     if (request.method === "GET" && requestUrl.pathname === "/healthz") {
       sendJson(response, 200, { ok: true });

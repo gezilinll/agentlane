@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 
 const { Pool } = pg;
 
-/** Organization member role supported by the first Agentlane auth layer. */
+/** Organization member role supported by the first Lorume auth layer. */
 export type AuthMemberRole = "owner" | "admin" | "member";
 
 /** Persisted email-code login challenge. */
@@ -17,7 +17,7 @@ export interface AuthLoginCode {
   id: string;
 }
 
-/** Agentlane user identity. */
+/** Lorume user identity. */
 export interface AuthUser {
   createdAt: Date;
   displayName?: string | null;
@@ -102,7 +102,7 @@ export interface PostgresAuthStoreOptions {
 /** Create the Postgres-backed auth repository. */
 export function createPostgresAuthStore(options: PostgresAuthStoreOptions = {}): AuthStore {
   const pool = new Pool({
-    connectionString: options.connectionString ?? process.env.DATABASE_URL ?? "postgres://agentlane:agentlane@127.0.0.1:54329/agentlane",
+    connectionString: options.connectionString ?? process.env.DATABASE_URL ?? "postgres://lorume:lorume@127.0.0.1:54329/lorume",
   });
 
   return {

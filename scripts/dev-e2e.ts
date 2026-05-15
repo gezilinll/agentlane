@@ -3,18 +3,18 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
-import { createAgentlaneBackendServer } from "../src/backend/backend-server";
+import { createLorumeBackendServer } from "../src/backend/backend-server";
 
 const { Client } = pg;
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const frontendPort = Number(process.env.AGENTLANE_E2E_FRONTEND_PORT ?? 4175);
-const backendPort = Number(process.env.AGENTLANE_BACKEND_PORT ?? 4174);
-const databaseUrl = process.env.DATABASE_URL ?? "postgres://agentlane:agentlane@127.0.0.1:54329/agentlane_e2e";
-const e2eSnapshotRoot = path.join(repoRoot, ".agentlane", "e2e");
+const frontendPort = Number(process.env.LORUME_E2E_FRONTEND_PORT ?? 4175);
+const backendPort = Number(process.env.LORUME_BACKEND_PORT ?? 4174);
+const databaseUrl = process.env.DATABASE_URL ?? "postgres://lorume:lorume@127.0.0.1:54329/lorume_e2e";
+const e2eSnapshotRoot = path.join(repoRoot, ".lorume", "e2e");
 
 await prepareDatabase(databaseUrl);
 
-const backend = createAgentlaneBackendServer({
+const backend = createLorumeBackendServer({
   databaseUrl,
   host: "127.0.0.1",
   inventorySnapshotPath: path.join(e2eSnapshotRoot, "runtime-inventory", "latest.json"),
@@ -22,13 +22,13 @@ const backend = createAgentlaneBackendServer({
   workStateSnapshotPath: path.join(e2eSnapshotRoot, "runtime-work-state", "latest.json"),
 });
 await backend.listen();
-process.stdout.write(`Agentlane E2E backend listening on ${backend.url}\n`);
+process.stdout.write(`Lorume E2E backend listening on ${backend.url}\n`);
 
 const vite = spawn("npm", ["run", "dev", "--", "--host", "127.0.0.1", "--port", String(frontendPort)], {
   cwd: repoRoot,
   env: {
     ...process.env,
-    AGENTLANE_BACKEND_URL: backend.url,
+    LORUME_BACKEND_URL: backend.url,
   },
   stdio: "inherit",
 });

@@ -1,14 +1,14 @@
-# Agentlane
+# Lorume
 
-**Agentlane is an open-source control plane for operating human-agent teams in production.**
+**Lorume is an open-source control plane for operating human-agent teams in production.**
 
-Agentlane helps teams manage Agents, Workflows, Skills, worker devices, runtime queues, memory, permissions, approvals, audits, and governance from one place. It is designed for teams that are moving from "one powerful agent on one machine" to a governed Agent Network that can be observed, scaled, and operated like real production infrastructure.
+Lorume helps teams manage Agents, Workflows, Skills, worker devices, runtime queues, memory, permissions, approvals, audits, and governance from one place. It is designed for teams that are moving from "one powerful agent on one machine" to a governed Agent Network that can be observed, scaled, and operated like real production infrastructure.
 
-## Why Agentlane
+## Why Lorume
 
 AI agents are quickly becoming part of daily operations, but most teams still run them through scattered chat entrypoints, local machines, cron jobs, ad-hoc skills, and tribal knowledge.
 
-Agentlane starts from a different premise: production agents need a control plane.
+Lorume starts from a different premise: production agents need a control plane.
 
 It should be possible to answer:
 
@@ -22,7 +22,7 @@ It should be possible to answer:
 
 ## Operating Model
 
-Agentlane treats an Agent Network as multiple coordinated paths, not one giant agent:
+Lorume treats an Agent Network as multiple coordinated paths, not one giant agent:
 
 - **Personal request path**: people or teams start work from personal, team, DingTalk, document, scheduled, or system-event entry points. A Personal Work Agent carries profile, responsibility tags, preference memory, and permission policy. Ambiguous or cross-domain work can be routed through the Semantic Coordinator, then answered by reusable Domain Agents and executed by the Runtime Fabric.
 - **Fixed workflow path**: scheduled or event-driven workflows can run directly when their trigger, steps, outputs, and recipients are already known. They reuse Domain Agents and Runtime Fabric without forcing every run through semantic orchestration.
@@ -36,9 +36,9 @@ The boundary is intentional:
 - **Runtime / Execution Fabric** handles task queue, multi-machine dispatch, concurrency, retry, health checks, capacity, session routing, and failover. It does not decide semantic intent.
 - **Registry / Catalog** records metadata such as owner, permissions, inputs, outputs, evals, and lifecycle. It is referenced by runtime, but does not execute work itself.
 
-## What Agentlane Manages
+## What Lorume Manages
 
-Agentlane is not a chatbot UI and not a single-agent framework. It is a product layer for managing an Agent Network:
+Lorume is not a chatbot UI and not a single-agent framework. It is a product layer for managing an Agent Network:
 
 - **Command Center**: global health, running work, queue depth, approvals, alerts, and risk signals.
 - **Catalog / Registry**: unified directory for Agents, Workflows, Skills, Tools, Data Sources, Memory, Policies, and Workers.
@@ -80,9 +80,9 @@ A single Run may contain multiple Tasks. For example, one Workflow Run may creat
 
 ## Current Status
 
-Agentlane is in product definition and early engineering. The first implemented surfaces are a public homepage, email-code login with organization membership, a Chinese-first Catalog / Registry page, a Runtime Fleet page, and a read-only Runs / Work Board for Agent work-state visibility. These surfaces are backed by the initial TypeScript Catalog Object model, normalized runtime inventory and work-state models, a device collector, a standalone local backend with Postgres-backed query APIs, and an outbound WebSocket device control channel for refreshing inventory plus work-state snapshots.
+Lorume is in product definition and early engineering. The first implemented surfaces are a public homepage, email-code login with organization membership, a Chinese-first Catalog / Registry page, a Runtime Fleet page, and a read-only Runs / Work Board for Agent work-state visibility. These surfaces are backed by the initial TypeScript Catalog Object model, normalized runtime inventory and work-state models, a device collector, a standalone local backend with Postgres-backed query APIs, and an outbound WebSocket device control channel for refreshing inventory plus work-state snapshots.
 
-Runtime and device registration can now complete a development and ECS loop against OpenClaw, Multica, and Slock-style sources. The backend has a Postgres-backed service shape, production-like local deployment path, organization-based access, and an initial ECS deployment at `agentlane.gezilinll.com`; backups, monitoring, multi-device orchestration, and execution control are still being built.
+Runtime and device registration can now complete a development and ECS loop against OpenClaw, Multica, and Slock-style sources. The backend has a Postgres-backed service shape, production-like local deployment path, organization-based access, and an initial ECS deployment at `lorume.com`; backups, monitoring, multi-device orchestration, and execution control are still being built.
 
 The first product design package is available here:
 
@@ -106,7 +106,7 @@ Coding agents and contributors should start from [AGENTS.md](AGENTS.md). That gu
 
 ## Design Preview
 
-![Agentlane Command Center](assets/product-ui/01-command-center.png)
+![Lorume Command Center](assets/product-ui/01-command-center.png)
 
 ## License
 

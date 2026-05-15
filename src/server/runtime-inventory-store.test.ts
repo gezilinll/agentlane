@@ -10,7 +10,7 @@ const fixture = fixtureSnapshot as RuntimeInventorySnapshot;
 
 describe("runtime inventory store", () => {
   it("writes and reads the latest runtime inventory snapshot", () => {
-    const dataDir = mkdtempSync(path.join(tmpdir(), "agentlane-runtime-store-"));
+    const dataDir = mkdtempSync(path.join(tmpdir(), "lorume-runtime-store-"));
     const store = createRuntimeInventoryStore({
       snapshotPath: path.join(dataDir, "latest.json"),
     });
@@ -27,7 +27,7 @@ describe("runtime inventory store", () => {
   });
 
   it("rejects malformed snapshots before persistence", () => {
-    const dataDir = mkdtempSync(path.join(tmpdir(), "agentlane-runtime-store-"));
+    const dataDir = mkdtempSync(path.join(tmpdir(), "lorume-runtime-store-"));
     const store = createRuntimeInventoryStore({
       snapshotPath: path.join(dataDir, "latest.json"),
     });
@@ -37,7 +37,7 @@ describe("runtime inventory store", () => {
   });
 
   it("tracks device connection freshness separately from the latest snapshot", () => {
-    const dataDir = mkdtempSync(path.join(tmpdir(), "agentlane-runtime-store-"));
+    const dataDir = mkdtempSync(path.join(tmpdir(), "lorume-runtime-store-"));
     const store = createRuntimeInventoryStore({
       snapshotPath: path.join(dataDir, "latest.json"),
       staleAfterMs: 60_000,
@@ -74,7 +74,7 @@ describe("runtime inventory store", () => {
   });
 
   it("tracks refresh command lifecycle by command id", () => {
-    const dataDir = mkdtempSync(path.join(tmpdir(), "agentlane-runtime-store-"));
+    const dataDir = mkdtempSync(path.join(tmpdir(), "lorume-runtime-store-"));
     const store = createRuntimeInventoryStore({
       snapshotPath: path.join(dataDir, "latest.json"),
     });

@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import path from "node:path";
 import type { RuntimeWorkStateSnapshot } from "../runtime";
 
-/** Runtime work-state persistence options for the local Agentlane backend. */
+/** Runtime work-state persistence options for the local Lorume backend. */
 export interface RuntimeWorkStateStoreOptions {
   /** Absolute or repository-relative path for the latest work-state snapshot JSON file. */
   snapshotPath?: string;
@@ -18,14 +18,14 @@ export interface RuntimeWorkStateStore {
   writeLatestSnapshot: (snapshot: unknown) => RuntimeWorkStateSnapshot;
 }
 
-const defaultSnapshotPath = path.resolve(".agentlane", "runtime-work-state", "latest.json");
+const defaultSnapshotPath = path.resolve(".lorume", "runtime-work-state", "latest.json");
 
 /** Create a file-backed store for the latest runtime work-state snapshot. */
 export function createRuntimeWorkStateStore(
   options: RuntimeWorkStateStoreOptions = {},
 ): RuntimeWorkStateStore {
   const snapshotPath = path.resolve(
-    options.snapshotPath || process.env.AGENTLANE_RUNTIME_WORK_STATE_PATH || defaultSnapshotPath,
+    options.snapshotPath || process.env.LORUME_RUNTIME_WORK_STATE_PATH || defaultSnapshotPath,
   );
 
   return {
@@ -52,7 +52,7 @@ export function createRuntimeWorkStateStore(
   };
 }
 
-/** Validate the small contract Agentlane needs before accepting a work-state snapshot. */
+/** Validate the small contract Lorume needs before accepting a work-state snapshot. */
 export function validateRuntimeWorkStateSnapshot(value: unknown): value is RuntimeWorkStateSnapshot {
   if (!isRecord(value)) return false;
   if (typeof value.observedAt !== "string") return false;

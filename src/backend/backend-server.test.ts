@@ -13,17 +13,17 @@ import { createPostgresSkillGovernanceStore } from "../skills/skill-governance-s
 import { createSkillPackageFromMarkdown } from "../skills/skill-package";
 import { createPostgresSkillStore } from "../skills/skill-store";
 import { createTemporaryPostgresDatabase, runMigrationsScript, shouldRunPostgresTests } from "../test/postgres";
-import { createAgentlaneBackendServer, type AgentlaneBackendServer } from "./backend-server";
+import { createLorumeBackendServer, type LorumeBackendServer } from "./backend-server";
 
 const describeDb = shouldRunPostgresTests() ? describe : describe.skip;
-const backends: AgentlaneBackendServer[] = [];
+const backends: LorumeBackendServer[] = [];
 
 afterEach(async () => {
   await Promise.all(backends.map((backend) => backend.close()));
   backends.length = 0;
 });
 
-describe("standalone Agentlane backend server", () => {
+describe("standalone Lorume backend server", () => {
   it("keeps the device control websocket available outside Vite", async () => {
     const backend = await startBackend({ createCommandId: () => "cmd-standalone-refresh" });
     const socket = new WebSocket(`${backend.wsUrl}/api/device-control/ws`);
@@ -100,10 +100,10 @@ describe("standalone Agentlane backend server", () => {
   });
 });
 
-describeDb("standalone Agentlane backend server with Postgres", () => {
+describeDb("standalone Lorume backend server with Postgres", () => {
   it("persists collector posts and serves formal query APIs", async () => {
     const database = await createTemporaryPostgresDatabase();
-    let backend: AgentlaneBackendServer | null = null;
+    let backend: LorumeBackendServer | null = null;
     try {
       runMigrationsScript(database.url);
       backend = await startBackend({ databaseUrl: database.url });
@@ -138,7 +138,7 @@ describeDb("standalone Agentlane backend server with Postgres", () => {
 
   it("runs due Skill operation jobs from the formal backend", async () => {
     const database = await createTemporaryPostgresDatabase();
-    let backend: AgentlaneBackendServer | null = null;
+    let backend: LorumeBackendServer | null = null;
     let organizationId = "";
     try {
       runMigrationsScript(database.url);
@@ -217,7 +217,7 @@ compatibility: openclaw
 
   it("serves authenticated Operation and Notification query APIs", async () => {
     const database = await createTemporaryPostgresDatabase();
-    let backend: AgentlaneBackendServer | null = null;
+    let backend: LorumeBackendServer | null = null;
     try {
       runMigrationsScript(database.url);
       const authStore = createPostgresAuthStore({ connectionString: database.url });
@@ -274,7 +274,7 @@ compatibility: openclaw
         authPepper: "test-pepper",
         databaseUrl: database.url,
       });
-      const cookie = "agentlane_session=backend-query-session";
+      const cookie = "lorume_session=backend-query-session";
       const operationsResponse = await fetch(`${backend.url}/api/operations?organizationId=${organizationId}`, {
         headers: { cookie },
       });
@@ -312,8 +312,8 @@ async function startBackend(options: {
   databaseUrl?: string;
   deviceTokenRequired?: boolean;
 } = {}) {
-  const dataDir = mkdtempSync(path.join(tmpdir(), "agentlane-standalone-backend-"));
-  const backend = createAgentlaneBackendServer({
+  const dataDir = mkdtempSync(path.join(tmpdir(), "lorume-standalone-backend-"));
+  const backend = createLorumeBackendServer({
     createCommandId: options.createCommandId,
     databaseUrl: options.databaseUrl,
     authPepper: options.authPepper,
@@ -340,7 +340,7 @@ function createDeviceTokenAuthStore(validToken: string): AuthStore {
   } as unknown as AuthStore;
 }
 
-async function closeRegisteredBackend(backend: AgentlaneBackendServer): Promise<void> {
+async function closeRegisteredBackend(backend: LorumeBackendServer): Promise<void> {
   await backend.close();
   const index = backends.indexOf(backend);
   if (index >= 0) backends.splice(index, 1);

@@ -10,7 +10,7 @@ export interface AuthClient {
   requestEmailCode: (email: string) => Promise<{ email: string; ok: boolean }>;
 }
 
-/** Create the default browser auth client backed by Agentlane HTTP APIs. */
+/** Create the default browser auth client backed by Lorume HTTP APIs. */
 export function createAuthClient(): AuthClient {
   return {
     acceptInvitation(token) {

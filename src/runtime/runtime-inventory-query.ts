@@ -1,6 +1,6 @@
 import {
   RUNTIME_KINDS,
-  type AgentlaneRuntime,
+  type LorumeRuntime,
   type ChannelKind,
   type RuntimeActivityStats,
   type RuntimeSource,
@@ -51,7 +51,7 @@ export const runtimeHealthLabels: Record<RuntimeHealthStatus, string> = {
   unknown: "未知",
 };
 
-/** Runtime operating state derived by Agentlane from linked Agent work evidence. */
+/** Runtime operating state derived by Lorume from linked Agent work evidence. */
 export type RuntimeOperatingStatus = "working" | "idle" | "offline" | "unknown";
 
 /** Runtime operating labels for Runtime Fleet. */
@@ -107,14 +107,14 @@ export function formatRuntimeTimestamp(value?: string): string {
 }
 
 /** Runtime display label used consistently across Runtime and Agent surfaces. */
-export function runtimeDisplayName(runtime: AgentlaneRuntime): string {
+export function runtimeDisplayName(runtime: LorumeRuntime): string {
   return runtime.name;
 }
 
 /** Resolve the best available observation time for an Agent row or detail view. */
 export function runtimeAgentLastSeenAt(
   agent: ManagedRuntimeAgent,
-  runtime?: AgentlaneRuntime,
+  runtime?: LorumeRuntime,
   snapshot?: RuntimeInventorySnapshot,
 ): string | undefined {
   return agent.lastSeenAt ?? runtime?.lastSeenAt ?? snapshot?.observedAt;
@@ -139,7 +139,7 @@ export function listRuntimeFleetHealthOptions(snapshot: RuntimeInventorySnapshot
 /** Derive a runtime's coarse operating state without exposing source-platform raw states. */
 export function deriveRuntimeOperatingStatus(
   snapshot: RuntimeInventorySnapshot,
-  runtime: AgentlaneRuntime,
+  runtime: LorumeRuntime,
   workState?: RuntimeWorkStateSnapshot | null,
 ): RuntimeOperatingStatus {
   if (snapshot.device.status === "offline" || runtime.status === "offline") return "offline";
@@ -167,7 +167,7 @@ export function deriveRuntimeOperatingStatus(
   return "unknown";
 }
 
-/** Derive an Agent's display state from Agentlane work evidence before falling back to raw inventory state. */
+/** Derive an Agent's display state from Lorume work evidence before falling back to raw inventory state. */
 export function deriveManagedAgentDisplayStatus(
   snapshot: RuntimeInventorySnapshot,
   agent: ManagedRuntimeAgent,
@@ -212,7 +212,7 @@ export interface RuntimeFleetResult {
   /** Device that produced the latest snapshot. */
   device: RuntimeDevice;
   /** Runtimes matching the active filters. */
-  runtimes: AgentlaneRuntime[];
+  runtimes: LorumeRuntime[];
   /** Agents matching the active filters. */
   agents: ManagedRuntimeAgent[];
 }
@@ -462,7 +462,7 @@ function normalizeSearch(value: string): string {
 
 function isWorkItemLinkedToRuntime(
   workItem: RuntimeWorkItem,
-  runtime: AgentlaneRuntime,
+  runtime: LorumeRuntime,
   runtimeAgentIds: Set<string>,
 ): boolean {
   return workItem.runtimeId === runtime.id || Boolean(workItem.agentId && runtimeAgentIds.has(workItem.agentId));
@@ -470,7 +470,7 @@ function isWorkItemLinkedToRuntime(
 
 function isExecutionLinkedToRuntime(
   execution: RuntimeExecution,
-  runtime: AgentlaneRuntime,
+  runtime: LorumeRuntime,
   runtimeAgentIds: Set<string>,
 ): boolean {
   return execution.runtimeId === runtime.id || Boolean(execution.agentId && runtimeAgentIds.has(execution.agentId));
@@ -590,7 +590,7 @@ function executionObservedTime(execution: RuntimeExecution): number {
 
 function canObserveRuntimeWork(
   capabilities: RuntimeObservationCapability[],
-  runtime: AgentlaneRuntime,
+  runtime: LorumeRuntime,
 ): boolean {
   const runtimeSources = new Set([runtime.kind, ...runtime.sourceRefs.map((ref) => ref.source)]);
   return capabilities.some((capability) =>
@@ -618,7 +618,7 @@ function includesQuery(values: Array<string | undefined>, query: string): boolea
   return values.some((value) => value?.toLowerCase().includes(query));
 }
 
-function runtimeMatches(runtime: AgentlaneRuntime, query: string): boolean {
+function runtimeMatches(runtime: LorumeRuntime, query: string): boolean {
   return includesQuery(
     [
       runtime.name,
@@ -668,7 +668,7 @@ function labelsForAgents(agents: ManagedRuntimeAgent[]): string[] {
   ).sort();
 }
 
-function registeredRuntimeLabels(runtimes: AgentlaneRuntime[]): string[] {
+function registeredRuntimeLabels(runtimes: LorumeRuntime[]): string[] {
   const labels = runtimes.map(runtimeDisplayName);
   return labels.length ? Array.from(new Set(labels)).sort() : ["暂无已注册 Runtime"];
 }

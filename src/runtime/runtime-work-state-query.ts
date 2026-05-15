@@ -32,7 +32,7 @@ export interface RuntimeWorkBoard {
   observedAt: string;
   /** Device that produced the snapshot. */
   deviceId: string;
-  /** Lanes in stable Agentlane-owned order. */
+  /** Lanes in stable Lorume-owned order. */
   lanes: RuntimeWorkBoardLane[];
   /** Flat filtered items for detail lookup and counts. */
   visibleItems: RuntimeWorkBoardItem[];
@@ -44,7 +44,7 @@ export interface RuntimeWorkBoard {
 
 /** One WorkStage lane on the board. */
 export interface RuntimeWorkBoardLane {
-  /** Agentlane-owned stage id. */
+  /** Lorume-owned stage id. */
   stage: RuntimeWorkStageId;
   /** Human-readable stage label. */
   label: string;
@@ -62,7 +62,7 @@ export interface RuntimeWorkBoardItem {
   source: RuntimeSource;
   /** Human-readable runtime label used by task cards and details. */
   runtimeLabel: string;
-  /** Unified Agentlane-owned stage. */
+  /** Unified Lorume-owned stage. */
   stage: RuntimeWorkStageId;
   /** Evidence confidence for the stage. */
   confidence: RuntimeWorkStageConfidence;
@@ -228,7 +228,7 @@ function createWorkItemBoardItem(workItem: RuntimeWorkItem, execution?: RuntimeE
     runtimeLabel: sourceLabel(workItem.source),
     stage,
     confidence: workItem.stage ? "direct" : derivation.confidence,
-    reasons: workItem.stage ? ["Backend query returned the materialized Agentlane work stage."] : derivation.reasons,
+    reasons: workItem.stage ? ["Backend query returned the materialized Lorume work stage."] : derivation.reasons,
     kind: "work_item",
     workItemStatus: workItem.status,
     executionStatus: execution?.status,

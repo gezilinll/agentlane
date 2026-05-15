@@ -2,7 +2,7 @@
 
 版本：TinySpec v0.9
 
-Runtime Fleet 是 Agentlane v1 用来查看设备、runtime、agent 和 channel binding 的第一版管理页面。页面正式数据来自 backend 查询 API；fixture 只作为开发期离线预览和测试辅助，不作为生产或正式本地验收路径。
+Runtime Fleet 是 Lorume v1 用来查看设备、runtime、agent 和 channel binding 的第一版管理页面。页面正式数据来自 backend 查询 API；fixture 只作为开发期离线预览和测试辅助，不作为生产或正式本地验收路径。
 
 ## 分层原则
 
@@ -11,7 +11,7 @@ Runtime Fleet 必须区分“数据从哪里采集”和“产品上归属哪一
 - Device 管设备连接和承载状态：在线、最近心跳、连接方式、collector 状态、已注册 Runtime。Device 不拥有任务、会话或泳道。
 - Runtime 管执行环境状态：是否可用、是否离线、是否闲置、是否有工作负载。Runtime 可以是采集任务和会话数据的入口，但不拥有项目管理级任务或泳道。
 - Agent 管用户可理解的工作状态：待处理、处理中、待验收、已关闭、需关注，以及发起人、承接 Agent、会话/群组、消息摘要和执行结果。
-- Adapter 负责把 OpenClaw、Multica、Slock 等平台差异转成 Agentlane 统一模型。UI 不能直接解释平台原始字段，也不能把平台状态原样暴露成产品语义。
+- Adapter 负责把 OpenClaw、Multica、Slock 等平台差异转成 Lorume 统一模型。UI 不能直接解释平台原始字段，也不能把平台状态原样暴露成产品语义。
 
 ## 目标
 
@@ -42,9 +42,9 @@ Runtime Fleet 必须区分“数据从哪里采集”和“产品上归属哪一
 
 ## 统一语义
 
-Adapter 必须把外部平台差异转换成 Agentlane 自己的数据语义，UI 不直接解释平台原始字段。
+Adapter 必须把外部平台差异转换成 Lorume 自己的数据语义，UI 不直接解释平台原始字段。
 
-`lastSeenAt` 表示 Agentlane 最近一次从对应对象采集到状态的时间。Device、Runtime、Agent 都使用同一字段语义，页面以本地化时间展示，不展示原始 UTC ISO 字符串。
+`lastSeenAt` 表示 Lorume 最近一次从对应对象采集到状态的时间。Device、Runtime、Agent 都使用同一字段语义，页面以本地化时间展示，不展示原始 UTC ISO 字符串。
 
 旧版本 snapshot 如果缺少 Agent 级 `lastSeenAt`，页面可以回退到归属 Runtime 的 `lastSeenAt`，再回退到 snapshot `observedAt`，避免在对象已被采集的情况下展示不可解释的未知时间。
 
@@ -55,7 +55,7 @@ Runtime 可用性继续使用 `RuntimeHealthStatus = online/degraded/offline/unk
 - `idle`：Runtime 可达，adapter 能观测该 Runtime 的工作项或执行态，且当前没有处理中工作项或运行中 execution。
 - `unknown`：adapter 无法判断当前 Runtime 可用性或忙闲。
 
-Runtime 运行状态必须从 Agentlane 统一 WorkStage / ExecutionStatus 推导，不直接把 Slock / OpenClaw / Multica 原始状态暴露到页面。
+Runtime 运行状态必须从 Lorume 统一 WorkStage / ExecutionStatus 推导，不直接把 Slock / OpenClaw / Multica 原始状态暴露到页面。
 
 Agent 状态：
 
@@ -65,7 +65,7 @@ Agent 状态：
 - `degraded`：可识别但状态异常。
 - `unknown`：adapter 无法判断当前状态。
 
-Agent 状态必须优先使用 Agentlane WorkItem / Execution 证据，再回退到 inventory 中的 adapter 原始归一结果。Slock task board 中的 assignee 名称可以用于匹配 ManagedAgent；如果 task board 中的 `agentId` 只是 workspace / token 归属而不是任务承接者，不能用它把所有任务错误归到同一个 Agent。
+Agent 状态必须优先使用 Lorume WorkItem / Execution 证据，再回退到 inventory 中的 adapter 原始归一结果。Slock task board 中的 assignee 名称可以用于匹配 ManagedAgent；如果 task board 中的 `agentId` 只是 workspace / token 归属而不是任务承接者，不能用它把所有任务错误归到同一个 Agent。
 
 Agent 工作负载统计：
 

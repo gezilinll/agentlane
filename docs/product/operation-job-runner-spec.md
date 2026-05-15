@@ -2,14 +2,14 @@
 
 状态：当前规则
 
-本规格定义 Agentlane 后端处理异步工作的最小公共底座。Operation 面向用户和产品状态，Job 面向后端执行。当前实现使用 Postgres 驱动的状态机，不引入 Redis、BullMQ、Kafka、Temporal 或独立 worker 服务。
+本规格定义 Lorume 后端处理异步工作的最小公共底座。Operation 面向用户和产品状态，Job 面向后端执行。当前实现使用 Postgres 驱动的状态机，不引入 Redis、BullMQ、Kafka、Temporal 或独立 worker 服务。
 
 ## 目标
 
 - 为 Skill 导入、发布、分配、下发、设备采集刷新、Agent 迁移和通知投递提供统一异步状态。
 - 用户能在页面内看到异步动作的当前状态、失败原因和需要人工处理的提示。
 - 后端能安全 claim、执行、重试和完成 Job，避免重复执行和长时间卡死。
-- 业务模块只暴露 Agentlane 自己的 Operation 语义，不把某个平台的任务状态直接泄漏给 UI。
+- 业务模块只暴露 Lorume 自己的 Operation 语义，不把某个平台的任务状态直接泄漏给 UI。
 - 每次 Operation 状态变化都可以产生通知事件，由 Notification 模块聚合、限流和投递。
 
 ## 非目标

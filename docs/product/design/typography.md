@@ -1,6 +1,6 @@
 # Typography
 
-Agentlane 使用三层字体系统：Pixel 建立品牌，Sans 保证中文阅读，Mono 表达技术和数据。
+Lorume 使用三层字体系统：Pixel 建立品牌，Sans 保证中文阅读，Mono 表达技术和数据。
 
 ## Font Roles
 

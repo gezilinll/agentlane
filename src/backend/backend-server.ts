@@ -26,8 +26,8 @@ import { createSkillHttpApiHandler } from "../skills/skill-http-api";
 import { createSkillOperationJobHandlers } from "../skills/skill-operation-handlers";
 import { createPostgresSkillStore, type SkillStore } from "../skills/skill-store";
 
-/** Construction options for the standalone Agentlane backend. */
-export interface AgentlaneBackendServerOptions {
+/** Construction options for the standalone Lorume backend. */
+export interface LorumeBackendServerOptions {
   /** Host passed to `server.listen`. */
   host?: string;
   /** Port passed to `server.listen`; use 0 for tests. */
@@ -69,7 +69,7 @@ export interface AgentlaneBackendServerOptions {
 }
 
 /** Running standalone backend handle used by tests and local dev. */
-export interface AgentlaneBackendServer {
+export interface LorumeBackendServer {
   /** HTTP base URL after `listen` resolves. */
   readonly url: string;
   /** WebSocket base URL after `listen` resolves. */
@@ -80,12 +80,12 @@ export interface AgentlaneBackendServer {
   close: () => Promise<void>;
 }
 
-/** Create the local-first standalone Agentlane backend service. */
-export function createAgentlaneBackendServer(
-  options: AgentlaneBackendServerOptions = {},
-): AgentlaneBackendServer {
-  const host = options.host ?? process.env.AGENTLANE_BACKEND_HOST ?? "0.0.0.0";
-  const port = options.port ?? Number(process.env.AGENTLANE_BACKEND_PORT ?? 4173);
+/** Create the local-first standalone Lorume backend service. */
+export function createLorumeBackendServer(
+  options: LorumeBackendServerOptions = {},
+): LorumeBackendServer {
+  const host = options.host ?? process.env.LORUME_BACKEND_HOST ?? "0.0.0.0";
+  const port = options.port ?? Number(process.env.LORUME_BACKEND_PORT ?? 4173);
   const store = createRuntimeInventoryStore({
     snapshotPath: options.inventorySnapshotPath,
     staleAfterMs: options.staleAfterMs,
@@ -125,17 +125,17 @@ export function createAgentlaneBackendServer(
   const operationRunnerEnabled = options.operationRunnerEnabled
     ?? Boolean(options.databaseUrl ?? process.env.DATABASE_URL);
   const operationRunnerIntervalMs = options.operationRunnerIntervalMs
-    ?? Number(process.env.AGENTLANE_OPERATION_RUNNER_INTERVAL_MS ?? 1_000);
+    ?? Number(process.env.LORUME_OPERATION_RUNNER_INTERVAL_MS ?? 1_000);
   const operationRunner = operationRunnerEnabled && operationStore && skillGovernanceStore
     ? createOperationJobRunner({
       handlers: createSkillOperationJobHandlers({ governanceStore: skillGovernanceStore }),
       notificationStore: notificationStore ?? undefined,
       operationStore,
-      runnerId: process.env.AGENTLANE_OPERATION_RUNNER_ID ?? "agentlane-backend",
+      runnerId: process.env.LORUME_OPERATION_RUNNER_ID ?? "lorume-backend",
     })
     : undefined;
-  const authRequired = options.authRequired ?? process.env.AGENTLANE_AUTH_REQUIRED === "1";
-  const deviceTokenRequired = options.deviceTokenRequired ?? process.env.AGENTLANE_DEVICE_TOKEN_REQUIRED === "1";
+  const authRequired = options.authRequired ?? process.env.LORUME_AUTH_REQUIRED === "1";
+  const deviceTokenRequired = options.deviceTokenRequired ?? process.env.LORUME_DEVICE_TOKEN_REQUIRED === "1";
   const authHandler = authStore
     ? createAuthHttpApiHandler({
       emailProvider: options.emailProvider ?? createBackendEmailProvider(),
@@ -249,7 +249,7 @@ export function createAgentlaneBackendServer(
 
   server.on("upgrade", (request, socket, head) => {
     void (async () => {
-      const requestUrl = new URL(request.url || "/", "http://agentlane.local");
+      const requestUrl = new URL(request.url || "/", "http://lorume.local");
       if (requestUrl.pathname !== "/api/device-control/ws") {
         socket.destroy();
         return;
@@ -286,7 +286,7 @@ export function createAgentlaneBackendServer(
           server.off("error", reject);
           const address = server.address();
           if (!address || typeof address === "string") {
-            reject(new Error("Agentlane backend did not receive a TCP address"));
+            reject(new Error("Lorume backend did not receive a TCP address"));
             return;
           }
           const displayHost = host === "0.0.0.0" ? "127.0.0.1" : host;
@@ -420,8 +420,8 @@ function parseControlHello(rawMessage: string): ({ deviceToken?: string } & Reco
 function createBackendEmailProvider(): AuthEmailProvider {
   return {
     async sendLoginCode({ code, email }) {
-      if (process.env.AGENTLANE_AUTH_DEBUG_CODES === "1") {
-        process.stdout.write(`Agentlane login code for ${email}: ${code}\n`);
+      if (process.env.LORUME_AUTH_DEBUG_CODES === "1") {
+        process.stdout.write(`Lorume login code for ${email}: ${code}\n`);
         return;
       }
       throw new Error("email_provider_not_configured");
@@ -453,7 +453,7 @@ function isDirectRun(): boolean {
 }
 
 if (isDirectRun()) {
-  const backend = createAgentlaneBackendServer();
+  const backend = createLorumeBackendServer();
   await backend.listen();
-  process.stdout.write(`Agentlane backend listening on ${backend.url}\n`);
+  process.stdout.write(`Lorume backend listening on ${backend.url}\n`);
 }

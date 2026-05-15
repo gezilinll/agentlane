@@ -1,6 +1,6 @@
 # Responsive And Accessibility
 
-Agentlane 必须在桌面、窄屏和高密度数据场景下保持可读、可操作。
+Lorume 必须在桌面、窄屏和高密度数据场景下保持可读、可操作。
 
 ## Responsive Rules
 

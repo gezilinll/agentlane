@@ -32,7 +32,7 @@ export interface RuntimeWorkItemsQueryPage {
 
 /** One normalized work item row returned by the backend query API. */
 export interface RuntimeWorkItemQueryRow {
-  /** Stable Agentlane work item id. */
+  /** Stable Lorume work item id. */
   id: string;
   /** External platform work item id. */
   externalId?: string;
@@ -40,7 +40,7 @@ export interface RuntimeWorkItemQueryRow {
   source: string;
   /** Normalized work item status. */
   status: string;
-  /** Derived Agentlane work stage. */
+  /** Derived Lorume work stage. */
   stage: string;
   /** User-facing work item title. */
   title: string;

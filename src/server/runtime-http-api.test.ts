@@ -193,7 +193,7 @@ async function startRuntimeApi(options: {
   auth?: Parameters<typeof createRuntimeHttpApiHandler>[0]["auth"];
   createCommandId?: () => string;
 } = {}) {
-  const dataDir = mkdtempSync(path.join(tmpdir(), "agentlane-runtime-api-"));
+  const dataDir = mkdtempSync(path.join(tmpdir(), "lorume-runtime-api-"));
   const store = createRuntimeInventoryStore({
     snapshotPath: path.join(dataDir, "latest.json"),
     staleAfterMs: 24 * 60 * 60 * 1000,

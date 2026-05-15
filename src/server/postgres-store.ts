@@ -6,7 +6,7 @@ import {
   type RuntimeWorkStateSnapshot,
 } from "../runtime/runtime-work-state";
 import type {
-  AgentlaneRuntime,
+  LorumeRuntime,
   ManagedRuntimeAgent,
   RuntimeDevice,
   RuntimeInventorySnapshot,
@@ -18,7 +18,7 @@ import {
 
 const { Pool } = pg;
 
-/** Construction options for the Postgres-backed Agentlane repository. */
+/** Construction options for the Postgres-backed Lorume repository. */
 export interface PostgresStoreOptions {
   /** Postgres connection string; defaults to local compose Postgres. */
   connectionString?: string;
@@ -87,7 +87,7 @@ const workItemOrderExpression = "coalesce(w.last_seen_at, w.updated_source_at, w
 export interface PostgresRuntimeFleetResult {
   observedAt: string | null;
   devices: RuntimeDevice[];
-  runtimes: AgentlaneRuntime[];
+  runtimes: LorumeRuntime[];
   agents: ManagedRuntimeAgent[];
   summary: {
     deviceCount: number;
@@ -157,10 +157,10 @@ export interface PostgresFailedCollectorIngestionInput {
   error: string;
 }
 
-/** Create a Postgres repository using Agentlane's normalized snapshot semantics. */
+/** Create a Postgres repository using Lorume's normalized snapshot semantics. */
 export function createPostgresStore(options: PostgresStoreOptions = {}): PostgresStore {
   const pool = new Pool({
-    connectionString: options.connectionString ?? process.env.DATABASE_URL ?? "postgres://agentlane:agentlane@127.0.0.1:54329/agentlane",
+    connectionString: options.connectionString ?? process.env.DATABASE_URL ?? "postgres://lorume:lorume@127.0.0.1:54329/lorume",
   });
 
   async function listCollectorIngestions(deviceId: string): Promise<PostgresCollectorIngestion[]> {
@@ -308,7 +308,7 @@ export function createPostgresStore(options: PostgresStoreOptions = {}): Postgre
     async readRuntimeFleet() {
       const [deviceResult, runtimeResult, agentResult] = await Promise.all([
         pool.query<{ raw: RuntimeDevice; observed_at: Date | null }>("SELECT raw, observed_at FROM devices ORDER BY name"),
-        pool.query<{ raw: AgentlaneRuntime }>("SELECT raw FROM runtimes ORDER BY name"),
+        pool.query<{ raw: LorumeRuntime }>("SELECT raw FROM runtimes ORDER BY name"),
         pool.query<{ raw: ManagedRuntimeAgent }>("SELECT raw FROM agents ORDER BY name"),
       ]);
       const observedAt = deviceResult.rows

@@ -4,7 +4,7 @@
 
 ## Home
 
-Purpose: 说明 Agentlane 是 Agent Network 控制平面，并展示已经可用的 Runtime Fleet、Runs、Catalog 等能力。
+Purpose: 说明 Lorume 是 Agent Network 控制平面，并展示已经可用的 Runtime Fleet、Runs、Catalog 等能力。
 
 Rules:
 
@@ -55,7 +55,7 @@ Rules:
 
 - Runtime 与 Channel 不混用。
 - Runtime Fleet 不提供 Channel 筛选。
-- Runtime 可用性和运行状态使用 Agentlane 统一语义。
+- Runtime 可用性和运行状态使用 Lorume 统一语义。
 - 详情面板展示用户可理解的身份、归属、同步和采集信息。
 - 异常和未知状态需要能在 ingestion 或日志中追溯。
 

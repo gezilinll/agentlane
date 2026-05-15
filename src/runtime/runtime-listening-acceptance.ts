@@ -8,7 +8,7 @@ import type {
   RuntimeWorkStateSnapshot,
 } from "./runtime-work-state";
 
-/** Fields Agentlane needs to make Runs understandable instead of merely debuggable. */
+/** Fields Lorume needs to make Runs understandable instead of merely debuggable. */
 export const RUNTIME_LISTENING_FIELDS = [
   "creator",
   "assigneeAgent",
@@ -20,13 +20,13 @@ export const RUNTIME_LISTENING_FIELDS = [
   "lastSeenAt",
 ] as const;
 
-/** One normalized field required by Agentlane's runtime listening acceptance harness. */
+/** One normalized field required by Lorume's runtime listening acceptance harness. */
 export type RuntimeListeningField = (typeof RUNTIME_LISTENING_FIELDS)[number];
 
 /** Field-level support after checking normalized objects and platform capability reports. */
 export type RuntimeListeningFieldSupport = "supported" | "partial" | "unsupported" | "unknown";
 
-/** Source role in Agentlane's unified work-state model. */
+/** Source role in Lorume's unified work-state model. */
 export type RuntimeListeningSourceRole =
   | "execution_source"
   | "work_item_source"
@@ -45,7 +45,7 @@ export type RuntimeListeningReadiness = "ready_for_runs" | "execution_only" | "n
 export interface RuntimeListeningProfile {
   /** Source adapter this profile describes. */
   source: RuntimeSource;
-  /** Source role in the normalized Agentlane model. */
+  /** Source role in the normalized Lorume model. */
   role: RuntimeListeningSourceRole;
   /** Whether this source may independently create Runs cards. */
   runsBoardPolicy: RuntimeRunsBoardPolicy;
@@ -120,7 +120,7 @@ export function getRuntimeListeningProfile(source: "openclaw" | "multica" | "slo
   return profiles[source];
 }
 
-/** Assess whether the current normalized snapshot satisfies Agentlane's listening needs. */
+/** Assess whether the current normalized snapshot satisfies Lorume's listening needs. */
 export function createRuntimeListeningAcceptanceReport(
   snapshot: RuntimeWorkStateSnapshot,
 ): RuntimeListeningAcceptanceReport {

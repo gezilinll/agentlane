@@ -35,7 +35,7 @@ export function extractCommitSubject(rawMessage) {
 }
 
 /**
- * Validates Agentlane's commit subject convention.
+ * Validates Lorume's commit subject convention.
  *
  * The repository uses a small Conventional Commits subset so local history is
  * scannable while still allowing concise Chinese or English subjects.

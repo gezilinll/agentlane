@@ -40,8 +40,8 @@ describeDb("Postgres auth store", () => {
         const user = await store.upsertUserForEmail("zhangliang@gaoding.com");
         const organization = await store.createOrganization({
           createdByUserId: user.id,
-          name: "Agentlane Team",
-          slug: "agentlane-team",
+          name: "Lorume Team",
+          slug: "lorume-team",
         });
         await expect(store.listOrganizationsForUser(user.id)).resolves.toEqual([
           expect.objectContaining({ organizationId: organization.id, role: "owner" }),
@@ -74,7 +74,7 @@ describeDb("Postgres auth store", () => {
         await expect(store.readSessionByHash(sessionHash, now)).resolves.toMatchObject({
           id: session.id,
           user: expect.objectContaining({ email: "zhangliang@gaoding.com" }),
-          organizations: [expect.objectContaining({ slug: "agentlane-team", role: "owner" })],
+          organizations: [expect.objectContaining({ slug: "lorume-team", role: "owner" })],
         });
 
         const deviceTokenHash = hashSecret("device-secret", "device-token", "test-pepper");

@@ -6,7 +6,7 @@ Surface Register 定义页面类型、视觉强度和体验边界。新增页面
 
 | Surface | Pages | Role | Visual Intensity |
 |---|---|---|---|
-| Brand Surface | `/` | 解释 Agentlane 的价值和方向 | 最高 |
+| Brand Surface | `/` | 解释 Lorume 的价值和方向 | 最高 |
 | Identity Surface | `/login`, `/invite/:token` | 登录、组织加入、身份恢复 | 高 |
 | Console Surface | `/catalog`, `/runtime`, `/runs` | 日常管理、查看、筛选、排查 | 中 |
 
@@ -14,7 +14,7 @@ Surface Register 定义页面类型、视觉强度和体验边界。新增页面
 
 Brand Surface 可以使用更强的像素字体、装饰物、非对称构图、模拟窗口和游戏化符号。它必须快速说明：
 
-- Agentlane 管理什么。
+- Lorume 管理什么。
 - 当前已经能做什么。
 - 用户下一步应该进入登录还是看 Console。
 

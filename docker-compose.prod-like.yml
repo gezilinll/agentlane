@@ -2,13 +2,13 @@ services:
   postgres:
     image: postgres:15-alpine
     environment:
-      POSTGRES_DB: agentlane
-      POSTGRES_USER: agentlane
-      POSTGRES_PASSWORD: ${AGENTLANE_POSTGRES_PASSWORD:-agentlane}
+      POSTGRES_DB: lorume
+      POSTGRES_USER: lorume
+      POSTGRES_PASSWORD: ${LORUME_POSTGRES_PASSWORD:-lorume}
     volumes:
-      - agentlane-prod-like-postgres-data:/var/lib/postgresql/data
+      - lorume-prod-like-postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U agentlane -d agentlane"]
+      test: ["CMD-SHELL", "pg_isready -U lorume -d lorume"]
       interval: 5s
       timeout: 3s
       retries: 12
@@ -18,14 +18,14 @@ services:
       context: .
       dockerfile: Dockerfile.backend
     environment:
-      DATABASE_URL: postgres://agentlane:${AGENTLANE_POSTGRES_PASSWORD:-agentlane}@postgres:5432/agentlane
-      AGENTLANE_BACKEND_HOST: 0.0.0.0
-      AGENTLANE_BACKEND_PORT: 4173
+      DATABASE_URL: postgres://lorume:${LORUME_POSTGRES_PASSWORD:-lorume}@postgres:5432/lorume
+      LORUME_BACKEND_HOST: 0.0.0.0
+      LORUME_BACKEND_PORT: 4173
     depends_on:
       postgres:
         condition: service_healthy
     ports:
-      - "${AGENTLANE_BACKEND_PUBLISH:-4173}:4173"
+      - "${LORUME_BACKEND_PUBLISH:-4173}:4173"
 
   frontend:
     build:
@@ -34,7 +34,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "${AGENTLANE_FRONTEND_PUBLISH:-8080}:80"
+      - "${LORUME_FRONTEND_PUBLISH:-8080}:80"
 
 volumes:
-  agentlane-prod-like-postgres-data:
+  lorume-prod-like-postgres-data:

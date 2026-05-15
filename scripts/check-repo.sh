@@ -51,7 +51,7 @@ required_paths=(
   "scripts/check-commit-message.mjs"
   "scripts/check-commit-message.test.mjs"
   "scripts/dev-e2e.ts"
-  "scripts/agentlane-device-collector.mjs"
+  "scripts/lorume-device-collector.mjs"
   "scripts/install-device-collector.sh"
   "fixtures/runtime/collector-snapshot.sample.json"
   "docs/product/agent-network-runtime-panorama.png"

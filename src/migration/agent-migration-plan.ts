@@ -1,13 +1,13 @@
 /** Runtime capability state used by Agent Migration planning. */
 export type AgentMigrationCapabilityState = "supported" | "partial" | "unsupported" | "requires_manual_step";
 
-/** Target runtime operation that Agentlane may need during migration. */
+/** Target runtime operation that Lorume may need during migration. */
 export type AgentMigrationAction = "detect_runtime" | "create_agent" | "sync_skill" | "configure_channel" | "verify_agent";
 
 /** Operation status returned by the deterministic migration planner. */
 export type AgentMigrationPlanStatus = "ready" | "unsupported" | "requires_manual_step";
 
-/** Runtime-specific migration capability declared by Agentlane adapters. */
+/** Runtime-specific migration capability declared by Lorume adapters. */
 export interface AgentMigrationCapability {
   createAgent: AgentMigrationCapabilityState;
   detectRuntime: AgentMigrationCapabilityState;
@@ -64,7 +64,7 @@ export function describeMigrationCapability(runtimeKind: string): AgentMigration
   }
   if (normalizedKind === "multica") {
     return {
-      channelNotes: ["Multica 是 runtime / platform source，不作为 Agentlane Channel。"],
+      channelNotes: ["Multica 是 runtime / platform source，不作为 Lorume Channel。"],
       createAgent: "supported",
       detectRuntime: "supported",
       importAgent: "supported",
@@ -76,7 +76,7 @@ export function describeMigrationCapability(runtimeKind: string): AgentMigration
   }
   if (normalizedKind === "slock") {
     return {
-      channelNotes: ["Slock 是 runtime / platform source，不作为 Agentlane Channel。"],
+      channelNotes: ["Slock 是 runtime / platform source，不作为 Lorume Channel。"],
       createAgent: "partial",
       detectRuntime: "supported",
       importAgent: "partial",
@@ -88,7 +88,7 @@ export function describeMigrationCapability(runtimeKind: string): AgentMigration
   }
   if (normalizedKind === "codex") {
     return {
-      channelNotes: ["Codex 没有 Agentlane 当前可确定调用的外部 Channel。"],
+      channelNotes: ["Codex 没有 Lorume 当前可确定调用的外部 Channel。"],
       createAgent: "requires_manual_step",
       detectRuntime: "supported",
       importAgent: "requires_manual_step",

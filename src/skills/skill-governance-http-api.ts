@@ -43,7 +43,7 @@ export function createSkillGovernanceHttpApiHandler(
   options: SkillGovernanceHttpApiHandlerOptions,
 ): SkillGovernanceHttpApiHandler {
   return async function skillGovernanceHttpApiHandler(request, response, next) {
-    const requestUrl = new URL(request.url || "/", "http://agentlane.local");
+    const requestUrl = new URL(request.url || "/", "http://lorume.local");
 
     if (request.method === "POST" && requestUrl.pathname === "/api/resource-permissions") {
       const session = await requireSession(request, response, options);

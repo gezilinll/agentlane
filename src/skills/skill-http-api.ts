@@ -41,7 +41,7 @@ export type SkillHttpApiHandler = (
 /** Create organization-scoped Skill import/read routes. */
 export function createSkillHttpApiHandler(options: SkillHttpApiHandlerOptions): SkillHttpApiHandler {
   return async function skillHttpApiHandler(request, response, next) {
-    const requestUrl = new URL(request.url || "/", "http://agentlane.local");
+    const requestUrl = new URL(request.url || "/", "http://lorume.local");
 
     if (request.method === "GET" && requestUrl.pathname === "/api/skills") {
       const session = await requireSession(request, response, options);

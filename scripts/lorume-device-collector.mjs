@@ -56,7 +56,7 @@ function parseArgs(argv) {
 }
 
 function printHelp() {
-  console.log(`Usage: agentlane-device-collector [options]
+  console.log(`Usage: lorume-device-collector [options]
 
 Options:
   --once                 Collect once and exit
@@ -64,11 +64,11 @@ Options:
   --print-only           Print snapshot instead of posting
   --config <path>        Read collector config JSON
   --fixture <path>       Load a fixture snapshot instead of probing the host
-  --server-url <url>     Agentlane server URL
-  --ws-url <url>         Agentlane device control WebSocket URL
+  --server-url <url>     Lorume server URL
+  --ws-url <url>         Lorume device control WebSocket URL
   --device-id <id>       Override device id
   --device-name <name>   Override device name
-  --device-token <token> Agentlane device token for ingestion and control
+  --device-token <token> Lorume device token for ingestion and control
   --interval-ms <ms>     Collection interval when not using --once
 `);
 }
@@ -78,7 +78,7 @@ function readJsonFile(filePath) {
 }
 
 function homeDir() {
-  return process.env.AGENTLANE_COLLECTOR_HOME || homedir();
+  return process.env.LORUME_COLLECTOR_HOME || homedir();
 }
 
 function loadConfig(configPath) {
@@ -2347,7 +2347,7 @@ async function main() {
   await refresh();
   setInterval(() => {
     refresh().catch((error) => {
-      console.error(`[agentlane-device-collector] ${error instanceof Error ? error.message : String(error)}`);
+      console.error(`[lorume-device-collector] ${error instanceof Error ? error.message : String(error)}`);
     });
   }, Number.isFinite(args.intervalMs) && args.intervalMs > 0 ? args.intervalMs : DEFAULT_INTERVAL_MS);
 }

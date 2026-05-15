@@ -26,7 +26,7 @@ export type NotificationHttpApiHandler = (
 /** Create in-app notification query routes. */
 export function createNotificationHttpApiHandler(options: NotificationHttpApiHandlerOptions): NotificationHttpApiHandler {
   return async function notificationHttpApiHandler(request, response, next) {
-    const requestUrl = new URL(request.url || "/", "http://agentlane.local");
+    const requestUrl = new URL(request.url || "/", "http://lorume.local");
 
     if (request.method === "GET" && requestUrl.pathname === "/api/notifications") {
       const session = await requireSession(request, response, options);

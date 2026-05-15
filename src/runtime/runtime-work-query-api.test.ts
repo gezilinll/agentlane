@@ -7,7 +7,7 @@ import { createRuntimeWorkBoard } from "./runtime-work-state-query";
 
 describe("Runtime work item query API helpers", () => {
   it("adds cursor to backend query URLs", () => {
-    const url = createWorkItemsQueryUrl("http://agentlane.local", { source: "slock" }, { cursor: "cursor-1" });
+    const url = createWorkItemsQueryUrl("http://lorume.local", { source: "slock" }, { cursor: "cursor-1" });
 
     expect(url.pathname).toBe("/api/runtime-work-items");
     expect(url.searchParams.get("source")).toBe("slock");
@@ -46,7 +46,7 @@ describe("Runtime work item query API helpers", () => {
     });
   });
 
-  it("preserves the backend materialized Agentlane stage for board lanes", () => {
+  it("preserves the backend materialized Lorume stage for board lanes", () => {
     const page = runtimeWorkItemsQueryPageFromResponse({
       items: [{
         id: "work-attention",

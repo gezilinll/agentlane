@@ -7,7 +7,7 @@ import pg from "pg";
 const { Client } = pg;
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const migrationsDir = path.join(repoRoot, "db", "migrations");
-const databaseUrl = process.env.DATABASE_URL ?? "postgres://agentlane:agentlane@127.0.0.1:54329/agentlane";
+const databaseUrl = process.env.DATABASE_URL ?? "postgres://lorume:lorume@127.0.0.1:54329/lorume";
 
 try {
   const applied = await runMigrations(databaseUrl);

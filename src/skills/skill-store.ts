@@ -161,7 +161,7 @@ export interface PostgresSkillStoreOptions {
 /** Create a Postgres-backed Skill repository. */
 export function createPostgresSkillStore(options: PostgresSkillStoreOptions = {}): SkillStore {
   const pool = new Pool({
-    connectionString: options.connectionString ?? process.env.DATABASE_URL ?? "postgres://agentlane:agentlane@127.0.0.1:54329/agentlane",
+    connectionString: options.connectionString ?? process.env.DATABASE_URL ?? "postgres://lorume:lorume@127.0.0.1:54329/lorume",
   });
 
   return {

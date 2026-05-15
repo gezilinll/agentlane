@@ -28,5 +28,5 @@ export function verifySecret(secret: string, expectedHash: string, purpose: stri
 }
 
 function defaultPepper(): string {
-  return process.env.AGENTLANE_AUTH_SECRET || "agentlane-development-auth-secret";
+  return process.env.LORUME_AUTH_SECRET || "lorume-development-auth-secret";
 }

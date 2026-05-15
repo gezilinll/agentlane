@@ -1,8 +1,8 @@
 import pg from "pg";
 
 const { Client } = pg;
-const databaseUrl = process.env.AGENTLANE_E2E_DATABASE_URL ??
-  "postgres://agentlane:agentlane@127.0.0.1:54329/agentlane_e2e";
+const databaseUrl = process.env.LORUME_E2E_DATABASE_URL ??
+  "postgres://lorume:lorume@127.0.0.1:54329/lorume_e2e";
 
 /** Reset the isolated Playwright database so each browser spec starts from a current snapshot. */
 export async function resetE2eDatabase(): Promise<void> {

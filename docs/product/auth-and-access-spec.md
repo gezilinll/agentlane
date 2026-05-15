@@ -2,12 +2,12 @@
 
 版本：TinySpec v0.1
 
-本规格定义 Agentlane 第一版组织、登录、成员、邀请、会话和设备 token 的产品边界。它是当前权限实现的来源，不覆盖计费、SSO、复杂 RBAC 或审计报表。
+本规格定义 Lorume 第一版组织、登录、成员、邀请、会话和设备 token 的产品边界。它是当前权限实现的来源，不覆盖计费、SSO、复杂 RBAC 或审计报表。
 
 ## 目标
 
 - 用户使用团队邮箱接收验证码登录，不设置密码。
-- 登录后必须处在一个组织中，才能进入 Agentlane Console。
+- 登录后必须处在一个组织中，才能进入 Lorume Console。
 - 组织可以由登录用户创建，也可以通过邀请链接加入。
 - 组织内成员有最小角色：owner、admin、member。
 - Device Collector 使用设备 token 向 backend 上报数据；token 只保存哈希，不明文入库。
@@ -169,7 +169,7 @@ Runtime / Runs 读取 API：
 - Console 必须被 `/api/me` gate 保护。
 - Cream Arcade 组件测试必须覆盖像素 logo、基础面板/button/badge/token 类名和身份页装饰层，防止后续页面绕开共享 token。
 - 登录页组件测试必须覆盖初始匿名 `/api/me` 探测 `401` / `404` 不显示错误，同时覆盖非匿名后端故障不被吞掉。
-- Playwright Console harness 可以通过 `VITE_AGENTLANE_AUTH_MODE=disabled` 进入已验收页面，专注验证 Catalog、Runtime Fleet 和 Runs 的布局与交互；Auth 流程由独立组件 harness 覆盖。
+- Playwright Console harness 可以通过 `VITE_LORUME_AUTH_MODE=disabled` 进入已验收页面，专注验证 Catalog、Runtime Fleet 和 Runs 的布局与交互；Auth 流程由独立组件 harness 覆盖。
 - 已验收的 Runtime Fleet 和 Runs 交互不得因 auth 和视觉改造回退。
 
 ## 验收标准

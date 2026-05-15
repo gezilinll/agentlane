@@ -134,10 +134,10 @@ function createSession(): AuthSessionContext {
     id: "session_1",
     organizations: [{
       id: "membership_1",
-      name: "Agentlane Team",
+      name: "Lorume Team",
       organizationId: "org_1",
       role: "owner",
-      slug: "agentlane-team",
+      slug: "lorume-team",
     }],
     user: {
       createdAt: now,

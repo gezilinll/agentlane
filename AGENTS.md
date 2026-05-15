@@ -1,10 +1,10 @@
-# Agentlane Agent Guide
+# Lorume Agent Guide
 
-Root guide for coding agents working in this repository. This file is operational: it tells agents how to understand Agentlane, preserve product boundaries, update specs, run harnesses, and self-close implementation work. Keep public project background in `README.md`.
+Root guide for coding agents working in this repository. This file is operational: it tells agents how to understand Lorume, preserve product boundaries, update specs, run harnesses, and self-close implementation work. Keep public project background in `README.md`.
 
 ## Project State
 
-Agentlane is currently in product definition and early engineering setup. The repository is becoming the control plane for operating an Agent Network. It now has a Chinese-first Catalog page, a Runtime Fleet page, a read-only Runs / Work Board page, collector-backed runtime inventory and work-state models, organization-based auth/access, a tokenized Cream Arcade UI system, and a standalone backend with Postgres-backed query APIs, production-like Docker / Nginx deployment files, an initial ECS deployment at `agentlane.gezilinll.com`, plus an outbound WebSocket device control channel. It does not yet have multi-device orchestration or runtime execution control.
+Lorume is currently in product definition and early engineering setup. The repository is becoming the control plane for operating an Agent Network. It now has a Chinese-first Catalog page, a Runtime Fleet page, a read-only Runs / Work Board page, collector-backed runtime inventory and work-state models, organization-based auth/access, a tokenized Cream Arcade UI system, and a standalone backend with Postgres-backed query APIs, production-like Docker / Nginx deployment files, an initial ECS deployment at `lorume.com`, plus an outbound WebSocket device control channel. It does not yet have multi-device orchestration or runtime execution control.
 
 Current source of truth:
 
@@ -35,7 +35,7 @@ Current source of truth:
 - `src/notifications/notification-store.ts`: Postgres repository for deduplicated notification events, threads, deliveries, and cooldown state.
 - `src/notifications/notification-http-api.ts`: authenticated in-app Notification query API for user-visible threads and delivery details.
 - `src/migration/agent-migration-plan.ts`: deterministic Agent migration capability and plan model for known runtime recipes and manual-step boundaries.
-- `src/HomePage.tsx`: public homepage entry for the current Agentlane value proposition and implemented capabilities.
+- `src/HomePage.tsx`: public homepage entry for the current Lorume value proposition and implemented capabilities.
 - `src/catalog/catalog-object.ts`: initial TypeScript source of truth for Catalog Object shape.
 - `src/catalog/catalog-seed.ts`: first reviewable seed data for the Catalog page.
 - `src/runtime/runtime-normalize.ts`: TypeScript source of truth for v1 runtime inventory normalization.
@@ -58,8 +58,8 @@ Current source of truth:
 - `scripts/db-migrate.mjs`: local Postgres migration runner.
 - `scripts/check-deploy-config.mjs`: production-like deploy config smoke check.
 - `scripts/smoke-production.mjs`: deployed environment smoke check for health, readiness, Runtime Fleet, Runs, and collection health.
-- `Dockerfile.backend`, `Dockerfile.frontend`, `nginx.agentlane.conf`, `docker-compose.prod-like.yml`: production-like local deployment shape before ECS.
-- `scripts/agentlane-device-collector.mjs`: device-side collector / Device Agent script.
+- `Dockerfile.backend`, `Dockerfile.frontend`, `nginx.lorume.conf`, `docker-compose.prod-like.yml`: production-like local deployment shape before ECS.
+- `scripts/lorume-device-collector.mjs`: device-side collector / Device Agent script.
 - `scripts/install-device-collector.sh`: local-path collector installer for development and remote-device testing.
 - `e2e/catalog-workflow.spec.ts`: browser-level user workflow harness for the Catalog page.
 - `e2e/catalog-layout.spec.ts`: browser-level responsive layout harness for the Catalog page.
@@ -85,7 +85,7 @@ Current source of truth:
 - Only expose implemented, user-verifiable capabilities in navigation, homepage CTAs, and page-level action buttons. Current Console navigation is `对象目录`, `Runtime Fleet`, `Skill Registry`, and `Runs`; future surfaces such as Agent Studio, Workflow Studio, People, Integrations, and Governance stay in docs/backlog until their page, data path, permissions, and harness exist.
 - Keep URL routes durable and minimal: `/` is the public homepage, `/login` is the auth entry, `/invite/:token` is the invitation entry, and `/catalog`, `/runtime`, `/skills`, `/runs` are the current protected Console pages.
 - Keep the browser tab icon and in-app logo aligned. If `PixelLogo` changes, update `public/favicon.svg`, relevant tests, and product visual rules in the same change.
-- Runtime adapters must translate platform-specific fields into Agentlane-owned semantics before UI consumption. Do not make React components infer whether OpenClaw sessions, Multica tasks, or Slock workspaces mean `active`, `idle`, `lastSeenAt`, or runtime statistics.
+- Runtime adapters must translate platform-specific fields into Lorume-owned semantics before UI consumption. Do not make React components infer whether OpenClaw sessions, Multica tasks, or Slock workspaces mean `active`, `idle`, `lastSeenAt`, or runtime statistics.
 - Keep Runtime and Channel separate in UI and query models. OpenClaw, Multica, Slock, Codex, and Claude Code are Runtime / platform sources; Runs Channel filters are only user-facing touchpoints such as DingTalk, Telegram, Slack, or future detected message channels.
 - Runs / Work Board must stay task-context first: do not render unlinked runtime executions, listening status, capability gaps, adapter evidence, raw limitations, command names, or debugging notes as user-facing task cards. If a platform cannot provide creator, assignee, group/channel, message excerpt, or execution state for a real work item, show a concise unsupported/unknown/user-facing fallback and keep details in logs/spec/harness. Do not display raw DingTalk `cid...`, phone numbers, open conversation ids, or other opaque external ids as conversation names. For DingTalk direct chats without a readable person name, show `DingTalk 私聊`; for groups without a readable name, show `DingTalk 群聊`. A real work item with no linked execution should say `未关联执行`, not `不支持采集`.
 - Use the repository commit convention for all new commits: `type(scope): subject` or `type: subject`, with `type` in `feat`, `fix`, `docs`, `test`, `refactor`, `chore`, `build`, `ci`, `perf`, `style`, or `revert`. Keep subjects concise and scannable; Chinese subjects are allowed when clearer. Run `npm run setup:git-hooks` once per checkout so `.githooks/commit-msg` blocks future untyped commits.
@@ -111,15 +111,15 @@ Current spec and harness mapping:
 | Catalog page behavior | `docs/product/catalog-page-spec.md` | `src/App.test.tsx`, `npm run check:quick` |
 | Catalog user workflow | `docs/product/catalog-page-spec.md` | `e2e/catalog-workflow.spec.ts`, `npm run check:e2e` |
 | Catalog responsive layout | `docs/product/catalog-page-spec.md` | `e2e/catalog-layout.spec.ts`, `npm run check:e2e` |
-| Runtime device registration | `docs/product/runtime-device-registration-spec.md`, `src/runtime/runtime-normalize.ts`, `scripts/agentlane-device-collector.mjs`, `scripts/install-device-collector.sh` | `src/runtime/runtime-normalize.test.ts`, `src/runtime/device-collector-script.test.ts`, `npm run check:runtime`, `npm run check:backend` |
+| Runtime device registration | `docs/product/runtime-device-registration-spec.md`, `src/runtime/runtime-normalize.ts`, `scripts/lorume-device-collector.mjs`, `scripts/install-device-collector.sh` | `src/runtime/runtime-normalize.test.ts`, `src/runtime/device-collector-script.test.ts`, `npm run check:runtime`, `npm run check:backend` |
 | Runtime work state model | `src/runtime/runtime-work-state.ts`, `docs/product/runtime-work-state-probe.md` | `src/runtime/runtime-work-state.test.ts`, `npm run check:runtime` |
 | Runtime work state adapters and board query | `src/runtime/runtime-work-state-adapters.ts`, `src/runtime/runtime-work-state-query.ts`, `docs/product/runtime-work-state-probe.md` | `src/runtime/runtime-work-state-adapters.test.ts`, `src/runtime/runtime-work-state-query.test.ts`, `npm run check:runtime` |
-| Runtime work state collector | `scripts/agentlane-device-collector.mjs`, `docs/product/runtime-work-state-probe.md` | `src/runtime/device-collector-script.test.ts`, `npm run check:runtime`, `npm run check:backend` |
+| Runtime work state collector | `scripts/lorume-device-collector.mjs`, `docs/product/runtime-work-state-probe.md` | `src/runtime/device-collector-script.test.ts`, `npm run check:runtime`, `npm run check:backend` |
 | Runtime listening acceptance | `docs/product/runtime-listening-acceptance-spec.md`, `src/runtime/runtime-listening-acceptance.ts`, `docs/product/runtime-work-state-probe.md` | `src/runtime/runtime-listening-acceptance.test.ts`, `src/runtime/runtime-work-state-adapters.test.ts`, `npm run check:runtime` |
 | Runs / Work Board page | `src/runtime/RuntimeWorkBoardPage.tsx`, `src/runtime/runtime-work-query-api.ts`, `src/runtime/runtime-data-source.ts`, `docs/product/runtime-work-state-probe.md` | `src/App.test.tsx`, `src/runtime/runtime-work-query-api.test.ts`, `src/runtime/runtime-data-source.test.ts`, `e2e/runtime-work-board.spec.ts`, `npm run check:quick`, `npm run check:e2e` |
 | Runtime Fleet page | `docs/product/runtime-fleet-page-spec.md`, `src/runtime/runtime-inventory-query.ts`, `src/runtime/runtime-collection-health.ts`, `src/runtime/RuntimeFleetPage.tsx` | `src/runtime/runtime-inventory-query.test.ts`, `src/runtime/runtime-collection-health.test.ts`, `src/App.test.tsx`, `e2e/runtime-fleet.spec.ts`, `npm run check:quick`, `npm run check:e2e` |
 | Runtime snapshot and control backend | `docs/product/runtime-device-registration-spec.md`, `src/runtime/runtime-collection-health.ts`, `src/server/runtime-inventory-store.ts`, `src/server/runtime-control-channel.ts`, `src/server/runtime-http-api.ts`, `src/backend/backend-server.ts` | `src/runtime/runtime-collection-health.test.ts`, `src/server/runtime-inventory-store.test.ts`, `src/server/runtime-control-channel.test.ts`, `src/server/runtime-http-api.test.ts`, `src/runtime/device-collector-script.test.ts`, `npm run check:backend` |
-| Backend service formalization | `docs/product/backend-service-spec.md`, `src/backend/backend-server.ts`, `src/server/postgres-store.ts`, `db/migrations/`, `scripts/db-migrate.mjs`, `scripts/dev-e2e.ts`, `scripts/smoke-production.mjs`, `vite.backend.config.ts`, `Dockerfile.backend`, `Dockerfile.frontend`, `nginx.agentlane.conf`, `docker-compose.prod-like.yml` | `src/backend/backend-server.test.ts`, `src/backend/dev-e2e-config.test.ts`, `src/server/db-migrate.test.ts`, `src/server/postgres-store.test.ts`, `src/server/runtime-http-api-postgres.test.ts`, `scripts/check-deploy-config.mjs`, `npm run check:backend:standalone`, `npm run check:db`, `npm run check:backend`, `npm run check:deploy`, `npm run smoke:production` |
+| Backend service formalization | `docs/product/backend-service-spec.md`, `src/backend/backend-server.ts`, `src/server/postgres-store.ts`, `db/migrations/`, `scripts/db-migrate.mjs`, `scripts/dev-e2e.ts`, `scripts/smoke-production.mjs`, `vite.backend.config.ts`, `Dockerfile.backend`, `Dockerfile.frontend`, `nginx.lorume.conf`, `docker-compose.prod-like.yml` | `src/backend/backend-server.test.ts`, `src/backend/dev-e2e-config.test.ts`, `src/server/db-migrate.test.ts`, `src/server/postgres-store.test.ts`, `src/server/runtime-http-api-postgres.test.ts`, `scripts/check-deploy-config.mjs`, `npm run check:backend:standalone`, `npm run check:db`, `npm run check:backend`, `npm run check:deploy`, `npm run smoke:production` |
 | Auth and access | `docs/product/auth-and-access-spec.md`, `src/auth/`, `db/migrations/` | `src/auth/auth-crypto.test.ts`, `src/auth/auth-store.test.ts`, `src/auth/auth-http-api.test.ts`, `src/server/runtime-http-api.test.ts`, `npm run check:backend`, `npm run check:db`, `npm run check:quick` |
 | Skill package import and validation | `docs/product/skill-management-spec.md`, `src/skills/skill-package.ts` | `src/skills/skill-package.test.ts`, `npm run check:backend`, `npm run check:quick` |
 | Skill storage and API | `docs/product/skill-management-spec.md`, `db/migrations/0003_skill_management.sql`, `src/skills/skill-store.ts`, `src/skills/skill-http-api.ts`, `src/backend/backend-server.ts` | `src/skills/skill-store.test.ts`, `src/skills/skill-http-api.test.ts`, `npm run check:backend`, `npm run check:db` |
@@ -149,13 +149,13 @@ Keep the test layout simple and tied to what each harness can prove:
 - Put React component and jsdom interaction tests near the component surface, for example `src/App.test.tsx`.
 - Keep shared Vitest / Testing Library setup in `src/test/setup.ts`.
 - Put real-browser Playwright specs in `e2e/`. Use this for user workflows, responsive layout, browser rendering, and behavior jsdom cannot prove.
-- Keep Playwright server state isolated from manual dev/acceptance state. The default e2e web server uses `scripts/dev-e2e.ts`, an isolated `agentlane_e2e` Postgres database, the standalone backend, and a Vite proxy so test fixture posts do not overwrite manual review data.
-- Keep auth harnesses and Console harnesses separated. `check:e2e` sets `VITE_AGENTLANE_AUTH_MODE=disabled` so Catalog, Runtime Fleet, and Runs browser tests validate the Console directly; auth entry, email-code login, organization creation, and invitation flows are covered by `src/auth/*` component/API/backend tests.
+- Keep Playwright server state isolated from manual dev/acceptance state. The default e2e web server uses `scripts/dev-e2e.ts`, an isolated `lorume_e2e` Postgres database, the standalone backend, and a Vite proxy so test fixture posts do not overwrite manual review data.
+- Keep auth harnesses and Console harnesses separated. `check:e2e` sets `VITE_LORUME_AUTH_MODE=disabled` so Catalog, Runtime Fleet, and Runs browser tests validate the Console directly; auth entry, email-code login, organization creation, and invitation flows are covered by `src/auth/*` component/API/backend tests.
 - Prefer adding the smallest focused test that captures the important behavior. Do not create broad `tests/`, `specs/`, or `harnesses/` directories until the project has enough surfaces to justify them.
 
 ## Agent-Ready Growth
 
-Agentlane should become agent-ready by growing only the infrastructure the project actually needs. The current layer is **Catalog + Runtime Fleet + Runs Work-State + Production-Like Backend Harness Ready** for the first frontend/runtime surfaces: root guide, TinySpecs, TypeScript object models, standalone backend, Postgres-backed query APIs, backend bundle and Docker/Nginx config checks, outbound device control channel, collector snapshot harnesses, unit/component tests, browser layout harness, and one full verification entry point.
+Lorume should become agent-ready by growing only the infrastructure the project actually needs. The current layer is **Catalog + Runtime Fleet + Runs Work-State + Production-Like Backend Harness Ready** for the first frontend/runtime surfaces: root guide, TinySpecs, TypeScript object models, standalone backend, Postgres-backed query APIs, backend bundle and Docker/Nginx config checks, outbound device control channel, collector snapshot harnesses, unit/component tests, browser layout harness, and one full verification entry point.
 
 Extend this guide and `./scripts/verify.sh` only when a real project surface appears:
 
@@ -165,7 +165,7 @@ Extend this guide and `./scripts/verify.sh` only when a real project surface app
 - Runtime / Execution Fabric: add worker setup, collector registration, runtime adapter, sandbox, queue, health-check, and artifact rules.
 - PR or release flow: add the smallest useful gates for owner review, approval boundary, audit evidence, and rollback notes.
 
-Do not add empty `specs/`, `evals/`, `harnesses/`, service directories, heavyweight spec frameworks, or generic agent platform rules before Agentlane has an Agentlane-specific need.
+Do not add empty `specs/`, `evals/`, `harnesses/`, service directories, heavyweight spec frameworks, or generic agent platform rules before Lorume has an Lorume-specific need.
 
 ## Verification
 
@@ -240,7 +240,7 @@ docker compose -f docker-compose.prod-like.yml up --build
 ## Change Hygiene
 
 - Prefer focused commits: product docs, object model, frontend, backend, runtime, and verification changes should be easy to review independently.
-- Commit messages must follow the Agentlane convention enforced by `.githooks/commit-msg`: `type(scope): subject` or `type: subject`; avoid untyped subjects like `Add runtime API`.
+- Commit messages must follow the Lorume convention enforced by `.githooks/commit-msg`: `type(scope): subject` or `type: subject`; avoid untyped subjects like `Add runtime API`.
 - Before committing, check `git status --short` and make sure there are no unrelated user changes mixed in.
 - If adding generated output later, document the source command and avoid hand-editing generated files.
 - Do not claim completion until the relevant harness has passed and the final answer names what was verified.

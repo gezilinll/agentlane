@@ -11,7 +11,7 @@ const requiredFiles = [
   "Dockerfile.backend",
   "Dockerfile.frontend",
   "docker-compose.prod-like.yml",
-  "nginx.agentlane.conf",
+  "nginx.lorume.conf",
   "scripts/smoke-production.mjs",
 ];
 
@@ -19,7 +19,7 @@ for (const file of requiredFiles) {
   assert(existsSync(path.join(repoRoot, file)), `missing ${file}`);
 }
 
-const nginxConfig = read("nginx.agentlane.conf");
+const nginxConfig = read("nginx.lorume.conf");
 assert(nginxConfig.includes("proxy_pass http://backend:4173"), "nginx must proxy backend API traffic");
 assert(nginxConfig.includes("proxy_set_header Upgrade $http_upgrade"), "nginx must proxy WebSocket upgrades");
 assert(nginxConfig.includes("client_max_body_size 50m"), "nginx must allow collector work-state payloads");
@@ -31,9 +31,9 @@ assert(backendDockerfile.includes("node dist/backend/backend-server.mjs"), "back
 const composeFile = read("docker-compose.prod-like.yml");
 assert(composeFile.includes("condition: service_healthy"), "backend must wait for healthy Postgres in prod-like compose");
 assert(composeFile.includes("Dockerfile.frontend"), "prod-like compose must build the frontend image");
-assert(composeFile.includes("AGENTLANE_POSTGRES_PASSWORD"), "prod-like compose must allow overriding the Postgres password");
-assert(composeFile.includes("AGENTLANE_BACKEND_PUBLISH"), "prod-like compose must allow backend host port binding override");
-assert(composeFile.includes("AGENTLANE_FRONTEND_PUBLISH"), "prod-like compose must allow frontend host port binding override");
+assert(composeFile.includes("LORUME_POSTGRES_PASSWORD"), "prod-like compose must allow overriding the Postgres password");
+assert(composeFile.includes("LORUME_BACKEND_PUBLISH"), "prod-like compose must allow backend host port binding override");
+assert(composeFile.includes("LORUME_FRONTEND_PUBLISH"), "prod-like compose must allow frontend host port binding override");
 
 const packageJson = JSON.parse(read("package.json"));
 assert(packageJson.scripts?.["smoke:production"] === "node scripts/smoke-production.mjs", "package must expose production smoke script");

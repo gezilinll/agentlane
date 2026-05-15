@@ -17,7 +17,7 @@ const fixtureDevice: RuntimeDevice = {
 };
 
 describe("runtime inventory normalization", () => {
-  it("normalizes runtime and agent reports into stable Agentlane ids", () => {
+  it("normalizes runtime and agent reports into stable Lorume ids", () => {
     const reports: RuntimeAdapterReport[] = [
       {
         source: "openclaw",

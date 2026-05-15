@@ -1,4 +1,4 @@
-/** Concrete runtime or platform kind that Agentlane can recognize in v1. */
+/** Concrete runtime or platform kind that Lorume can recognize in v1. */
 export const RUNTIME_KINDS = [
   "openclaw",
   "codex",
@@ -8,7 +8,7 @@ export const RUNTIME_KINDS = [
   "unknown",
 ] as const;
 
-/** Concrete runtime or platform kind that Agentlane can recognize in v1. */
+/** Concrete runtime or platform kind that Lorume can recognize in v1. */
 export type RuntimeKind = (typeof RUNTIME_KINDS)[number];
 
 /** Source adapter that reported a runtime or agent. */
@@ -17,7 +17,7 @@ export type RuntimeSource = RuntimeKind | "manual";
 /** Normalized health state used by devices, runtimes, and agents. */
 export type RuntimeHealthStatus = "online" | "degraded" | "offline" | "unknown";
 
-/** Agent activity state after adapter-specific states are mapped into Agentlane. */
+/** Agent activity state after adapter-specific states are mapped into Lorume. */
 export type ManagedAgentStatus = "active" | "idle" | "inactive" | "degraded" | "unknown";
 
 /** Channel or platform surface where an Agent is visible or usable. */
@@ -47,9 +47,9 @@ export interface RuntimeCollectorInfo {
   lastError?: string;
 }
 
-/** Registered device viewed by Agentlane. */
+/** Registered device viewed by Lorume. */
 export interface RuntimeDevice {
-  /** Stable Agentlane device id. */
+  /** Stable Lorume device id. */
   id: string;
   /** Human-readable device name. */
   name: string;
@@ -68,8 +68,8 @@ export interface RuntimeDevice {
 }
 
 /** Runtime view after adapter reports are normalized. */
-export interface AgentlaneRuntime {
-  /** Stable Agentlane runtime id. */
+export interface LorumeRuntime {
+  /** Stable Lorume runtime id. */
   id: string;
   /** Device id that owns this runtime. */
   deviceId: string;
@@ -118,7 +118,7 @@ export interface ChannelBinding {
   status?: "enabled" | "disabled" | "unknown";
 }
 
-/** Normalized runtime or agent activity statistics owned by Agentlane. */
+/** Normalized runtime or agent activity statistics owned by Lorume. */
 export interface RuntimeActivityStats {
   /** Current running task count. */
   activeTasks?: number;
@@ -134,7 +134,7 @@ export interface RuntimeActivityStats {
 
 /** Agent view after adapter reports are normalized. */
 export interface ManagedRuntimeAgent {
-  /** Stable Agentlane agent id. */
+  /** Stable Lorume agent id. */
   id: string;
   /** Runtime id this agent belongs to. */
   runtimeId: string;
@@ -174,8 +174,8 @@ export interface RuntimeDiscovery {
   lastSeenAt?: string;
   /** Optional external references in addition to the adapter-local id. */
   sourceRefs?: ExternalRuntimeRef[];
-  /** Optional runtime health detail using Agentlane-owned statistic semantics. */
-  health?: AgentlaneRuntime["health"];
+  /** Optional runtime health detail using Lorume-owned statistic semantics. */
+  health?: LorumeRuntime["health"];
 }
 
 /** Agent discovery reported by one adapter before normalization. */
@@ -214,7 +214,7 @@ export interface RuntimeAdapterReport {
   warnings?: string[];
 }
 
-/** Normalized collector snapshot consumed by Agentlane. */
+/** Normalized collector snapshot consumed by Lorume. */
 export interface RuntimeInventorySnapshot {
   /** ISO timestamp when the full snapshot was observed. */
   observedAt: string;
@@ -223,7 +223,7 @@ export interface RuntimeInventorySnapshot {
   /** Device metadata and rolled-up status. */
   device: RuntimeDevice;
   /** Normalized runtimes on the device. */
-  runtimes: AgentlaneRuntime[];
+  runtimes: LorumeRuntime[];
   /** Normalized agents on the device. */
   agents: ManagedRuntimeAgent[];
   /** Adapter reports that contributed to this snapshot. */
@@ -302,7 +302,7 @@ function agentId(resolvedRuntimeId: string, externalId: string): string {
 
 function rollupDeviceStatus(
   collector: RuntimeCollectorInfo,
-  runtimes: AgentlaneRuntime[],
+  runtimes: LorumeRuntime[],
 ): RuntimeHealthStatus {
   if (collector.status === "offline") return "offline";
   if (collector.status === "degraded") return "degraded";
@@ -326,7 +326,7 @@ function sourceRefsForAgent(source: RuntimeSource, agent: AgentDiscovery): Exter
   ];
 }
 
-/** Normalize adapter reports into stable Agentlane device, runtime, and agent objects. */
+/** Normalize adapter reports into stable Lorume device, runtime, and agent objects. */
 export function createRuntimeInventorySnapshot(
   input: CreateRuntimeInventorySnapshotInput,
 ): RuntimeInventorySnapshot {

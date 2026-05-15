@@ -1,10 +1,10 @@
 # Design Principles
 
-Agentlane 是 Agent Network 控制平面。设计目标是让分散在设备、runtime、agent、channel 和工作项里的运行状态变得可观察、可管理、可治理。
+Lorume 是 Agent Network 控制平面。设计目标是让分散在设备、runtime、agent、channel 和工作项里的运行状态变得可观察、可管理、可治理。
 
 ## Product Posture
 
-- Agentlane 是生产工具，不是聊天产品、玩具页面或普通 SaaS 营销壳。
+- Lorume 是生产工具，不是聊天产品、玩具页面或普通 SaaS 营销壳。
 - 页面应优先帮助用户判断现状、定位问题、执行下一步，而不是展示概念。
 - 首页和身份页可以强化品牌表达；Console 页面必须保持扫描效率、稳定布局和信息密度。
 - 所有可点击入口都必须指向已经实现并可验收的能力。
@@ -24,7 +24,7 @@ Agentlane 是 Agent Network 控制平面。设计目标是让分散在设备、r
 - 若无必要，勿增实体。没有明确用途的按钮、入口、图表、状态和装饰都应删除。
 - 不为未来页面提前设计完整组件族；但当前已经出现的组件必须统一规范。
 - 不把平台内部实现、调试证据、适配器限制直接暴露给用户。
-- 不为了某个平台的字段临时污染 Agentlane 自己的数据语义。
+- 不为了某个平台的字段临时污染 Lorume 自己的数据语义。
 
 ## Brand And Product Balance
 
