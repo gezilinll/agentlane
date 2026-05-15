@@ -12,5 +12,6 @@ npm run check:quick
 npm run check:build
 npm run check:deploy
 npm run check:e2e
+npm run check:e2e:auth
 
 echo "verify: ok"

@@ -1,4 +1,5 @@
 import { execFileSync, spawn } from "node:child_process";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -11,11 +12,23 @@ const frontendPort = Number(process.env.LORUME_E2E_FRONTEND_PORT ?? 4175);
 const backendPort = Number(process.env.LORUME_BACKEND_PORT ?? 4174);
 const databaseUrl = process.env.DATABASE_URL ?? "postgres://lorume:lorume@127.0.0.1:54329/lorume_e2e";
 const e2eSnapshotRoot = path.join(repoRoot, ".lorume", "e2e");
+const e2eLoginCodePath = process.env.LORUME_E2E_LOGIN_CODE_PATH
+  ?? path.join(e2eSnapshotRoot, "latest-login-code.json");
 
 await prepareDatabase(databaseUrl);
+rmSync(e2eLoginCodePath, { force: true });
 
 const backend = createLorumeBackendServer({
   databaseUrl,
+  emailProvider: {
+    async sendLoginCode(input) {
+      mkdirSync(path.dirname(e2eLoginCodePath), { recursive: true });
+      writeFileSync(e2eLoginCodePath, JSON.stringify({
+        ...input,
+        sentAt: new Date().toISOString(),
+      }, null, 2));
+    },
+  },
   host: "127.0.0.1",
   inventorySnapshotPath: path.join(e2eSnapshotRoot, "runtime-inventory", "latest.json"),
   port: backendPort,
@@ -91,6 +104,26 @@ async function resetDatabase(connectionString: string): Promise<void> {
   try {
     await client.query(`
       TRUNCATE
+        notification_deliveries,
+        notification_preferences,
+        notification_threads,
+        notification_events,
+        operation_jobs,
+        operations,
+        approval_requests,
+        resource_permissions,
+        skill_sync_jobs,
+        skill_assignments,
+        skill_files,
+        skill_versions,
+        skills,
+        device_tokens,
+        organization_invitations,
+        sessions,
+        email_login_codes,
+        organization_members,
+        organizations,
+        users,
         collector_ingestions,
         channel_bindings,
         work_executions,

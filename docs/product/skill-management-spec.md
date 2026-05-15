@@ -455,6 +455,7 @@ UI：
 - 包含 `:` 的 target ID 在选择和提交分配时不丢失。
 - 风险提示和审核状态可见。
 - 页面导航通过 `/skills` 进入，并纳入 Console 路由 harness。
+- `check:e2e:auth` 必须通过真实邮箱验证码登录、创建组织、进入 `/skills`、导入 Markdown Skill，并创建发布 Operation；该浏览器 harness 不允许绕过正式 Skill API 或组织上下文。
 
 ## 验收标准
 

@@ -169,7 +169,7 @@ Runtime / Runs 读取 API：
 - Console 必须被 `/api/me` gate 保护。
 - Cream Arcade 组件测试必须覆盖像素 logo、基础面板/button/badge/token 类名和身份页装饰层，防止后续页面绕开共享 token。
 - 登录页组件测试必须覆盖初始匿名 `/api/me` 探测 `401` / `404` 不显示错误，同时覆盖非匿名后端故障不被吞掉。
-- Playwright Console harness 可以通过 `VITE_LORUME_AUTH_MODE=disabled` 进入已验收页面，专注验证 Catalog、Runtime Fleet 和 Runs 的布局与交互；Auth 流程由独立组件 harness 覆盖。
+- Playwright Console harness 可以通过 `VITE_LORUME_AUTH_MODE=disabled` 进入已验收页面，专注验证 Catalog、Runtime Fleet 和 Runs 的布局与交互；Auth 流程由独立组件 harness 覆盖。受保护业务页面需要真实登录串联时，使用单独的 auth-backed Playwright harness，例如 `check:e2e:auth` 覆盖 Skill Registry 从邮箱验证码、组织创建到导入 Skill 的链路。
 - 已验收的 Runtime Fleet 和 Runs 交互不得因 auth 和视觉改造回退。
 
 ## 验收标准

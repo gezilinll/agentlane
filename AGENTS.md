@@ -65,6 +65,7 @@ Current source of truth:
 - `e2e/catalog-layout.spec.ts`: browser-level responsive layout harness for the Catalog page.
 - `e2e/runtime-fleet.spec.ts`: browser-level Runtime Fleet workflow and responsive layout harness.
 - `e2e/runtime-work-board.spec.ts`: browser-level Runs / Work Board workflow and responsive layout harness.
+- `e2e/skill-registry-auth.spec.ts`: browser-level authenticated Skill Registry import and publish-queue harness.
 - `docs/product/agent-network-runtime-panorama.png`: runtime panorama.
 - `docs/product/agent-network-build-objects.png`: build object map.
 - `assets/product-ui/`: UI and flow design assets.
@@ -124,7 +125,7 @@ Current spec and harness mapping:
 | Skill package import and validation | `docs/product/skill-management-spec.md`, `src/skills/skill-package.ts` | `src/skills/skill-package.test.ts`, `npm run check:backend`, `npm run check:quick` |
 | Skill storage and API | `docs/product/skill-management-spec.md`, `db/migrations/0003_skill_management.sql`, `src/skills/skill-store.ts`, `src/skills/skill-http-api.ts`, `src/backend/backend-server.ts` | `src/skills/skill-store.test.ts`, `src/skills/skill-http-api.test.ts`, `npm run check:backend`, `npm run check:db` |
 | Skill governance permissions and approvals | `docs/product/skill-management-spec.md`, `db/migrations/0004_skill_governance.sql`, `src/skills/skill-governance-store.ts`, `src/skills/skill-governance-http-api.ts`, `src/skills/skill-operation-handlers.ts`, `src/backend/backend-server.ts` | `src/skills/skill-governance-store.test.ts`, `src/skills/skill-governance-http-api.test.ts`, `src/skills/skill-operation-handlers.test.ts`, `src/backend/backend-server.test.ts`, `src/server/db-migrate.test.ts`, `npm run check:backend`, `npm run check:db` |
-| Skill Registry page | `docs/product/skill-management-spec.md`, `src/skills/SkillRegistryPage.tsx`, `src/App.tsx` | `src/skills/SkillRegistryPage.test.tsx`, `src/App.test.tsx`, `npm run check:quick` |
+| Skill Registry page | `docs/product/skill-management-spec.md`, `src/skills/SkillRegistryPage.tsx`, `src/App.tsx` | `src/skills/SkillRegistryPage.test.tsx`, `src/App.test.tsx`, `e2e/skill-registry-auth.spec.ts`, `npm run check:quick`, `npm run check:e2e:auth` |
 | Operation and Job Runner persistence/API | `docs/product/operation-job-runner-spec.md`, `db/migrations/0005_operations_notifications.sql`, `db/migrations/0006_operation_manual_steps.sql`, `src/operations/operation-store.ts`, `src/operations/operation-http-api.ts`, `src/operations/job-runner.ts` | `src/operations/operation-store.test.ts`, `src/operations/operation-http-api.test.ts`, `src/operations/job-runner.test.ts`, `src/backend/backend-server.test.ts`, `src/server/db-migrate.test.ts`, `npm run check:backend`, `npm run check:db` |
 | Notification persistence, dedupe, and in-app API | `docs/product/notification-spec.md`, `db/migrations/0005_operations_notifications.sql`, `src/notifications/notification-store.ts`, `src/notifications/notification-http-api.ts`, `src/operations/job-runner.ts` | `src/notifications/notification-store.test.ts`, `src/notifications/notification-http-api.test.ts`, `src/operations/job-runner.test.ts`, `src/backend/backend-server.test.ts`, `src/server/db-migrate.test.ts`, `npm run check:backend`, `npm run check:db` |
 | Agent migration and bootstrap product rules | `docs/product/agent-migration-spec.md`, `docs/product/skill-management-spec.md`, `docs/product/notification-spec.md`, `src/migration/agent-migration-plan.ts` | `src/migration/agent-migration-plan.test.ts`, `src/operations/job-runner.test.ts`, `src/operations/operation-store.test.ts`, `npm run check:quick`, `npm run check:db` |
@@ -150,7 +151,7 @@ Keep the test layout simple and tied to what each harness can prove:
 - Keep shared Vitest / Testing Library setup in `src/test/setup.ts`.
 - Put real-browser Playwright specs in `e2e/`. Use this for user workflows, responsive layout, browser rendering, and behavior jsdom cannot prove.
 - Keep Playwright server state isolated from manual dev/acceptance state. The default e2e web server uses `scripts/dev-e2e.ts`, an isolated `lorume_e2e` Postgres database, the standalone backend, and a Vite proxy so test fixture posts do not overwrite manual review data.
-- Keep auth harnesses and Console harnesses separated. `check:e2e` sets `VITE_LORUME_AUTH_MODE=disabled` so Catalog, Runtime Fleet, and Runs browser tests validate the Console directly; auth entry, email-code login, organization creation, and invitation flows are covered by `src/auth/*` component/API/backend tests.
+- Keep auth harnesses and Console harnesses separated. `check:e2e` sets `VITE_LORUME_AUTH_MODE=disabled` so Catalog, Runtime Fleet, and Runs browser tests validate the Console directly; auth entry, email-code login, organization creation, and invitation flows are covered by `src/auth/*` component/API/backend tests. `check:e2e:auth` runs a separate authenticated browser harness for protected Skill Registry import and publish-queue behavior through real backend APIs.
 - Prefer adding the smallest focused test that captures the important behavior. Do not create broad `tests/`, `specs/`, or `harnesses/` directories until the project has enough surfaces to justify them.
 
 ## Agent-Ready Growth
@@ -165,7 +166,7 @@ Extend this guide and `./scripts/verify.sh` only when a real project surface app
 - Runtime / Execution Fabric: add worker setup, collector registration, runtime adapter, sandbox, queue, health-check, and artifact rules.
 - PR or release flow: add the smallest useful gates for owner review, approval boundary, audit evidence, and rollback notes.
 
-Do not add empty `specs/`, `evals/`, `harnesses/`, service directories, heavyweight spec frameworks, or generic agent platform rules before Lorume has an Lorume-specific need.
+Do not add empty `specs/`, `evals/`, `harnesses/`, service directories, heavyweight spec frameworks, or generic agent platform rules before Lorume has a Lorume-specific need.
 
 ## Verification
 
@@ -203,7 +204,8 @@ Current harness scripts:
 | `npm run start:backend` | Run the bundled backend artifact. | Manual smoke of production-like backend output after `npm run build:backend`. |
 | `npm run check:deploy` | Build backend bundle and verify Docker / Nginx / production-like compose config. | Deployment-shape, backend bundle, Dockerfile, compose, or Nginx changes. |
 | `npm run smoke:production` | Check the deployed environment health, readiness, Runtime Fleet, Runs, and device collection-health read paths. | After ECS deploy, DNS/Nginx changes, backend query changes, or collector registration changes. |
-| `npm run check:e2e` | Playwright browser harness using isolated Postgres, standalone backend, and Vite proxy. | Catalog/Runtime Fleet/Runs interaction paths, layout, toolbar, responsive behavior, navigation shell, backend query wiring, or visual regression risk. |
+| `npm run check:e2e` | Playwright browser harness using isolated Postgres, standalone backend, Vite proxy, and auth disabled for Console surfaces. | Catalog/Runtime Fleet/Runs interaction paths, layout, toolbar, responsive behavior, navigation shell, backend query wiring, or visual regression risk. |
+| `npm run check:e2e:auth` | Playwright browser harness using isolated Postgres, standalone backend, Vite proxy, and real email-code auth. | Protected Skill Registry import/publish flows, organization bootstrap, or auth-to-console wiring changes. |
 | `npm run verify` | Full harness, same as `./scripts/verify.sh`. | Before handoff, commit, or review. |
 
 Local frontend development:

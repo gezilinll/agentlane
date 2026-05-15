@@ -28,11 +28,13 @@
     "check:deploy": "npm run build:backend && node scripts/check-deploy-config.mjs",
     "smoke:production": "node scripts/smoke-production.mjs",
     "check:e2e": "npm run test:e2e",
+    "check:e2e:auth": "npm run test:e2e:auth",
     "harness": "npm run check:full",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest",
     "test:run": "vitest run",
     "test:e2e": "env -u NO_COLOR playwright test",
+    "test:e2e:auth": "env -u NO_COLOR playwright test --config playwright.auth.config.ts",
     "test:e2e:install": "npm run setup:e2e"
   },
   "dependencies": {
