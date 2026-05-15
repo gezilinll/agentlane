@@ -50,8 +50,8 @@ Operation Job 是后端可执行的最小任务单元。
 - `id`：内部 ID。
 - `operationId`：所属 Operation。
 - `organizationId`：所属组织。
-- `type`：执行类型，例如 `skill_publish`、`skill_assign`、`skill_sync`、`notification_in_app`、`notification_email`。
-- `status`：`queued`、`running`、`succeeded`、`failed`、`unsupported`、`cancelled`。
+- `type`：执行类型，例如 `skill_publish`、`skill_assign`、`skill_sync`、`agent_migration`、`notification_in_app`、`notification_email`。
+- `status`：`queued`、`running`、`succeeded`、`failed`、`unsupported`、`requires_manual_step`、`cancelled`。
 - `payload`：执行所需的非敏感参数。
 - `attemptCount` / `maxAttempts`：已尝试次数和最大尝试次数。
 - `runAfter`：最早执行时间。
@@ -78,6 +78,7 @@ Job 状态：
 - `succeeded`：执行成功。
 - `failed`：执行失败且达到重试上限，或业务返回不可重试失败。
 - `unsupported`：handler 明确返回不支持。
+- `requires_manual_step`：handler 能判断下一步必须由用户或 owner 手动补齐。
 - `cancelled`：所属 Operation 被取消。
 
 规则：
@@ -87,6 +88,7 @@ Job 状态：
 - 每次执行失败增加 `attemptCount`，未到 `maxAttempts` 时回到 `queued` 并设置 `runAfter`。
 - Job handler 必须具备幂等性：重复执行同一个 Job 不应造成重复发布、重复分配或重复通知。
 - Operation 的最终状态由必要 Job 的结果汇总产生。
+- 任一必要 Job 进入 `requires_manual_step` 时，Operation 进入 `requires_manual_step` 并保留 `manualInstruction`。
 - Operation 状态变化必须可以创建 Notification Event。
 
 ## 当前实现策略
@@ -138,6 +140,7 @@ Job 状态：
 - Job 成功后 Operation 进入 `succeeded`。
 - Job 达到重试上限后 Operation 进入 `failed`。
 - 不支持 Job 会让 Operation 进入 `unsupported`。
+- 需要人工处理的 Job 会让 Operation 进入 `requires_manual_step`，并保留用户可理解的手动处理说明。
 - Operation 状态变化能创建通知事件。
 
 ## 验收标准

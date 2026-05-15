@@ -14,7 +14,14 @@ export type OperationStatus =
   | "cancelled";
 
 /** Backend-executable job status. */
-export type OperationJobStatus = "queued" | "running" | "succeeded" | "failed" | "unsupported" | "cancelled";
+export type OperationJobStatus =
+  | "queued"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "unsupported"
+  | "requires_manual_step"
+  | "cancelled";
 
 /** Operation type currently supported by Agentlane. */
 export type OperationType =
@@ -32,6 +39,7 @@ export type OperationJobType =
   | "skill_publish"
   | "skill_assign"
   | "skill_sync"
+  | "agent_migration"
   | "notification_in_app"
   | "notification_email";
 
@@ -117,7 +125,12 @@ export interface OperationStore {
   listOperations: (input: ListOperationsInput) => Promise<OperationRow[]>;
   listJobs: (input: { operationId: string; limit?: number }) => Promise<OperationJobRow[]>;
   claimNextJob: (input: { runnerId: string; now: Date; leaseMs: number }) => Promise<OperationJobRow | null>;
-  completeJob: (input: { jobId: string; now: Date; status: "succeeded" | "unsupported" }) => Promise<OperationJobRow | null>;
+  completeJob: (input: {
+    jobId: string;
+    manualInstruction?: string;
+    now: Date;
+    status: "succeeded" | "unsupported" | "requires_manual_step";
+  }) => Promise<OperationJobRow | null>;
   failJob: (input: { jobId: string; now: Date; errorSummary: string; retryAfterMs?: number }) => Promise<OperationJobRow | null>;
   readOperation: (input: { operationId: string }) => Promise<OperationRow | null>;
   close: () => Promise<void>;
@@ -269,7 +282,7 @@ export function createPostgresOperationStore(options: PostgresOperationStoreOpti
         `, [input.jobId, input.status, input.now]);
         const job = result.rows[0] ?? null;
         if (job) {
-          await refreshOperationStatus(client, job.operationId, input.now);
+          await refreshOperationStatus(client, job.operationId, input.now, undefined, input.manualInstruction);
         }
         return job;
       });
@@ -398,6 +411,7 @@ async function refreshOperationStatus(
   operationId: string,
   now: Date,
   errorSummary?: string,
+  manualInstruction?: string,
 ): Promise<void> {
   const jobs = await client.query<{ status: OperationJobStatus }>(`
     SELECT status
@@ -407,6 +421,10 @@ async function refreshOperationStatus(
   const statuses = jobs.rows.map((row) => row.status);
   if (statuses.some((status) => status === "failed")) {
     await finishOperation(client, operationId, "failed", now, errorSummary);
+    return;
+  }
+  if (statuses.some((status) => status === "requires_manual_step")) {
+    await finishOperation(client, operationId, "requires_manual_step", now, errorSummary, manualInstruction);
     return;
   }
   if (statuses.some((status) => status === "unsupported")) {
@@ -435,16 +453,18 @@ async function finishOperation(
   status: OperationStatus,
   now: Date,
   errorSummary?: string,
+  manualInstruction?: string,
 ): Promise<void> {
   await client.query(`
     UPDATE operations
     SET
       status = $2,
       error_summary = $3,
-      finished_at = $4,
-      updated_at = $4
+      manual_instruction = $4,
+      finished_at = $5,
+      updated_at = $5
     WHERE id = $1
-  `, [operationId, status, errorSummary ?? null, now]);
+  `, [operationId, status, errorSummary ?? null, manualInstruction ?? null, now]);
 }
 
 async function withTransaction<T>(pool: pg.Pool, callback: (client: PoolClient) => Promise<T>): Promise<T> {

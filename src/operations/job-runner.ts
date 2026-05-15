@@ -3,7 +3,8 @@ import type { OperationJobRow, OperationJobType, OperationRow, OperationStatus, 
 
 /** Handler result for a claimed operation job. */
 export interface OperationJobHandlerResult {
-  status: "succeeded" | "unsupported";
+  manualInstruction?: string;
+  status: "succeeded" | "unsupported" | "requires_manual_step";
 }
 
 /** Handler for one executable operation job type. */
@@ -23,7 +24,12 @@ export interface OperationJobRunnerOptions {
 /** Result of one runner tick. */
 export type OperationJobRunResult =
   | { status: "idle" }
-  | { status: "handled"; jobId: string; jobType: OperationJobType; outcome: "succeeded" | "unsupported" }
+  | {
+    status: "handled";
+    jobId: string;
+    jobType: OperationJobType;
+    outcome: "succeeded" | "unsupported" | "requires_manual_step";
+  }
   | { status: "failed"; jobId: string; jobType: OperationJobType; errorSummary: string };
 
 /** Minimal Postgres-backed job runner. */
@@ -66,6 +72,7 @@ export function createOperationJobRunner(options: OperationJobRunnerOptions): Op
         const result = await handler(claimedJob);
         await options.operationStore.completeJob({
           jobId: claimedJob.id,
+          manualInstruction: result.manualInstruction,
           now: now(),
           status: result.status,
         });

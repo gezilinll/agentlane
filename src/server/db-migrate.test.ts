@@ -63,6 +63,7 @@ describeDb("database migrations", () => {
           "0003_skill_management",
           "0004_skill_governance",
           "0005_operations_notifications",
+          "0006_operation_manual_steps",
         ]);
       } finally {
         await client.end();

@@ -146,6 +146,65 @@ describeDb("Postgres operation store", () => {
     }
   });
 
+  it("lets a job move the owning operation into a manual-step state", async () => {
+    const database = await createTemporaryPostgresDatabase();
+    try {
+      runMigrationsScript(database.url);
+      const authStore = createPostgresAuthStore({ connectionString: database.url });
+      const operationStore = createPostgresOperationStore({ connectionString: database.url });
+      try {
+        const user = await authStore.upsertUserForEmail("ops-manual@example.com");
+        const organization = await authStore.createOrganization({
+          createdByUserId: user.id,
+          name: "Manual Step Team",
+          slug: "manual-step-team",
+        });
+        const operation = await operationStore.createOperation({
+          organizationId: organization.id,
+          requestedByUserId: user.id,
+          summary: "迁移 Agent 到目标设备",
+          targetId: "agent-main",
+          targetType: "agent",
+          type: "agent_migration",
+        });
+        const job = await operationStore.enqueueJob({
+          operationId: operation.id,
+          organizationId: organization.id,
+          payload: { sourceAgentId: "agent-main", targetRuntimeId: "runtime-codex" },
+          type: "agent_migration",
+        });
+
+        await operationStore.claimNextJob({
+          leaseMs: 30_000,
+          now: new Date("2026-05-14T10:30:00.000Z"),
+          runnerId: "runner-a",
+        });
+        await operationStore.completeJob({
+          jobId: job.id,
+          manualInstruction: "目标 Runtime 缺少已知安装 recipe，请先在设备上安装 runtime 后重试。",
+          now: new Date("2026-05-14T10:30:12.000Z"),
+          status: "requires_manual_step",
+        });
+        const completed = await operationStore.readOperation({ operationId: operation.id });
+        const jobs = await operationStore.listJobs({ operationId: operation.id });
+
+        expect(jobs[0]).toMatchObject({
+          id: job.id,
+          status: "requires_manual_step",
+        });
+        expect(completed).toMatchObject({
+          id: operation.id,
+          manualInstruction: "目标 Runtime 缺少已知安装 recipe，请先在设备上安装 runtime 后重试。",
+          status: "requires_manual_step",
+        });
+      } finally {
+        await Promise.all([authStore.close(), operationStore.close()]);
+      }
+    } finally {
+      await database.drop();
+    }
+  });
+
   it("requeues failed jobs until max attempts and then fails the operation", async () => {
     const database = await createTemporaryPostgresDatabase();
     try {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CreateNotificationEventInput } from "../notifications/notification-store";
+import type { CreateNotificationEventInput, CreateNotificationEventResult } from "../notifications/notification-store";
 import { createOperationJobRunner } from "./job-runner";
 import type { OperationJobRow, OperationRow, OperationStore } from "./operation-store";
 
@@ -48,6 +48,59 @@ describe("operation job runner", () => {
     });
     expect(store.completed).toEqual([{ jobId: "job_1", status: "unsupported" }]);
     expect(store.failed).toEqual([]);
+  });
+
+  it("passes manual-step handler results through the operation store and notification path", async () => {
+    const notifications: CreateNotificationEventInput[] = [];
+    const store = createFakeOperationStore(
+      createJob({ type: "agent_migration" }),
+      createOperation({
+        requestedByUserId: "user_1",
+        status: "queued",
+        summary: "迁移 Agent",
+        targetId: "agent-main",
+        targetType: "agent",
+        type: "agent_migration",
+      }),
+    );
+    const runner = createOperationJobRunner({
+      handlers: {
+        agent_migration: () => ({
+          manualInstruction: "目标设备缺少已知 runtime 安装入口，请先补齐 runtime。",
+          status: "requires_manual_step",
+        }),
+      },
+      notificationStore: {
+        createNotificationEvent: async (input) => {
+          notifications.push(input);
+          return createNotificationResult(input);
+        },
+      },
+      now: () => new Date("2026-05-14T12:07:00.000Z"),
+      operationStore: store,
+      runnerId: "runner-a",
+    });
+
+    await expect(runner.runDueJobOnce()).resolves.toEqual({
+      jobId: "job_1",
+      jobType: "agent_migration",
+      outcome: "requires_manual_step",
+      status: "handled",
+    });
+    expect(store.completed).toEqual([{
+      jobId: "job_1",
+      manualInstruction: "目标设备缺少已知 runtime 安装入口，请先补齐 runtime。",
+      status: "requires_manual_step",
+    }]);
+    expect(notifications).toEqual([
+      expect.objectContaining({
+        dedupeKey: "operation:operation_1:requires_manual_step",
+        eventType: "operation_requires_manual_step",
+        severity: "warning",
+        sourceModule: "migration",
+        title: "迁移 Agent 需要人工处理",
+      }),
+    ]);
   });
 
   it("records failed handler attempts through the operation store", async () => {
@@ -188,9 +241,51 @@ function createOperation(input: Partial<OperationRow>): OperationRow {
   };
 }
 
+function createNotificationResult(input: CreateNotificationEventInput): CreateNotificationEventResult {
+  const createdAt = input.createdAt ?? new Date("2026-05-14T12:00:00.000Z");
+  return {
+    deliveries: [],
+    event: {
+      actorUserId: input.actorUserId ?? null,
+      createdAt,
+      dedupeKey: input.dedupeKey,
+      eventType: input.eventType,
+      id: "notification_event_1",
+      operationId: input.operationId ?? null,
+      organizationId: input.organizationId,
+      recipientUserIds: input.recipientUserIds,
+      resourceId: input.resourceId ?? null,
+      resourceType: input.resourceType ?? null,
+      severity: input.severity,
+      sourceModule: input.sourceModule,
+      summary: input.summary,
+      title: input.title,
+    },
+    thread: {
+      cooldownUntil: null,
+      createdAt,
+      dedupeKey: input.dedupeKey,
+      eventType: input.eventType,
+      firstOccurredAt: createdAt,
+      id: "notification_thread_1",
+      lastOccurredAt: createdAt,
+      latestSummary: input.summary,
+      occurrenceCount: 1,
+      organizationId: input.organizationId,
+      resolvedAt: null,
+      resourceId: input.resourceId ?? null,
+      resourceType: input.resourceType ?? null,
+      severity: input.severity,
+      status: "open",
+      title: input.title,
+      updatedAt: createdAt,
+    },
+  };
+}
+
 function createFakeOperationStore(claimedJob: OperationJobRow | null, initialOperation?: OperationRow): OperationStore & {
   claims: number;
-  completed: Array<{ jobId: string; status: "succeeded" | "unsupported" }>;
+  completed: Array<{ jobId: string; manualInstruction?: string; status: "succeeded" | "unsupported" | "requires_manual_step" }>;
   failed: Array<{ jobId: string; errorSummary: string; retryAfterMs?: number }>;
   operation?: OperationRow;
 } {
@@ -212,12 +307,21 @@ function createFakeOperationStore(claimedJob: OperationJobRow | null, initialOpe
       return claimedJob;
     },
     async completeJob(input) {
-      this.completed.push({ jobId: input.jobId, status: input.status });
+      this.completed.push({
+        jobId: input.jobId,
+        manualInstruction: input.manualInstruction,
+        status: input.status,
+      });
       if (this.operation) {
         this.operation = {
           ...this.operation,
           finishedAt: input.now,
-          status: input.status === "succeeded" ? "succeeded" : "unsupported",
+          manualInstruction: input.manualInstruction ?? this.operation.manualInstruction,
+          status: input.status === "succeeded"
+            ? "succeeded"
+            : input.status === "requires_manual_step"
+              ? "requires_manual_step"
+              : "unsupported",
           updatedAt: input.now,
         };
       }
