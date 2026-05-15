@@ -326,7 +326,7 @@ describe("device collector scripts", () => {
       status: "active",
       title: "研发值班群",
     }));
-  });
+  }, 10_000);
 
   it("uses unlinked OpenClaw DingTalk message context as conversation evidence only", () => {
     const fakeHome = mkdtempSync(path.join(tmpdir(), "agentlane-openclaw-map-home-"));

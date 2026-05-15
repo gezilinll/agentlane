@@ -82,6 +82,8 @@ Skill Installation 由 Skill Management 负责。Agent Migration 只引用 Skill
 
 Agentlane 使用 Operation 记录过程，不引入长期可复用的迁移资产对象。系统只在用户发起一次迁移或安装时创建一次操作记录。
 
+当前代码层有一个确定性的迁移计划模型 `src/migration/agent-migration-plan.ts`。它根据来源 Agent、目标设备在线状态、目标 runtime kind 和期望 Channel 生成当次计划，返回 `ready`、`unsupported` 或 `requires_manual_step`，用于在创建 Operation 前判断是否存在已知 recipe。这个计划不是持久化业务对象，也不是可复用模板。
+
 ### Agent Export Snapshot
 
 Agent Export Snapshot 是来源 Agent 可迁移配置的只读快照。
@@ -121,7 +123,7 @@ Operation 表示一次用户触发或系统触发的设备、runtime、agent 或
 
 - `id`：内部 ID。
 - `organizationId`：所属组织。
-- `type`：`device_bootstrap`、`runtime_install`、`runtime_probe`、`agent_create`、`agent_migrate`、`skill_sync`。
+- `type`：迁移相关操作统一使用 `agent_migration`。设备刷新、Skill 发布 / 分配 / 同步等其他异步动作使用各自模块在 [Operation And Job Runner Spec](./operation-job-runner-spec.md) 中定义的 Operation type。
 - `requestedByUserId`：触发人。
 - `targetDeviceId`：目标设备，可为空。
 - `targetRuntimeId`：目标 runtime，可为空。
@@ -144,7 +146,7 @@ Operation 表示一次用户触发或系统触发的设备、runtime、agent 或
 4. 匹配 adapter 已知 Install Recipe。
 5. 校验 recipe 前置条件。
 6. 前置条件满足时创建 Operation 并执行。
-7. 前置条件不满足时创建 `requires_manual_step` Operation，并展示手动补齐指引。
+7. 前置条件不满足时创建或返回 `requires_manual_step` Operation，并展示手动补齐指引。
 8. Skill 相关步骤委托 Skill Management。
 9. 执行完成或失败后产生通知事件。
 
@@ -311,6 +313,7 @@ UI 不展示：
 
 Capability：
 
+- `src/migration/agent-migration-plan.test.ts` 覆盖当前 runtime capability 和迁移计划状态。
 - Adapter capability matrix 覆盖 OpenClaw、Multica、Slock、Codex 的 supported / partial / unsupported / requires_manual_step。
 - Slock Skill 同步必须通过底层 runtime capability，不直接写 `.slock`。
 - 无 runtime 的设备不能进入“让 Agent 自己安装”的路径，只能展示 bootstrap / runtime setup。
@@ -325,6 +328,7 @@ Capability：
 
 Operation：
 
+- 迁移异步动作使用 `agent_migration` Operation / Job，Job 进入 `requires_manual_step` 时 Operation 也进入 `requires_manual_step` 并保留 `manualInstruction`。
 - 成功路径记录每一步状态。
 - 失败路径记录 error summary 且不泄露密钥。
 - 不支持能力返回 `unsupported`，UI 展示原因。
