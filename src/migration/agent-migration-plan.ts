@@ -44,6 +44,7 @@ export interface CreateAgentMigrationPlanInput {
   sourceAgentName?: string;
   sourceRuntimeKind: string;
   targetDeviceOnline: boolean;
+  targetRuntimeDetected?: boolean;
   targetRuntimeKind?: string | null;
 }
 
@@ -114,7 +115,8 @@ export function describeMigrationCapability(runtimeKind: string): AgentMigration
 export function createAgentMigrationPlan(input: CreateAgentMigrationPlanInput): AgentMigrationPlan {
   const targetRuntimeKind = normalizeRuntimeKind(input.targetRuntimeKind ?? input.sourceRuntimeKind);
   const capability = describeMigrationCapability(targetRuntimeKind);
-  const steps = createPlanSteps(capability, input.desiredChannels ?? []);
+  const targetRuntimeDetected = input.targetRuntimeDetected ?? true;
+  const steps = createPlanSteps(capability, input.desiredChannels ?? [], targetRuntimeDetected);
   const unsupportedStep = steps.find((step) => step.status === "unsupported");
   const manualStep = steps.find((step) => step.status === "requires_manual_step");
 
@@ -167,13 +169,16 @@ export function createAgentMigrationPlan(input: CreateAgentMigrationPlanInput): 
 function createPlanSteps(
   capability: AgentMigrationCapability,
   desiredChannels: string[],
+  targetRuntimeDetected: boolean,
 ): AgentMigrationPlanStep[] {
   return [
     {
       action: "detect_runtime",
       label: "检测目标 Runtime",
-      status: capability.detectRuntime,
-      reason: reasonFor(capability.runtimeKind, "detect_runtime", capability.detectRuntime),
+      status: targetRuntimeDetected ? capability.detectRuntime : "requires_manual_step",
+      reason: targetRuntimeDetected
+        ? reasonFor(capability.runtimeKind, "detect_runtime", capability.detectRuntime)
+        : `目标设备尚未识别到 ${capability.runtimeKind} Runtime，先安装或启动该 Runtime，并等待 Collector 完成一次采集。`,
     },
     {
       action: "create_agent",

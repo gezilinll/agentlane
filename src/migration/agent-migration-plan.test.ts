@@ -63,6 +63,24 @@ describe("agent migration planning", () => {
     });
   });
 
+  it("stops with a manual instruction when the target runtime has not been detected", () => {
+    const plan = createAgentMigrationPlan({
+      sourceAgentName: "main",
+      sourceRuntimeKind: "openclaw",
+      targetDeviceOnline: true,
+      targetRuntimeDetected: false,
+      targetRuntimeKind: "openclaw",
+    });
+
+    expect(plan).toMatchObject({
+      manualInstruction: "目标设备尚未识别到 openclaw Runtime，先安装或启动该 Runtime，并等待 Collector 完成一次采集。",
+      status: "requires_manual_step",
+    });
+    expect(plan.steps.find((step) => step.action === "detect_runtime")).toMatchObject({
+      status: "requires_manual_step",
+    });
+  });
+
   it("does not pretend Slock skill synchronization is deterministic before a backend runtime path exists", () => {
     const plan = createAgentMigrationPlan({
       sourceAgentName: "PMO",

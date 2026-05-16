@@ -7,6 +7,7 @@ import {
   type AuthEmailProvider,
 } from "../auth/auth-http-api";
 import { createPostgresAuthStore, type AuthStore } from "../auth/auth-store";
+import { createAgentMigrationHttpApiHandler } from "../migration/agent-migration-http-api";
 import { createNotificationHttpApiHandler } from "../notifications/notification-http-api";
 import { createPostgresNotificationStore, type NotificationStore } from "../notifications/notification-store";
 import { createOperationHttpApiHandler } from "../operations/operation-http-api";
@@ -192,6 +193,12 @@ export function createLorumeBackendServer(
       requireUserSession: authGuards.requireUserSession,
     })
     : undefined;
+  const agentMigrationHandler = authGuards
+    ? createAgentMigrationHttpApiHandler({
+      requireUserSession: authGuards.requireUserSession,
+      runtimeStore: postgresStore ?? undefined,
+    })
+    : undefined;
   const webSocketServer = new WebSocketServer({ noServer: true });
   const server = createServer((request, response) => {
     const notFound = () => {
@@ -230,10 +237,17 @@ export function createLorumeBackendServer(
         runOperationHandler();
       }
     };
+    const runAgentMigrationHandler = () => {
+      if (agentMigrationHandler) {
+        void agentMigrationHandler(request, response, runNotificationHandler);
+      } else {
+        runNotificationHandler();
+      }
+    };
     if (authHandler) {
-      void authHandler(request, response, runNotificationHandler);
+      void authHandler(request, response, runAgentMigrationHandler);
     } else {
-      runNotificationHandler();
+      runAgentMigrationHandler();
     }
   });
   let baseUrl = "";
