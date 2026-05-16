@@ -1,4 +1,4 @@
-/** Concrete runtime or platform kind that Lorume can recognize in v1. */
+/** Concrete runtime or platform kind that Lorume currently recognizes. */
 export const RUNTIME_KINDS = [
   "openclaw",
   "codex",
@@ -8,7 +8,7 @@ export const RUNTIME_KINDS = [
   "unknown",
 ] as const;
 
-/** Concrete runtime or platform kind that Lorume can recognize in v1. */
+/** Concrete runtime or platform kind that Lorume currently recognizes. */
 export type RuntimeKind = (typeof RUNTIME_KINDS)[number];
 
 /** Source adapter that reported a runtime or agent. */
@@ -61,7 +61,7 @@ export interface RuntimeDevice {
   architecture?: string;
   /** Device health rolled up from collector and runtime reports. */
   status: RuntimeHealthStatus;
-  /** Product connection mode. v1 uses collector; SSH is only a developer transport for testing installs. */
+  /** Product connection mode; SSH is only a developer transport for testing installs. */
   connectionMode: "collector";
   /** ISO timestamp when the device was last observed. */
   lastSeenAt?: string;

@@ -38,7 +38,7 @@ export type RuntimeRunsBoardPolicy =
   | "work_item_cards"
   | "task_board_cards";
 
-/** Source-level readiness for v1 Runs and future task management. */
+/** Source-level readiness for Runs and future task management. */
 export type RuntimeListeningReadiness = "ready_for_runs" | "execution_only" | "not_ready";
 
 /** Static platform profile reviewed by product and adapter work. */
@@ -69,13 +69,13 @@ export interface RuntimeSourceListeningReport {
   gaps: string[];
 }
 
-/** Runtime listening acceptance report for all v1 target sources. */
+/** Runtime listening acceptance report for all current target sources. */
 export interface RuntimeListeningAcceptanceReport {
   /** Snapshot timestamp assessed by this report. */
   observedAt: string;
   /** Device id assessed by this report. */
   deviceId: string;
-  /** Per-source reports in v1 target order. */
+  /** Per-source reports in current target order. */
   sources: Record<"openclaw" | "multica" | "slock", RuntimeSourceListeningReport>;
 }
 
@@ -115,7 +115,7 @@ const profiles: Record<"openclaw" | "multica" | "slock", RuntimeListeningProfile
   },
 };
 
-/** Return the v1 listening profile for a target source. */
+/** Return the current listening profile for a target source. */
 export function getRuntimeListeningProfile(source: "openclaw" | "multica" | "slock"): RuntimeListeningProfile {
   return profiles[source];
 }

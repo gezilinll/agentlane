@@ -958,7 +958,7 @@ function slockCapability(collectedAt: string, hasExecutionEvidence = false): Run
       support: "supported",
       strategies: ["cli", "native_api"],
       evidence: ["slock task board exposes task lifecycle fields."],
-      limitations: ["Task board lifecycle is the v1 source for Runs stages; it does not create RuntimeExecution records by itself."],
+      limitations: ["Task board lifecycle is the current source for Runs stages; it does not create RuntimeExecution records by itself."],
     },
     conversations: {
       support: "partial",
@@ -971,7 +971,7 @@ function slockCapability(collectedAt: string, hasExecutionEvidence = false): Run
       strategies: ["native_api", "network_proxy", "managed_launcher"],
       evidence: hasExecutionEvidence
         ? ["Slock activity evidence was linked to task-board work items."]
-        : ["Slock task board is available; realtime activity is not collected in the v1 adapter path."],
+        : ["Slock task board is available; realtime activity is not collected in the current adapter path."],
       limitations: ["Server active means online or available, not execution running."],
     },
   };

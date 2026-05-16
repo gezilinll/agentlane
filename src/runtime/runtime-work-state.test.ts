@@ -158,7 +158,7 @@ describe("runtime work state model", () => {
     });
   });
 
-  it("maps Slock task-board state as the v1 Runs authority without requiring execution state", () => {
+  it("maps Slock task-board state as the Runs authority without requiring execution state", () => {
     expect(deriveRuntimeWorkStage({ source: "slock", workItemStatus: "in_progress" })).toMatchObject({
       stage: "processing",
       confidence: "direct",
