@@ -11,11 +11,12 @@
 - 支持把设备、runtime 或 agent 上已有的 Skill 提升为组织级 Skill。
 - 组织级 Skill 必须保存自己的内容副本和版本，不能只引用来源设备上的路径。
 - 支持发布 Skill 版本；发布权限不足或风险较高时进入审核。
+- 支持在 Skill Registry 内编辑当前最新 Markdown 源文，并保存为新的草稿版本。
 - 支持把组织级 Skill 分配到 Device、Runtime 或 Agent。
 - Skill 分配和后续同步必须通过可审计的 Operation / Job Runner 表达状态；不在页面内假装同步已经完成。
 - 支持资源级权限和审核流，避免普通成员直接编辑、发布或下发到非本人管理的目标。
 - 所有平台差异必须由 adapter 转换成 Lorume 的 Skill 语义，UI 不直接判断 OpenClaw、Multica 或 Slock 的本地目录规则。
-- UI 只能暴露已有 HTTP API、权限规则和 harness 覆盖的动作。编辑文件、归档、删除、目标有效 Skill 查询等能力如果没有 API 与 harness，不出现在页面动作中。
+- UI 只能暴露已有 HTTP API、权限规则和 harness 覆盖的动作。归档、删除、target support 原因等能力如果没有 API 与 harness，不出现在页面动作中。
 
 ## 非目标
 
@@ -41,12 +42,12 @@ Skill 是组织级能力资产。它拥有名称、描述、owner、生命周期
 - `description`：简短说明。
 - `ownerUserId`：Skill owner。
 - `status`：`draft`、`published`、`archived`。
-- `source`：首次导入来源摘要，例如 `upload_md`、`upload_zip`、`github_url`、`marketplace`、`runtime_discovered`。
+- `source`：最近一次内容来源摘要，例如 `upload_md`、`upload_zip`、`github_url`、`marketplace_url`、`manual_edit`、`runtime_discovered`。
 - `createdAt` / `updatedAt` / `archivedAt`：创建、更新和归档时间。
 
 ### Skill Version
 
-Skill Version 是 Skill 的不可变内容版本。编辑发生在草稿，发布后形成新版本。
+Skill Version 是 Skill 的不可变内容版本。每次导入或编辑都会创建新的版本记录；编辑保存为草稿版本，发布只改变对应版本的发布状态，不覆盖历史版本。
 
 字段：
 
@@ -253,7 +254,8 @@ Skill 生命周期：
 规则：
 
 - 编辑已发布 Skill 会产生草稿，不直接修改已发布版本。
-- 发布草稿形成新的 Skill Version。
+- 页面内编辑当前只支持单文件 `SKILL.md` 的最新 Markdown 源文。多文件 Skill 必须通过重新导入更新，避免只保存源文时丢失配套文件。保存草稿时必须重新走 Skill 包规范化和静态校验，生成新的不可变 Skill Version，并把 Skill 状态置为 `draft`。
+- 发布草稿会标记当前草稿版本为已发布，并把 Skill 状态置为 `published`。
 - 已发布版本不可变。
 - 归档 Skill 不删除历史文件、Assignment 和同步记录。
 - 删除只允许用于未发布草稿或未被引用的版本。
@@ -401,6 +403,7 @@ Skill API：
 - `POST /api/skills/import`：导入 Markdown、ZIP、GitHub URL 或 Marketplace 来源。
 - `GET /api/skills/:skillId`：读取可查看 Skill 的详情。
 - `GET /api/skills/:skillId/versions/:versionId/files`：读取可查看版本文件树。
+- `POST /api/skills/:skillId/versions`：对可编辑 Skill 创建新的草稿版本。当前页面编辑器提交 Markdown 源文，后端按 `manual_edit` 来源重新规范化、校验并保存文件副本。
 - `POST /api/skills/:skillId/publish`：创建发布 Operation 或创建发布审核。
 
 Resource Permission API：
@@ -427,7 +430,7 @@ Operation / Notification API：
 - `GET /api/notifications`：按组织读取页面内通知线程。
 - `GET /api/notifications/:threadId`：读取通知线程和投递明细。
 
-当前 Skill Registry 页面从 Runtime Fleet 查询结果中派生可分配目标，并在用户选择目标后调用 Skill target HTTP API 展示目标 Skill Set 与安装状态。页面不得在前端自行拼接生效规则，也不得调用不存在的编辑、归档、删除或 target support 原因 API。
+当前 Skill Registry 页面从 Runtime Fleet 查询结果中派生可分配目标，并在用户选择目标后调用 Skill target HTTP API 展示目标 Skill Set 与安装状态。页面不得在前端自行拼接生效规则，也不得调用不存在的归档、删除或 target support 原因 API。
 当前 Skill Registry 页面可以对已批准、已同步、失败或不支持的 Assignment 触发“同步到目标”；该动作只创建 Operation，不直接写设备。
 
 ## UI 规则
@@ -437,6 +440,7 @@ Skill Registry 页面必须支持：
 - 在用户已选组织后读取组织 Skill、分配、待处理审核、相关 Operation、通知和 Runtime Fleet 目标。
 - 查看 Skill 详情、版本、文件树、校验结果、分配目标、相关 Operation 和待处理审核。
 - 导入 Markdown、ZIP、GitHub URL 和 Marketplace URL。ZIP 文件由页面转成 base64 后进入同一个 `POST /api/skills/import` 校验链路。
+- 单文件 `SKILL.md` 可以打开最新版本源文，支持源文编辑和本地 Markdown 预览；保存时调用 `POST /api/skills/:skillId/versions` 创建新的草稿版本，不直接覆盖已发布版本。
 - 发布版本或提交发布审核。
 - 选择 Device、Runtime 或 Agent 目标并创建分配 Operation 或提交分配审核。
 - 选择目标后展示后端解析出的 Target Skill Set，包含 Skill 名称和待同步、同步中、已安装、同步失败或不支持等安装状态。
@@ -447,7 +451,7 @@ Skill Registry 页面必须支持：
 - 页面内通知展示状态摘要和跳转语义，不展示完整原始日志。
 
 UI 不展示原始 token、完整脚本风险日志、外部平台私有 API 返回体或调试字段。
-UI 不展示未实现入口。没有 API 与 harness 的编辑、归档、删除和 target support 原因入口不出现在页面中。
+UI 不展示未实现入口。没有 API 与 harness 的归档、删除和 target support 原因入口不出现在页面中。
 
 ## Harness
 
@@ -459,6 +463,7 @@ UI 不展示未实现入口。没有 API 与 harness 的编辑、归档、删除
 - Markdown 或脚本内容包含 `../` 字符串不会被路径校验误杀。
 - GitHub URL 导入锁定 commit SHA 和 package hash。
 - Marketplace 导入仍经过统一包校验。
+- 手动编辑保存会以 `manual_edit` 来源创建新的草稿版本，并重新走 Markdown 包校验。
 - 脚本、依赖文件、license 缺失、compatibility 缺失产生 warning。
 
 权限与审核：
@@ -489,6 +494,7 @@ UI：
 - Markdown 导入调用正式 Skill API，不绕过后端校验。
 - ZIP 导入把文件名和 base64 内容提交到正式 Skill API，不伪装成 Markdown。
 - GitHub URL 和 Marketplace URL 导入进入同一 `POST /api/skills/import` 路径。
+- 单文件 `SKILL.md` 的 Skill 源文编辑器能在源文和预览之间切换，保存后调用 `POST /api/skills/:skillId/versions`，显示草稿保存状态，并刷新最新版本和文件内容。
 - 发布、分配和审批动作返回 Operation 或 Approval 后，页面刷新相关 Operation、通知、分配和审批状态。
 - 已批准 Assignment 的“同步到目标”按钮调用 `POST /api/skill-assignments/:assignmentId/sync`，返回 Operation 后显示排队状态并刷新相关数据。
 - 选择目标后调用 `GET /api/skill-targets/:targetType/:targetId/skill-set`，页面只展示后端解析出的 Target Skill Set，不把组织 Skill 库里的未分配 Skill 当作目标已生效 Skill。

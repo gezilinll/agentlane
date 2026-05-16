@@ -240,6 +240,40 @@ function installSkillRegistryFetchMock(options: {
         },
       }, 202);
     }
+    if (url.includes("/api/skills/skill_cost/versions") && method === "POST") {
+      const nextDetail = {
+        ...detailResponse,
+        skill: {
+          ...detailResponse.skill,
+          description: "已更新的成本审查说明",
+          status: "draft",
+          updatedAt: "2026-05-14T09:30:00.000Z",
+        },
+        versions: [
+          {
+            ...detailResponse.versions[0],
+            id: "skillver_cost_2",
+            packageHash: "hash_2",
+            publishedAt: null,
+            version: "2",
+          },
+          ...detailResponse.versions,
+        ],
+        files: [
+          {
+            ...detailResponse.files[0],
+            content: init?.body ? JSON.parse(init.body.toString()).source.content : "",
+            contentHash: "hash_file_2",
+            skillVersionId: "skillver_cost_2",
+          },
+        ],
+      };
+      return jsonResponse({
+        files: nextDetail.files,
+        skill: nextDetail.skill,
+        version: nextDetail.versions[0],
+      }, 201);
+    }
     if (url.includes("/api/skill-assignments/assignment_1/sync") && method === "POST") {
       return jsonResponse({
         operation: {
@@ -482,5 +516,45 @@ describe("SkillRegistryPage", () => {
       call.url.includes("/api/skill-targets/agent/gezilinll-claw%3Aopenclaw%3Agateway-local%3Aagent%3Amain/skill-set")
       && call.url.includes("organizationId=org_1")
     ))).toBe(true);
+  });
+
+  it("edits the latest Skill markdown as a draft version with a preview", async () => {
+    const user = userEvent.setup();
+    const calls = installSkillRegistryFetchMock();
+    render(<SkillRegistryPage organizationId="org_1" />);
+
+    await screen.findByRole("heading", { name: "Cost Review" });
+    await user.click(screen.getByRole("button", { name: "编辑源文" }));
+    const editor = screen.getByLabelText("Skill 源文");
+    await user.clear(editor);
+    await user.type(editor, `---
+name: Cost Review
+description: 已更新的成本审查说明
+license: MIT
+compatibility: openclaw
+---
+
+# Cost Review
+
+增加日报检查。`);
+    await user.click(screen.getByRole("button", { name: "预览" }));
+
+    const preview = screen.getByLabelText("Skill 预览");
+    expect(within(preview).getByRole("heading", { name: "Cost Review" })).toBeInTheDocument();
+    expect(within(preview).getByText("增加日报检查。")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "源文" }));
+    await user.click(screen.getByRole("button", { name: "保存草稿版本" }));
+
+    await waitFor(() => expect(screen.getByText("草稿版本已保存。")).toBeInTheDocument());
+    const draftCall = calls.find((call) => call.url.includes("/api/skills/skill_cost/versions") && call.method === "POST");
+    expect(draftCall?.body).toMatchObject({
+      source: {
+        content: expect.stringContaining("增加日报检查。"),
+        filename: "SKILL.md",
+        type: "markdown",
+      },
+      summary: "Manual Skill edit",
+    });
   });
 });

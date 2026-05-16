@@ -586,7 +586,13 @@ describe("skill governance target Skill set API", () => {
       }),
       requireUserSession: async () => ({
         id: "ses_1",
-        organizations: [{ organizationId: "org_1", role: "member" }],
+        organizations: [{
+          id: "membership_1",
+          name: "Org One",
+          organizationId: "org_1",
+          role: "member",
+          slug: "org-one",
+        }],
         user: { createdAt: now, email: "member@example.com", id: "user_1", updatedAt: now },
       }),
       skillStore: {} as SkillStore,

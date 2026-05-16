@@ -118,6 +118,18 @@ export interface SkillImportInput {
   summary?: string;
 }
 
+/** Input for creating an immutable draft version on an existing Skill. */
+export interface SkillDraftVersionInput {
+  /** Existing Skill id. */
+  skillId: string;
+  /** User creating the draft version. */
+  createdByUserId: string;
+  /** Validated package snapshot. */
+  package: NormalizedSkillPackage;
+  /** Optional version summary. */
+  summary?: string;
+}
+
 /** Skill list query input. */
 export interface SkillListInput {
   /** Organization whose Skills should be listed. */
@@ -142,6 +154,8 @@ export interface SkillVersionFilesInput {
 export interface SkillStore {
   /** Import a validated Skill package into an organization-owned copy. */
   importSkillVersion: (input: SkillImportInput) => Promise<SkillImportResult>;
+  /** Create an immutable draft version for an existing organization-owned Skill. */
+  createSkillDraftVersion: (input: SkillDraftVersionInput) => Promise<SkillImportResult>;
   /** List Skills for an organization. */
   listSkills: (input: SkillListInput) => Promise<SkillListRow[]>;
   /** Read one Skill with latest files. */
@@ -177,6 +191,33 @@ export function createPostgresSkillStore(options: PostgresSkillStoreOptions = {}
           organizationId: input.organizationId,
           ownerUserId: input.ownerUserId ?? input.createdByUserId,
           slug,
+          source: input.package.source,
+        });
+        const versionLabel = await readNextVersion(client, skill.id);
+        const version = await insertSkillVersion(client, {
+          createdByUserId: input.createdByUserId,
+          packageHash: input.package.packageHash,
+          skillId: skill.id,
+          summary: input.summary,
+          validation: input.package.validation,
+          version: versionLabel,
+        });
+        const files = [];
+        for (const file of input.package.files) {
+          files.push(await insertSkillFile(client, version.id, file));
+        }
+        return { files, skill, version };
+      });
+    },
+    createSkillDraftVersion(input) {
+      if (input.package.validation.status === "blocked") {
+        throw new Error("blocked skill packages cannot be imported");
+      }
+      return withTransaction(pool, async (client) => {
+        const skill = await updateSkillForDraft(client, {
+          description: input.package.metadata.description,
+          name: input.package.metadata.name,
+          skillId: input.skillId,
           source: input.package.source,
         });
         const versionLabel = await readNextVersion(client, skill.id);
@@ -319,6 +360,48 @@ async function upsertSkill(
     JSON.stringify(input.source),
   ]);
   return result.rows[0];
+}
+
+async function updateSkillForDraft(
+  client: PoolClient,
+  input: {
+    description: string;
+    name: string;
+    skillId: string;
+    source: SkillPackageSource;
+  },
+): Promise<SkillRow> {
+  const result = await client.query<SkillRow>(`
+    UPDATE skills
+    SET
+      name = $2,
+      description = $3,
+      source = $4,
+      status = 'draft',
+      updated_at = now()
+    WHERE id = $1
+      AND status <> 'archived'
+    RETURNING
+      id,
+      organization_id AS "organizationId",
+      slug,
+      name,
+      description,
+      owner_user_id AS "ownerUserId",
+      status,
+      source,
+      created_at AS "createdAt",
+      updated_at AS "updatedAt",
+      archived_at AS "archivedAt"
+  `, [
+    input.skillId,
+    input.name,
+    input.description,
+    JSON.stringify(input.source),
+  ]);
+  const skill = result.rows[0];
+  if (!skill) throw new Error("skill not found");
+  return skill;
 }
 
 async function insertSkillVersion(

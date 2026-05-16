@@ -78,6 +78,85 @@ compatibility: openclaw
     }
   });
 
+  it("creates immutable draft versions for an existing organization Skill", async () => {
+    const database = await createTemporaryPostgresDatabase();
+    try {
+      runMigrationsScript(database.url);
+      const authStore = createPostgresAuthStore({ connectionString: database.url });
+      const skillStore = createPostgresSkillStore({ connectionString: database.url });
+      try {
+        const user = await authStore.upsertUserForEmail("skill-editor@example.com");
+        const organization = await authStore.createOrganization({
+          createdByUserId: user.id,
+          name: "Skill Editor Team",
+          slug: "skill-editor-team",
+        });
+        const imported = await skillStore.importSkillVersion({
+          createdByUserId: user.id,
+          organizationId: organization.id,
+          package: createSkillPackageFromMarkdown({
+            content: `---
+name: Review Bot
+description: Shared review guidance.
+license: MIT
+compatibility: openclaw
+---
+
+# Review Bot
+`,
+            source: { type: "upload_md" },
+          }),
+        });
+        const editedPackage = createSkillPackageFromMarkdown({
+          content: `---
+name: Review Bot
+description: Updated review guidance.
+license: MIT
+compatibility: openclaw
+---
+
+# Review Bot
+
+Add one more deterministic check.
+`,
+          source: { filename: "SKILL.md", type: "manual_edit" },
+        });
+
+        const draft = await skillStore.createSkillDraftVersion({
+          createdByUserId: user.id,
+          package: editedPackage,
+          skillId: imported.skill.id,
+          summary: "Update review guidance",
+        });
+        const detail = await skillStore.readSkillDetail({ skillId: imported.skill.id });
+
+        expect(draft.skill).toMatchObject({
+          id: imported.skill.id,
+          description: "Updated review guidance.",
+          slug: "review-bot",
+          status: "draft",
+        });
+        expect(draft.version).toMatchObject({
+          packageHash: editedPackage.packageHash,
+          publishedAt: null,
+          validationStatus: "passed",
+          version: "2",
+        });
+        expect(detail?.versions.map((version) => version.version)).toEqual(["2", "1"]);
+        expect(detail?.files).toEqual([
+          expect.objectContaining({
+            content: expect.stringContaining("Add one more deterministic check."),
+            path: "SKILL.md",
+          }),
+        ]);
+      } finally {
+        await Promise.all([authStore.close(), skillStore.close()]);
+      }
+    } finally {
+      await database.drop();
+    }
+  });
+
   it("does not persist blocked packages", async () => {
     const database = await createTemporaryPostgresDatabase();
     try {

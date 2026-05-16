@@ -46,18 +46,17 @@ export function resolveTargetSkillAssignments(
     input.targetLineage.map((target, index) => [targetKey(target.targetType, target.targetId), index]),
   );
   const candidates = input.assignments
-    .map((assignment) => {
+    .flatMap((assignment): ResolvedTargetSkillAssignment[] => {
       const specificity = specificityByTargetKey.get(targetKey(assignment.targetType, assignment.targetId));
-      if (specificity === undefined) return null;
-      if (assignment.status === "disabled" || assignment.status === "pending_review") return null;
-      return {
+      if (specificity === undefined) return [];
+      if (assignment.status === "disabled" || assignment.status === "pending_review") return [];
+      return [{
         ...assignment,
         specificity,
         resolutionState: resolutionStateForAssignmentStatus(assignment.status),
         overriddenAssignmentIds: [],
-      };
-    })
-    .filter((assignment): assignment is ResolvedTargetSkillAssignment => assignment !== null);
+      }];
+    });
 
   const bySkillId = new Map<string, ResolvedTargetSkillAssignment>();
   for (const candidate of candidates) {

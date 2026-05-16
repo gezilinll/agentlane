@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { PixelIcon } from "../ui/PixelIcon";
 
 type SkillStatus = "draft" | "published" | "archived";
@@ -64,6 +64,12 @@ interface SkillFile {
 interface SkillDetailResponse {
   skill: SkillSummary;
   versions: SkillVersion[];
+  files: SkillFile[];
+}
+
+interface SkillVersionDraftResponse {
+  skill: SkillSummary;
+  version: SkillVersion;
   files: SkillFile[];
 }
 
@@ -198,6 +204,9 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
   const [sourceUrl, setSourceUrl] = useState("");
   const [filename, setFilename] = useState("SKILL.md");
   const [markdownContent, setMarkdownContent] = useState("");
+  const [editorContent, setEditorContent] = useState("");
+  const [editorMode, setEditorMode] = useState<"source" | "preview">("source");
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [zipFile, setZipFile] = useState<File | null>(null);
   const [selectedTargetValue, setSelectedTargetValue] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
@@ -264,16 +273,13 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
     let cancelled = false;
     async function loadDetail() {
       try {
-        const nextDetail = await fetchJson<SkillDetailResponse>(`/api/skills/${encodeURIComponent(selectedSkillId)}`);
-        const nextVersion = nextDetail.versions[0];
-        const nextFiles = nextVersion
-          ? (await fetchJson<{ files?: SkillFile[] }>(
-              `/api/skills/${encodeURIComponent(selectedSkillId)}/versions/${encodeURIComponent(nextVersion.id)}/files`,
-            )).files ?? nextDetail.files ?? []
-          : [];
+        const { nextDetail, nextFiles } = await fetchSkillDetailWithFiles(selectedSkillId);
         if (cancelled) return;
         setDetail(nextDetail);
         setFiles(nextFiles);
+        setEditorContent(readEditableSkillContent(nextFiles));
+        setEditorMode("source");
+        setIsEditorOpen(false);
       } catch (error) {
         if (!cancelled) setErrorMessage(error instanceof Error ? error.message : "读取 Skill 详情失败");
       }
@@ -336,6 +342,51 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
     if (nextTargetSkillSet) {
       setTargetSkillSet(nextTargetSkillSet.targetSkillSet ?? []);
       setTargetSkillSetTarget(nextTargetSkillSet.target ?? null);
+    }
+  }
+
+  async function handleSaveDraftVersion() {
+    if (!selectedSkill) return;
+    setIsSubmitting(true);
+    setStatusMessage("");
+    setErrorMessage("");
+    try {
+      const result = await fetchJson<SkillVersionDraftResponse>(
+        `/api/skills/${encodeURIComponent(selectedSkill.id)}/versions`,
+        {
+          body: JSON.stringify({
+            source: {
+              content: editorContent,
+              filename: "SKILL.md",
+              type: "markdown",
+            },
+            summary: "Manual Skill edit",
+          }),
+          headers: { "content-type": "application/json" },
+          method: "POST",
+        },
+      );
+      setSkills((current) => current.map((skill) => (
+        skill.id === result.skill.id
+          ? {
+              ...result.skill,
+              latestValidationStatus: result.version.validationStatus,
+              latestVersion: result.version.version,
+            }
+          : skill
+      )));
+      const { nextDetail, nextFiles } = await fetchSkillDetailWithFiles(result.skill.id);
+      setDetail(nextDetail);
+      setFiles(nextFiles);
+      setEditorContent(readEditableSkillContent(nextFiles));
+      setEditorMode("source");
+      setIsEditorOpen(true);
+      setStatusMessage("草稿版本已保存。");
+      await refreshActivity();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "保存草稿版本失败");
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -608,7 +659,10 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
           assignments={selectedAssignments}
           approvals={selectedApprovals}
           detail={detail}
+          editorContent={editorContent}
+          editorMode={editorMode}
           files={files}
+          isEditorOpen={isEditorOpen}
           isLoadingTargetSkillSet={isLoadingTargetSkillSet}
           latestVersion={latestVersion}
           operations={operations}
@@ -619,9 +673,13 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
           targets={targets}
           onAssign={() => void handleAssign()}
           onApprovalDecision={(approval, decision) => void handleApprovalDecision(approval, decision)}
+          onEditorChange={setEditorContent}
+          onEditorModeChange={setEditorMode}
           onPublish={() => void handlePublish()}
+          onSaveDraftVersion={() => void handleSaveDraftVersion()}
           onSyncAssignment={(assignment) => void handleSyncAssignment(assignment)}
           onTargetChange={setSelectedTargetValue}
+          onToggleEditor={() => setIsEditorOpen((current) => !current)}
           isSubmitting={isSubmitting}
         />
       </section>
@@ -633,15 +691,22 @@ function SkillDetailPanel({
   assignments,
   approvals,
   detail,
+  editorContent,
+  editorMode,
   files,
+  isEditorOpen,
   isLoadingTargetSkillSet,
   isSubmitting,
   latestVersion,
   onAssign,
   onApprovalDecision,
+  onEditorChange,
+  onEditorModeChange,
   onPublish,
+  onSaveDraftVersion,
   onSyncAssignment,
   onTargetChange,
+  onToggleEditor,
   operations,
   selectedTargetValue,
   skills,
@@ -652,7 +717,10 @@ function SkillDetailPanel({
   assignments: SkillAssignment[];
   approvals: ApprovalRequest[];
   detail: SkillDetailResponse | null;
+  editorContent: string;
+  editorMode: "source" | "preview";
   files: SkillFile[];
+  isEditorOpen: boolean;
   isLoadingTargetSkillSet: boolean;
   isSubmitting: boolean;
   latestVersion: SkillVersion | null;
@@ -664,9 +732,13 @@ function SkillDetailPanel({
   targets: SkillTargetOption[];
   onAssign: () => void;
   onApprovalDecision: (approval: ApprovalRequest, decision: "approve" | "reject") => void;
+  onEditorChange: (value: string) => void;
+  onEditorModeChange: (mode: "source" | "preview") => void;
   onPublish: () => void;
+  onSaveDraftVersion: () => void;
   onSyncAssignment: (assignment: SkillAssignment) => void;
   onTargetChange: (value: string) => void;
+  onToggleEditor: () => void;
 }) {
   if (!detail) {
     return (
@@ -680,6 +752,7 @@ function SkillDetailPanel({
   const scopedOperations = operations.filter((operation) => operation.resourceId === detail.skill.id);
   const latestVersionIsPublished = Boolean(latestVersion?.publishedAt);
   const skillNameById = new Map(skills.map((skill) => [skill.id, skill.name]));
+  const canEditSource = files.length === 1 && files[0]?.path === "SKILL.md";
 
   return (
     <aside className="detailPanel skillDetailPanel" aria-label="Skill 详情">
@@ -715,6 +788,49 @@ function SkillDetailPanel({
             <li key={file.id}>{file.path}</li>
           ))}
         </ul>
+        <button className="secondaryButton compactButton" type="button" disabled={!canEditSource} onClick={onToggleEditor}>
+          编辑源文
+        </button>
+        {!canEditSource && files.length > 0 ? (
+          <p className="mutedText">多文件 Skill 请通过重新导入更新，避免页面源文编辑丢失配套文件。</p>
+        ) : null}
+        {isEditorOpen ? (
+          <div className="skillEditor">
+            <div className="skillEditorToolbar" role="group" aria-label="Skill 编辑模式">
+              <button
+                className={editorMode === "source" ? "secondaryButton compactButton activeToggle" : "secondaryButton compactButton"}
+                type="button"
+                onClick={() => onEditorModeChange("source")}
+              >
+                源文
+              </button>
+              <button
+                className={editorMode === "preview" ? "secondaryButton compactButton activeToggle" : "secondaryButton compactButton"}
+                type="button"
+                onClick={() => onEditorModeChange("preview")}
+              >
+                预览
+              </button>
+              <button className="primaryButton compactButton" type="button" disabled={isSubmitting} onClick={onSaveDraftVersion}>
+                保存草稿版本
+              </button>
+            </div>
+            {editorMode === "source" ? (
+              <label className="toolbarField skillEditorSource">
+                <span className="controlLabel">Skill 源文</span>
+                <textarea
+                  aria-label="Skill 源文"
+                  value={editorContent}
+                  onChange={(event) => onEditorChange(event.target.value)}
+                />
+              </label>
+            ) : (
+              <div className="skillEditorPreview" aria-label="Skill 预览">
+                {renderSkillMarkdownPreview(editorContent)}
+              </div>
+            )}
+          </div>
+        ) : null}
       </div>
 
       <div className="detailBlock">
@@ -846,6 +962,72 @@ function Metric({ label, value, tone }: { label: string; value: number; tone: st
       <strong>{value}</strong>
     </div>
   );
+}
+
+async function fetchSkillDetailWithFiles(skillId: string): Promise<{
+  nextDetail: SkillDetailResponse;
+  nextFiles: SkillFile[];
+}> {
+  const nextDetail = await fetchJson<SkillDetailResponse>(`/api/skills/${encodeURIComponent(skillId)}`);
+  const nextVersion = nextDetail.versions[0];
+  const nextFiles = nextVersion
+    ? (await fetchJson<{ files?: SkillFile[] }>(
+        `/api/skills/${encodeURIComponent(skillId)}/versions/${encodeURIComponent(nextVersion.id)}/files`,
+      )).files ?? nextDetail.files ?? []
+    : [];
+  return { nextDetail, nextFiles };
+}
+
+function readEditableSkillContent(files: SkillFile[]): string {
+  return files.find((file) => file.path === "SKILL.md")?.content ?? files[0]?.content ?? "";
+}
+
+function renderSkillMarkdownPreview(content: string) {
+  const lines = stripFrontmatter(content).split(/\r?\n/);
+  const nodes: ReactNode[] = [];
+  let paragraph: string[] = [];
+
+  function flushParagraph(key: string) {
+    if (paragraph.length === 0) return;
+    nodes.push(<p key={key}>{paragraph.join(" ")}</p>);
+    paragraph = [];
+  }
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]?.trim() ?? "";
+    if (!line) {
+      flushParagraph(`p-${index}`);
+      continue;
+    }
+    const heading = line.match(/^(#{1,3})\s+(.+)$/);
+    if (heading) {
+      flushParagraph(`p-${index}`);
+      const level = heading[1].length;
+      const text = heading[2];
+      if (level === 1) nodes.push(<h1 key={`h-${index}`}>{text}</h1>);
+      else if (level === 2) nodes.push(<h2 key={`h-${index}`}>{text}</h2>);
+      else nodes.push(<h3 key={`h-${index}`}>{text}</h3>);
+      continue;
+    }
+    const bullet = line.match(/^[-*]\s+(.+)$/);
+    if (bullet) {
+      flushParagraph(`p-${index}`);
+      nodes.push(<p className="skillPreviewBullet" key={`b-${index}`}>{bullet[1]}</p>);
+      continue;
+    }
+    paragraph.push(line);
+  }
+  flushParagraph("p-end");
+
+  return nodes.length > 0 ? nodes : <p className="mutedText">暂无可预览内容。</p>;
+}
+
+function stripFrontmatter(content: string): string {
+  const lines = content.split(/\r?\n/);
+  if (lines[0]?.trim() !== "---") return content;
+  const endIndex = lines.findIndex((line, index) => index > 0 && line.trim() === "---");
+  if (endIndex < 0) return content;
+  return lines.slice(endIndex + 1).join("\n");
 }
 
 async function fetchJson<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {

@@ -91,6 +91,46 @@ export function createSkillHttpApiHandler(options: SkillHttpApiHandlerOptions): 
       return;
     }
 
+    const draftVersionMatch = requestUrl.pathname.match(/^\/api\/skills\/([^/]+)\/versions$/);
+    if (request.method === "POST" && draftVersionMatch) {
+      const session = await requireSession(request, response, options);
+      if (!session) return;
+      const skillId = decodeURIComponent(draftVersionMatch[1] ?? "");
+      const detail = await options.skillStore.readSkillDetail({ skillId });
+      if (!detail) {
+        sendJson(response, 404, { error: "skill_not_found" });
+        return;
+      }
+      const membership = readOrganizationMembership(session, detail.skill.organizationId);
+      if (!ensureOrganizationMember(response, detail.skill.organizationId, membership)) return;
+      if (!(await canEditSkill(options, session, membership, detail.skill.organizationId, detail.skill.id))) {
+        sendJson(response, 403, { error: "forbidden" });
+        return;
+      }
+      const body = await readJsonBody(request);
+      try {
+        const skillPackage = await createPackageFromRequest(body, options.fetch, "manual_edit");
+        const draft = await options.skillStore.createSkillDraftVersion({
+          createdByUserId: session.user.id,
+          package: skillPackage,
+          skillId: detail.skill.id,
+          summary: readString(body, "summary") || undefined,
+        });
+        sendJson(response, 201, draft);
+      } catch (error) {
+        if (error instanceof SkillPackageValidationError) {
+          sendJson(response, 422, { error: "skill_package_blocked", validation: error.validation });
+          return;
+        }
+        if (error instanceof UnsupportedSkillSourceError) {
+          sendJson(response, 400, { error: "unsupported_skill_source", message: error.message });
+          return;
+        }
+        throw error;
+      }
+      return;
+    }
+
     const filesMatch = requestUrl.pathname.match(/^\/api\/skills\/([^/]+)\/versions\/([^/]+)\/files$/);
     if (request.method === "GET" && filesMatch) {
       const session = await requireSession(request, response, options);
@@ -141,14 +181,18 @@ export function createSkillHttpApiHandler(options: SkillHttpApiHandlerOptions): 
   };
 }
 
-async function createPackageFromRequest(body: unknown, fetchImpl?: typeof fetch) {
+async function createPackageFromRequest(
+  body: unknown,
+  fetchImpl?: typeof fetch,
+  markdownSourceType: SkillPackageSource["type"] = "upload_md",
+) {
   const source = readObject(body, "source");
   const type = readString(source, "type");
   if (type === "markdown" || type === "upload_md") {
     return createSkillPackageFromMarkdown({
       content: readRawString(source, "content"),
       filename: readString(source, "filename") || undefined,
-      source: createSource(source, "upload_md"),
+      source: createSource(source, markdownSourceType),
     });
   }
   if (type === "zip" || type === "upload_zip") {
@@ -207,6 +251,24 @@ async function canViewSkill(
     organizationId,
     organizationRole: membership.role,
     permission: "view",
+    resourceId: skillId,
+    resourceType: "skill",
+    userId: session.user.id,
+  });
+}
+
+async function canEditSkill(
+  options: SkillHttpApiHandlerOptions,
+  session: AuthSessionContext,
+  membership: AuthOrganizationMembership,
+  organizationId: string,
+  skillId: string,
+): Promise<boolean> {
+  if (!options.governanceStore) return true;
+  return options.governanceStore.hasResourcePermission({
+    organizationId,
+    organizationRole: membership.role,
+    permission: "edit",
     resourceId: skillId,
     resourceType: "skill",
     userId: session.user.id,

@@ -750,6 +750,10 @@ h1 {
   padding: 0 10px;
 }
 
+.activeToggle {
+  background: var(--lorume-color-yellow);
+}
+
 .quickRangeButton {
   border: 0;
   color: var(--lorume-color-ink);
@@ -1596,6 +1600,67 @@ button.tableRow:hover,
   flex-wrap: wrap;
   gap: 8px;
   margin-left: 8px;
+}
+
+.skillEditor {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.skillEditorToolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.skillEditorSource textarea {
+  font-family: var(--font-mono);
+  min-height: 300px;
+  white-space: pre-wrap;
+}
+
+.skillEditorPreview {
+  background: var(--lorume-color-field);
+  border: var(--lorume-border-thin);
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+  padding: 14px;
+}
+
+.skillEditorPreview h1,
+.skillEditorPreview h2,
+.skillEditorPreview h3,
+.skillEditorPreview p {
+  color: var(--lorume-color-ink);
+  font-family: var(--font-sans);
+  margin: 0;
+}
+
+.skillEditorPreview h1 {
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.skillEditorPreview h2 {
+  font-size: 17px;
+}
+
+.skillEditorPreview h3 {
+  font-size: 15px;
+}
+
+.skillEditorPreview p {
+  color: var(--lorume-color-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.skillPreviewBullet::before {
+  content: "- ";
 }
 
 .skillTargetSet {

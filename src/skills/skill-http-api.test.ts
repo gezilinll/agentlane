@@ -179,6 +179,99 @@ compatibility: openclaw
       await database.drop();
     }
   });
+
+  it("creates draft versions for editable organization Skills", async () => {
+    const database = await createTemporaryPostgresDatabase();
+    try {
+      runMigrationsScript(database.url);
+      const authStore = createPostgresAuthStore({ connectionString: database.url });
+      const skillStore = createPostgresSkillStore({ connectionString: database.url });
+      try {
+        const user = await authStore.upsertUserForEmail("skill-draft-editor@example.com");
+        const organization = await authStore.createOrganization({
+          createdByUserId: user.id,
+          name: "Draft Org",
+          slug: "draft-org",
+        });
+        const session: AuthSessionContext = {
+          id: "ses_test",
+          organizations: await authStore.listOrganizationsForUser(user.id),
+          user,
+        };
+        const { baseUrl } = await startSkillApi({
+          requireUserSession: async () => session,
+          skillStore,
+        });
+        const importResponse = await postJson(`${baseUrl}/api/skills/import`, {
+          organizationId: organization.id,
+          source: {
+            content: `---
+name: Draftable Skill
+description: First version.
+license: MIT
+compatibility: openclaw
+---
+
+# Draftable Skill
+`,
+            type: "markdown",
+          },
+        });
+        const imported = await importResponse.json();
+
+        const draftResponse = await postJson(`${baseUrl}/api/skills/${encodeURIComponent(imported.skill.id)}/versions`, {
+          source: {
+            content: `---
+name: Draftable Skill
+description: Edited version.
+license: MIT
+compatibility: openclaw
+---
+
+# Draftable Skill
+
+Edited in Lorume.
+`,
+            filename: "SKILL.md",
+            type: "markdown",
+          },
+          summary: "Edit guidance",
+        });
+        const draft = await draftResponse.json();
+        const detailResponse = await fetch(`${baseUrl}/api/skills/${encodeURIComponent(imported.skill.id)}`);
+
+        expect(draftResponse.status).toBe(201);
+        expect(draft).toMatchObject({
+          skill: expect.objectContaining({
+            description: "Edited version.",
+            id: imported.skill.id,
+            slug: "draftable-skill",
+          }),
+          version: expect.objectContaining({
+            publishedAt: null,
+            validationStatus: "passed",
+            version: "2",
+          }),
+        });
+        await expect(detailResponse.json()).resolves.toMatchObject({
+          versions: [
+            expect.objectContaining({ id: draft.version.id, version: "2" }),
+            expect.objectContaining({ id: imported.version.id, version: "1" }),
+          ],
+          files: [
+            expect.objectContaining({
+              content: expect.stringContaining("Edited in Lorume."),
+              path: "SKILL.md",
+            }),
+          ],
+        });
+      } finally {
+        await Promise.all([authStore.close(), skillStore.close()]);
+      }
+    } finally {
+      await database.drop();
+    }
+  });
 });
 
 async function startSkillApi(options: Parameters<typeof createSkillHttpApiHandler>[0]) {

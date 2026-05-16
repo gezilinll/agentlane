@@ -24,12 +24,12 @@ Current source of truth:
 - `docs/product/notification-spec.md`: product spec for in-app and email notifications, recipient scope, dedupe, rate limits, and recovery notifications.
 - `src/skills/skill-package.ts`: deterministic Skill package normalization and static validation for Markdown, ZIP, GitHub URL, and Marketplace URL imports.
 - `src/skills/skill-store.ts`: Postgres repository for organization-owned Skill copies, versions, and files.
-- `src/skills/skill-http-api.ts`: organization-scoped Skill import, list, detail, and version-file HTTP API.
+- `src/skills/skill-http-api.ts`: organization-scoped Skill import, draft-version edit, list, detail, and version-file HTTP API.
 - `src/skills/skill-governance-store.ts`: Postgres repository for Skill resource permissions, approval requests, and target assignments.
 - `src/skills/skill-governance-http-api.ts`: Skill governance HTTP API for permission grants, publish approvals, approval decisions, target assignment requests, and target Skill Set queries.
 - `src/skills/skill-operation-handlers.ts`: executable Skill Operation handlers that apply approved publish, assignment, and deterministic target sync jobs to the governance store and device control channel.
 - `src/skills/skill-effective.ts`: TypeScript source of truth for resolving explicit Device / Runtime / Agent Skill assignments into a target Skill set; organization Skills are reusable assets and do not default-apply.
-- `src/skills/SkillRegistryPage.tsx`: protected Skill Registry page for organization Skill import, detail, publish, assignment, target Skill Set display, target sync, Operation, approval, and notification status.
+- `src/skills/SkillRegistryPage.tsx`: protected Skill Registry page for organization Skill import, source edit/preview, draft-version save, detail, publish, assignment, target Skill Set display, target sync, Operation, approval, and notification status.
 - `src/operations/operation-store.ts`: Postgres repository for asynchronous Operations and executable Jobs.
 - `src/operations/operation-http-api.ts`: authenticated Operation query API for user-visible asynchronous status and job details.
 - `src/operations/job-runner.ts`: minimal backend job runner over OperationStore claim, lease, handler, retry, and completion semantics.
