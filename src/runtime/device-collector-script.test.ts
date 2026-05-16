@@ -1577,10 +1577,121 @@ description: Review runtime changes.
         type: "command.result",
         result: {
           skillSlug: "shared-skill",
+          targetRootMode: "configured_root",
           writtenFiles: 1,
         },
       });
       expect(readFileSync(writtenSkillPath, "utf8")).toBe("# Shared Skill\n");
+    } finally {
+      child.kill();
+      controlServer.close();
+    }
+  });
+
+  it("writes Skill sync command files into an exact target sync root", async () => {
+    const targetId = "fixture-mac:openclaw:gateway-local:agent:main";
+    const controlServer = await startSkillSyncControlServer({
+      targetId,
+      targetType: "agent",
+    });
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-skill-sync-target-home-"));
+    const configDir = mkdtempSync(path.join(tmpdir(), "lorume-skill-sync-target-config-"));
+    const targetRoot = path.join(fakeHome, "openclaw-main-skills");
+    const fallbackRoot = path.join(fakeHome, "fallback-skills");
+    const configPath = path.join(configDir, "config.json");
+    writeFileSync(configPath, JSON.stringify({
+      intervalMs: 100000,
+      skillSyncRoot: fallbackRoot,
+      serverUrl: controlServer.baseUrl,
+      skillSyncTargets: [
+        {
+          root: targetRoot,
+          targetId,
+          targetType: "agent",
+        },
+      ],
+    }));
+    const child = spawn(process.execPath, [
+      collectorScript,
+      "--fixture",
+      fixturePath,
+      "--config",
+      configPath,
+      "--interval-ms",
+      "100000",
+    ], {
+      env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    try {
+      const result = await controlServer.skillSyncResult;
+
+      expect(result.commandResult).toMatchObject({
+        commandId: "cmd-skill-sync-1",
+        deviceId: "fixture-mac",
+        status: "succeeded",
+        result: {
+          skillSlug: "shared-skill",
+          targetRootMode: "configured_target",
+          writtenFiles: 1,
+        },
+      });
+      expect(readFileSync(path.join(targetRoot, "shared-skill", "SKILL.md"), "utf8")).toBe("# Shared Skill\n");
+      expect(existsSync(path.join(fallbackRoot, "shared-skill", "SKILL.md"))).toBe(false);
+    } finally {
+      child.kill();
+      controlServer.close();
+    }
+  });
+
+  it("resolves Skill sync target roots from runtime and agent external ids", async () => {
+    const targetId = "fixture-mac:openclaw:gateway-local:agent:main";
+    const controlServer = await startSkillSyncControlServer({
+      targetId,
+      targetType: "agent",
+    });
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-skill-sync-external-home-"));
+    const configDir = mkdtempSync(path.join(tmpdir(), "lorume-skill-sync-external-config-"));
+    const targetRoot = path.join(fakeHome, "external-main-skills");
+    const configPath = path.join(configDir, "config.json");
+    writeFileSync(configPath, JSON.stringify({
+      intervalMs: 100000,
+      serverUrl: controlServer.baseUrl,
+      skillSyncTargets: [
+        {
+          agentExternalId: "main",
+          root: targetRoot,
+          runtimeExternalId: "gateway-local",
+          source: "openclaw",
+          targetType: "agent",
+        },
+      ],
+    }));
+    const child = spawn(process.execPath, [
+      collectorScript,
+      "--fixture",
+      fixturePath,
+      "--config",
+      configPath,
+      "--interval-ms",
+      "100000",
+    ], {
+      env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    try {
+      const result = await controlServer.skillSyncResult;
+
+      expect(result.commandResult).toMatchObject({
+        status: "succeeded",
+        result: {
+          targetRootMode: "configured_target",
+          writtenFiles: 1,
+        },
+      });
+      expect(readFileSync(path.join(targetRoot, "shared-skill", "SKILL.md"), "utf8")).toBe("# Shared Skill\n");
     } finally {
       child.kill();
       controlServer.close();
@@ -2366,7 +2477,11 @@ async function startControlServer(options: {
   };
 }
 
-async function startSkillSyncControlServer(options: { contentHash?: string } = {}): Promise<{
+async function startSkillSyncControlServer(options: {
+  contentHash?: string;
+  targetId?: string;
+  targetType?: "device" | "runtime" | "agent";
+} = {}): Promise<{
   baseUrl: string;
   close: () => void;
   skillSyncResult: Promise<{
@@ -2430,8 +2545,8 @@ async function startSkillSyncControlServer(options: { contentHash?: string } = {
               skillId: "skill_1",
               skillSlug: "shared-skill",
               skillVersionId: "version_1",
-              targetId: "fixture-mac",
-              targetType: "device",
+              targetId: options.targetId ?? "fixture-mac",
+              targetType: options.targetType ?? "device",
             },
             type: "skill.sync",
           }));

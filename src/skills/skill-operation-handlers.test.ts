@@ -106,7 +106,9 @@ describe("Skill operation job handlers", () => {
     }));
     expect(controlChannel.requestSkillSync).toHaveBeenCalledWith("fixture-mac", expect.objectContaining({
       files: [expect.objectContaining({ path: "SKILL.md" })],
+      packageHash: "sha256:package",
       skillSlug: "shared-skill",
+      targetId: "fixture-mac:codex:local:agent:main",
       targetType: "agent",
     }));
     expect(governanceStore.finishSkillSyncJob).toHaveBeenCalledWith({

@@ -2630,7 +2630,8 @@ function writeSkillSyncPayload(config, payload) {
   const files = Array.isArray(payload.files) ? payload.files : [];
   if (!files.length) throw new Error("skill.sync files required");
 
-  const root = path.resolve(config.skillSyncRoot || path.join(homeDir(), ".lorume", "skills"));
+  const rootResolution = resolveSkillSyncRoot(config, payload);
+  const root = rootResolution.root;
   const targetDir = path.join(root, skillSlug);
   const tempDir = path.join(root, `.${skillSlug}.${process.pid}.${Date.now()}.tmp`);
   mkdirSync(root, { recursive: true });
@@ -2652,8 +2653,78 @@ function writeSkillSyncPayload(config, payload) {
     assignmentId: payload.assignmentId,
     skillSlug,
     targetPath: targetDir,
+    targetRootMode: rootResolution.mode,
     writtenFiles: files.length,
   };
+}
+
+function resolveSkillSyncRoot(config, payload) {
+  const target = findConfiguredSkillSyncTarget(config.skillSyncTargets, payload);
+  if (target) {
+    return {
+      mode: "configured_target",
+      root: path.resolve(target.root),
+    };
+  }
+  if (typeof config.skillSyncRoot === "string" && config.skillSyncRoot.trim()) {
+    return {
+      mode: "configured_root",
+      root: path.resolve(config.skillSyncRoot),
+    };
+  }
+  return {
+    mode: "collector_default",
+    root: path.join(homeDir(), ".lorume", "skills"),
+  };
+}
+
+function findConfiguredSkillSyncTarget(targets, payload) {
+  if (!Array.isArray(targets)) return null;
+  for (const target of targets) {
+    if (!target || typeof target !== "object") continue;
+    if (typeof target.root !== "string" || !target.root.trim()) continue;
+    if (skillSyncTargetMatches(target, payload)) return target;
+  }
+  return null;
+}
+
+function skillSyncTargetMatches(target, payload) {
+  const payloadTargetType = payload.targetType === "device" || payload.targetType === "runtime" || payload.targetType === "agent"
+    ? payload.targetType
+    : "";
+  const payloadTargetId = typeof payload.targetId === "string" ? payload.targetId.trim() : "";
+  if (!payloadTargetId) return false;
+
+  if (target.targetType && target.targetType !== payloadTargetType) return false;
+  if (typeof target.targetId === "string" && target.targetId.trim()) {
+    return target.targetId.trim() === payloadTargetId;
+  }
+  if (typeof target.runtimeId === "string" && target.runtimeId.trim() && target.runtimeId.trim() === payloadTargetId) return true;
+  if (typeof target.agentId === "string" && target.agentId.trim() && target.agentId.trim() === payloadTargetId) return true;
+
+  const parsed = parseSkillSyncTargetId(payloadTargetId);
+  const source = normalizeOptionalSkillSyncId(target.source);
+  const runtimeExternalId = normalizeOptionalSkillSyncId(target.runtimeExternalId);
+  const agentExternalId = normalizeOptionalSkillSyncId(target.agentExternalId);
+  if (!source && !runtimeExternalId && !agentExternalId) return false;
+  if (source && parsed.source !== source) return false;
+  if (runtimeExternalId && parsed.runtimeExternalId !== runtimeExternalId) return false;
+  if (agentExternalId && parsed.agentExternalId !== agentExternalId) return false;
+  return true;
+}
+
+function parseSkillSyncTargetId(targetId) {
+  const parts = String(targetId || "").split(":");
+  const agentMarkerIndex = parts.indexOf("agent");
+  return {
+    source: sanitizeId(parts[1] || ""),
+    runtimeExternalId: sanitizeId(parts[2] || ""),
+    agentExternalId: agentMarkerIndex >= 0 ? sanitizeId(parts[agentMarkerIndex + 1] || "") : "",
+  };
+}
+
+function normalizeOptionalSkillSyncId(value) {
+  return typeof value === "string" && value.trim() ? sanitizeId(value) : "";
 }
 
 function writeSkillSyncFile(root, file) {
