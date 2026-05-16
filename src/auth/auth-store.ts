@@ -68,6 +68,8 @@ export interface AuthStore {
   revokeSession: (sessionHash: string) => Promise<void>;
   createOrganization: (input: { createdByUserId: string; name: string; slug: string }) => Promise<AuthOrganization>;
   listOrganizationsForUser: (userId: string) => Promise<AuthOrganizationMembership[]>;
+  /** Returns active organization owners and admins for infrastructure notifications and admin-only actions. */
+  listOrganizationAdminUserIds: (organizationId: string) => Promise<string[]>;
   createInvitation: (input: {
     email: string;
     expiresAt: Date;
@@ -230,6 +232,17 @@ export function createPostgresAuthStore(options: PostgresAuthStoreOptions = {}):
     },
     listOrganizationsForUser(userId) {
       return listOrganizationsForUser(pool, userId);
+    },
+    async listOrganizationAdminUserIds(organizationId) {
+      const result = await pool.query<{ userId: string }>(`
+        SELECT user_id AS "userId"
+        FROM organization_members
+        WHERE organization_id = $1
+          AND status = 'active'
+          AND role IN ('owner', 'admin')
+        ORDER BY updated_at ASC, id ASC
+      `, [organizationId]);
+      return result.rows.map((row) => row.userId);
     },
     async createInvitation(input) {
       const result = await pool.query<{

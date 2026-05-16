@@ -81,6 +81,7 @@ Collector 保持主动上报：
 - Work state 里的 `workItemId`、`conversationId` 等可选关联必须以当前快照中真实存在的对象为准。缺失的可选关联写成 `NULL`，不能因为单个平台的关联证据不完整而拒绝整批工作态上报。
 - Work state 里的 `runtimeId`、`agentId` 也必须按当前设备已注册对象校验。会话和工作项的陈旧 `runtimeId` / `agentId` 降级为 `NULL`；执行记录的 `runtimeId` 是必填外键，若 runtime 不存在则跳过该 execution，并在本次 ingestion 数量中反映实际写入数量。
 - 每次上报必须写 `collector_ingestions`，记录设备、类型、状态、对象数量、warnings、错误摘要和接收时间。
+- 认证后的 inventory / work-state 上报失败除了写入 `collector_ingestions`，还必须进入统一 Notification 模型，按设备和 snapshot type 聚合为 runtime warning，接收人为所属组织 active owner / admin。
 - Collector 上报 inventory / work-state 时遇到网络错误或后端 `5xx` 可以做有限重试；`4xx` 代表 payload 或权限问题，不应通过重试掩盖。
 - 设备 WebSocket 在线只表示控制面可达，不等于 inventory / work-state 采集健康。采集健康必须从 `collector_ingestions` 中最近一次 inventory 与 work-state 记录独立判断。
 - 后续 collector 可演进为增量采集，但第一版可以先复用现有采集结果，由后端通过 upsert 去重。
@@ -184,6 +185,7 @@ ECS 部署形态：
 - control channel harness：WebSocket hello、heartbeat、refresh command lifecycle 继续可用。
 - operation runner harness：Postgres Job claim、lease、retry、完成态和失败态。
 - notification harness：事件聚合、限流、in-app 记录和 email delivery 记录。
+- collector notification harness：认证后的 collector payload 失败会写 ingestion 记录并生成限流后的 runtime warning 通知。
 - collector contract harness：现有 collector 上报 payload 仍可被后端接收。
 - deploy config harness：backend bundle、Dockerfile、Nginx、production-like compose 必须和当前服务入口一致。
 - production smoke harness：`npm run smoke:production` 检查 `/healthz`、`/readyz`、Runtime Fleet、Work Items 和设备采集健康查询。

@@ -156,6 +156,12 @@ export function createLorumeBackendServer(
     controlChannel,
     workStateStore,
     postgresStore: postgresStore ?? undefined,
+    collectorNotifications: authStore && notificationStore
+      ? {
+        createNotificationEvent: notificationStore.createNotificationEvent,
+        listRecipientUserIds: (organizationId) => authStore.listOrganizationAdminUserIds(organizationId),
+      }
+      : undefined,
   });
   const skillHandler = authGuards && skillStore
     ? createSkillHttpApiHandler({

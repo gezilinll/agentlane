@@ -103,6 +103,12 @@ Notification Preference 是用户或组织对通知的基础偏好。
 organizationId + sourceModule + resourceType + resourceId + eventType + severity
 ```
 
+Collector 上报失败使用稳定聚合键：
+
+```text
+runtime:collector:${deviceId}:${snapshotType}:failed
+```
+
 规则：
 
 - 相同 `dedupeKey` 的事件进入同一个 Notification Thread。
@@ -184,9 +190,17 @@ organizationId + sourceModule + resourceType + resourceId + eventType + severity
 
 - Device owner。
 - Runtime owner。
-- 组织 admin，限持续失败或 critical 场景。
+- 组织 owner / admin，限采集失败、持续失败或 critical 场景。
 
 普通数据同步完成默认只进入 in-app，不主动发 email。人工触发的刷新、迁移或下发完成可以发 email 给申请人。
+
+Collector 上报失败进入统一通知模型：
+
+- Inventory 上报失败生成 `collector_inventory_failed`。
+- Work-state 上报失败生成 `collector_work_state_failed`。
+- 事件由认证后的 device token 解析组织，接收人为该组织 active owner / admin。
+- 事件关联 `resourceType=device` 和上报 payload 中的 `deviceId`；如果 payload 无法解析设备 ID，使用 `unknown` 作为可排查占位。
+- 摘要只包含设备 ID、采集类型和截断后的错误摘要，不包含原始 payload、token、外部平台返回体或调试-only 字段。
 
 ### Approval
 
@@ -296,6 +310,7 @@ Operation 集成 API：
 业务集成：
 
 - Skill 下发失败不会每次重试都发新邮件。
+- 认证后的 Collector inventory / work-state 上报失败会聚合为 runtime warning 通知，并按 `30min` 邮件冷却投递给组织 owner / admin。
 - Device 离线持续发生时只按阈值升级通知。
 - Migration 成功、失败、需要手动处理会通知申请人。
 - Approval 待处理会通知审批人，通过或拒绝会通知申请人。

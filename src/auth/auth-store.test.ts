@@ -46,6 +46,7 @@ describeDb("Postgres auth store", () => {
         await expect(store.listOrganizationsForUser(user.id)).resolves.toEqual([
           expect.objectContaining({ organizationId: organization.id, role: "owner" }),
         ]);
+        await expect(store.listOrganizationAdminUserIds(organization.id)).resolves.toEqual([user.id]);
 
         const invitedUser = await store.upsertUserForEmail("juanbai@gaoding.com");
         const invitationTokenHash = hashSecret("invite-token", "invitation-token", "test-pepper");
@@ -64,6 +65,26 @@ describeDb("Postgres auth store", () => {
           userId: invitedUser.id,
         });
         expect(accepted).toMatchObject({ organizationId: organization.id, role: "admin" });
+        const memberUser = await store.upsertUserForEmail("member@gaoding.com");
+        const memberInvitationTokenHash = hashSecret("member-invite-token", "invitation-token", "test-pepper");
+        await store.createInvitation({
+          email: "member@gaoding.com",
+          expiresAt: new Date("2026-05-13T10:00:00.000Z"),
+          invitedByUserId: user.id,
+          organizationId: organization.id,
+          role: "member",
+          tokenHash: memberInvitationTokenHash,
+        });
+        await store.acceptInvitation({
+          email: "member@gaoding.com",
+          now,
+          tokenHash: memberInvitationTokenHash,
+          userId: memberUser.id,
+        });
+        await expect(store.listOrganizationAdminUserIds(organization.id)).resolves.toEqual([
+          user.id,
+          invitedUser.id,
+        ]);
 
         const sessionHash = hashSecret("session-token", "session-token", "test-pepper");
         const session = await store.createSession({

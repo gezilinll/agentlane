@@ -4,7 +4,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import fixtureSnapshot from "../../fixtures/runtime/collector-snapshot.sample.json";
+import { createPostgresAuthStore } from "../auth/auth-store";
 import type { RuntimeInventorySnapshot, RuntimeWorkStateSnapshot } from "../runtime";
+import { createPostgresNotificationStore } from "../notifications/notification-store";
 import { createTemporaryPostgresDatabase, runMigrationsScript, shouldRunPostgresTests } from "../test/postgres";
 import { createPostgresStore, type PostgresStore } from "./postgres-store";
 import { createRuntimeControlChannel } from "./runtime-control-channel";
@@ -158,9 +160,70 @@ describeDb("runtime HTTP API with Postgres store", () => {
       await database.drop();
     }
   });
+
+  it("creates a runtime notification when authenticated collector ingestion fails", async () => {
+    const database = await createTemporaryPostgresDatabase();
+    try {
+      runMigrationsScript(database.url);
+      const authStore = createPostgresAuthStore({ connectionString: database.url });
+      const notificationStore = createPostgresNotificationStore({ connectionString: database.url });
+      const postgresStore = createPostgresStore({ connectionString: database.url });
+      try {
+        const user = await authStore.upsertUserForEmail("collector-owner@example.com");
+        const organization = await authStore.createOrganization({
+          createdByUserId: user.id,
+          name: "Collector Owner Team",
+          slug: "collector-owner-team",
+        });
+        const { baseUrl } = await startRuntimeApi(postgresStore, {
+          auth: {
+            requireDeviceToken: async () => ({ organizationId: organization.id }),
+          },
+          collectorNotifications: {
+            createNotificationEvent: notificationStore.createNotificationEvent,
+            listRecipientUserIds: (organizationId) => authStore.listOrganizationAdminUserIds(organizationId),
+          },
+        });
+
+        const response = await postJson(`${baseUrl}/api/device-snapshots`, {
+          observedAt: "2026-05-10T10:00:00.000Z",
+          device: { id: "broken-device" },
+        });
+        const threads = await notificationStore.listThreads({
+          organizationId: organization.id,
+          recipientUserId: user.id,
+        });
+        const deliveries = threads[0]
+          ? await notificationStore.listDeliveries({ threadId: threads[0].id })
+          : [];
+
+        expect(response.status).toBe(400);
+        expect(threads).toEqual([
+          expect.objectContaining({
+            dedupeKey: "runtime:collector:broken-device:inventory:failed",
+            eventType: "collector_inventory_failed",
+            resourceId: "broken-device",
+            resourceType: "device",
+            title: "设备资产采集失败",
+          }),
+        ]);
+        expect(deliveries).toEqual(expect.arrayContaining([
+          expect.objectContaining({ channel: "in_app", recipientUserId: user.id, status: "sent" }),
+          expect.objectContaining({ channel: "email", recipientUserId: user.id, status: "pending" }),
+        ]));
+      } finally {
+        await Promise.all([authStore.close(), notificationStore.close(), postgresStore.close()]);
+      }
+    } finally {
+      await database.drop();
+    }
+  });
 });
 
-async function startRuntimeApi(postgresStore: PostgresStore) {
+async function startRuntimeApi(
+  postgresStore: PostgresStore,
+  options: Pick<Parameters<typeof createRuntimeHttpApiHandler>[0], "auth" | "collectorNotifications"> = {},
+) {
   const dataDir = mkdtempSync(path.join(tmpdir(), "lorume-runtime-api-postgres-"));
   const store = createRuntimeInventoryStore({
     snapshotPath: path.join(dataDir, "latest.json"),
@@ -169,7 +232,14 @@ async function startRuntimeApi(postgresStore: PostgresStore) {
     snapshotPath: path.join(dataDir, "work-state-latest.json"),
   });
   const controlChannel = createRuntimeControlChannel({ store });
-  const handler = createRuntimeHttpApiHandler({ store, controlChannel, workStateStore, postgresStore });
+  const handler = createRuntimeHttpApiHandler({
+    auth: options.auth,
+    store,
+    controlChannel,
+    workStateStore,
+    postgresStore,
+    collectorNotifications: options.collectorNotifications,
+  });
   const server = createServer((request, response) => {
     void handler(request, response, () => {
       response.statusCode = 404;

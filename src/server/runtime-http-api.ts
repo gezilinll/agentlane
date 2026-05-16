@@ -3,6 +3,7 @@ import type { RuntimeControlChannel } from "./runtime-control-channel";
 import type { RuntimeInventoryStore } from "./runtime-inventory-store";
 import type { PostgresStore } from "./postgres-store";
 import type { RuntimeWorkStateStore } from "./runtime-work-state-store";
+import type { CreateNotificationEventInput } from "../notifications/notification-store";
 
 const maxJsonBodyChars = 10_000_000;
 
@@ -21,6 +22,11 @@ export interface RuntimeHttpApiHandlerOptions {
   workStateStore?: RuntimeWorkStateStore;
   /** Optional Postgres-backed formal repository. */
   postgresStore?: PostgresStore;
+  /** Optional notification integration for collector ingestion health events. */
+  collectorNotifications?: {
+    createNotificationEvent: (input: CreateNotificationEventInput) => Promise<unknown>;
+    listRecipientUserIds: (organizationId: string, deviceId: string) => Promise<string[]>;
+  };
 }
 
 /** Node/Vite middleware-style next callback. */
@@ -108,7 +114,8 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
     }
 
     if (request.method === "POST" && requestUrl.pathname === "/api/device-snapshots") {
-      if (!(await authorizeDeviceWrite(options, request, response))) return;
+      const deviceAuth = await authorizeDeviceWrite(options, request, response);
+      if (deviceAuth === null) return;
       let body: unknown = undefined;
       try {
         body = await readJsonBody(request);
@@ -121,6 +128,7 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
         });
       } catch (error) {
         await recordFailedCollectorIngestion(options, "inventory", body, error);
+        await notifyFailedCollectorIngestion(options, "inventory", body, error, deviceAuth);
         sendJson(response, statusCodeForWriteError(error), {
           error: error instanceof Error ? error.message : "invalid snapshot",
         });
@@ -129,7 +137,8 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
     }
 
     if (request.method === "POST" && requestUrl.pathname === "/api/runtime-work-state-snapshots") {
-      if (!(await authorizeDeviceWrite(options, request, response))) return;
+      const deviceAuth = await authorizeDeviceWrite(options, request, response);
+      if (deviceAuth === null) return;
       if (!options.workStateStore) {
         sendJson(response, 503, { error: "work_state_store_unavailable" });
         return;
@@ -146,6 +155,7 @@ export function createRuntimeHttpApiHandler(options: RuntimeHttpApiHandlerOption
         });
       } catch (error) {
         await recordFailedCollectorIngestion(options, "work_state", body, error);
+        await notifyFailedCollectorIngestion(options, "work_state", body, error, deviceAuth);
         sendJson(response, statusCodeForWriteError(error), {
           error: error instanceof Error ? error.message : "invalid runtime work state snapshot",
         });
@@ -236,12 +246,12 @@ async function authorizeDeviceWrite(
   options: RuntimeHttpApiHandlerOptions,
   request: IncomingMessage,
   response: ServerResponse,
-): Promise<boolean> {
-  if (!options.auth?.requireDeviceToken) return true;
+): Promise<unknown | null> {
+  if (!options.auth?.requireDeviceToken) return undefined;
   const deviceToken = await options.auth.requireDeviceToken(request);
-  if (deviceToken) return true;
+  if (deviceToken) return deviceToken;
   sendJson(response, 401, { error: "invalid_device_token" });
-  return false;
+  return null;
 }
 
 async function recordFailedCollectorIngestion(
@@ -257,6 +267,52 @@ async function recordFailedCollectorIngestion(
     observedAt: extractObservedAt(body),
     snapshotType,
   }).catch(() => undefined);
+}
+
+async function notifyFailedCollectorIngestion(
+  options: RuntimeHttpApiHandlerOptions,
+  snapshotType: "inventory" | "work_state",
+  body: unknown,
+  error: unknown,
+  deviceAuth: unknown,
+): Promise<void> {
+  if (!options.collectorNotifications) return;
+  const organizationId = extractOrganizationId(deviceAuth);
+  if (!organizationId) return;
+  const deviceId = extractDeviceId(snapshotType, body);
+  const recipients = uniqueNonEmptyStrings(
+    await options.collectorNotifications.listRecipientUserIds(organizationId, deviceId).catch(() => []),
+  );
+  if (recipients.length === 0) return;
+  const label = snapshotType === "inventory" ? "设备资产" : "工作态";
+  await options.collectorNotifications.createNotificationEvent({
+    dedupeKey: `runtime:collector:${deviceId}:${snapshotType}:failed`,
+    emailCooldownMs: 30 * 60 * 1000,
+    eventType: `collector_${snapshotType}_failed`,
+    organizationId,
+    recipientUserIds: recipients,
+    resourceId: deviceId,
+    resourceType: "device",
+    severity: "warning",
+    sourceModule: "runtime",
+    summary: `${deviceId} ${label}采集失败：${errorSummary(error)}`,
+    title: `${label}采集失败`,
+  }).catch(() => undefined);
+}
+
+function extractOrganizationId(deviceAuth: unknown): string | undefined {
+  if (!deviceAuth || typeof deviceAuth !== "object") return undefined;
+  const organizationId = (deviceAuth as Record<string, unknown>).organizationId;
+  return typeof organizationId === "string" && organizationId.trim() ? organizationId : undefined;
+}
+
+function uniqueNonEmptyStrings(values: string[]): string[] {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+}
+
+function errorSummary(error: unknown): string {
+  const message = error instanceof Error ? error.message : "invalid collector snapshot";
+  return message.replace(/\s+/g, " ").trim().slice(0, 200);
 }
 
 function extractDeviceId(snapshotType: "inventory" | "work_state", body: unknown): string {

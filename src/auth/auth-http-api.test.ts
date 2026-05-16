@@ -227,13 +227,23 @@ class MemoryAuthStore implements AuthStore {
     const organization = { ...input, id: `org-${++this.organizationCounter}` };
     this.organizations.push(organization);
     this.linkUserToOrganization(input.createdByUserId, organization.id);
-    this.memberships.push({ id: `${organization.id}:owner`, name: input.name, organizationId: organization.id, role: "owner", slug: input.slug });
+    const membership = { id: `${organization.id}:owner`, name: input.name, organizationId: organization.id, role: "owner" as const, slug: input.slug };
+    this.memberships.push(membership);
+    this.membershipUserIds.set(membership.id, input.createdByUserId);
     return organization;
   }
 
   async listOrganizationsForUser(userId: string): Promise<AuthOrganizationMembership[]> {
     const organizationIds = new Set(this.membershipsByUser.get(userId) ?? []);
     return this.memberships.filter((membership) => organizationIds.has(membership.organizationId));
+  }
+
+  async listOrganizationAdminUserIds(organizationId: string): Promise<string[]> {
+    const adminRoles = new Set<AuthMemberRole>(["owner", "admin"]);
+    return this.memberships
+      .filter((membership) => membership.organizationId === organizationId && adminRoles.has(membership.role))
+      .map((membership) => this.membershipUserIds.get(membership.id) ?? "")
+      .filter(Boolean);
   }
 
   async createInvitation(input: {
@@ -269,6 +279,7 @@ class MemoryAuthStore implements AuthStore {
       slug: organization.slug,
     };
     this.memberships.push(membership);
+    this.membershipUserIds.set(membership.id, input.userId);
     return membership;
   }
 
@@ -283,6 +294,7 @@ class MemoryAuthStore implements AuthStore {
   async close(): Promise<void> {}
 
   private readonly membershipsByUser = new Map<string, string[]>();
+  private readonly membershipUserIds = new Map<string, string>();
 
   private linkUserToOrganization(userId: string, organizationId: string): void {
     this.membershipsByUser.set(userId, [...(this.membershipsByUser.get(userId) ?? []), organizationId]);
