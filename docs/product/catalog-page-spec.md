@@ -4,9 +4,9 @@
 
 ## Goal
 
-实现 Lorume 第一版 Catalog / Registry 页面，让团队可以浏览第一批正式对象，理解对象类型、owner 槽位、生命周期、输入输出、触发方式、权限摘要、评测摘要、依赖关系和被使用关系。
+实现 Lorume 当前 Catalog / Registry 页面，让团队可以浏览正式对象，理解对象类型、owner 槽位、生命周期、输入输出、触发方式、权限摘要、评测摘要、依赖关系和被使用关系。
 
-页面第一版使用中文界面文案，并为后续中英文双语保留集中化文案和标签映射。
+页面使用中文界面文案，并为中英文双语保留集中化文案和标签映射。
 
 ## Non-Goals
 
@@ -14,11 +14,11 @@
 - 不接入后端服务或数据库。
 - 不实现真实权限判断、治理规则执行或运行时调度。
 - 不引入完整设计系统。
-- 不把 Personal Work Agent、Semantic Coordinator、Runtime、Eval、Role Profile、Responsibility Tag 做成第一版 Catalog 列表对象。
+- 不把 Personal Work Agent、Semantic Coordinator、Runtime、Eval、Role Profile、Responsibility Tag 做成当前 Catalog 列表对象。
 
 ## Data Contract
 
-第一版页面使用 `src/catalog/catalog-object.ts` 中的 `CatalogObject` 作为对象模型，使用 `src/catalog/catalog-seed.ts` 提供 seed data。
+页面使用 `src/catalog/catalog-object.ts` 中的 `CatalogObject` 作为对象模型，使用 `src/catalog/catalog-seed.ts` 提供 seed data。
 
 当前核心对象类型：
 

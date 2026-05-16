@@ -56,7 +56,7 @@ flowchart LR
 
 ## 数据模型
 
-第一版只保留必要表：
+当前只保留必要表：
 
 - `devices`：设备身份、hostname、OS、架构、collector 状态、最近同步和连接摘要。
 - `runtimes`：设备上的 Runtime / 平台入口，例如 OpenClaw、Multica、Codex、Slock。
@@ -84,7 +84,7 @@ Collector 保持主动上报：
 - 认证后的 inventory / work-state 上报失败除了写入 `collector_ingestions`，还必须进入统一 Notification 模型，按设备和 snapshot type 聚合为 runtime warning，接收人为所属组织 active owner / admin。
 - Collector 上报 inventory / work-state 时遇到网络错误或后端 `5xx` 可以做有限重试；`4xx` 代表 payload 或权限问题，不应通过重试掩盖。
 - 设备 WebSocket 在线只表示控制面可达，不等于 inventory / work-state 采集健康。采集健康必须从 `collector_ingestions` 中最近一次 inventory 与 work-state 记录独立判断。
-- 后续 collector 可演进为增量采集，但第一版可以先复用现有采集结果，由后端通过 upsert 去重。
+- Collector 可以继续演进为增量采集；当前复用现有采集结果，由后端通过 upsert 去重。
 
 建议节奏：
 
@@ -146,7 +146,7 @@ Collector 保持主动上报：
 - 搜索输入 debounce。
 - 筛选条件变化后请求后端。
 - 前端保留当前结果、loading、empty、error 状态。
-- 第一版不做复杂离线缓存；生产构建下后端不可用时展示明确错误，不回退 fixture。
+- 当前不做复杂离线缓存；生产构建下后端不可用时展示明确错误，不回退 fixture。
 
 ## 部署形态
 

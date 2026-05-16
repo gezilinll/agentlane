@@ -55,6 +55,6 @@ Runtime 是 OpenClaw、Multica、Slock、Codex、Claude Code 等运行来源。C
 
 ## Language
 
-- 第一版界面中文优先。
+- 界面中文优先。
 - 产品专有名词如 Runtime、Agent、Channel 可以保留英文。
 - 英文句子只用于命令、代码、技术值或品牌短句，不用于普通说明。

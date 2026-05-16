@@ -2,7 +2,7 @@
 
 版本：TinySpec v0.1
 
-本规格定义 Lorume 第一版组织、登录、成员、邀请、会话和设备 token 的产品边界。它是当前权限实现的来源，不覆盖计费、SSO、复杂 RBAC 或审计报表。
+本规格定义 Lorume 组织、登录、成员、邀请、会话和设备 token 的产品边界。它是当前权限实现的来源，不覆盖计费、SSO、复杂 RBAC 或审计报表。
 
 ## 目标
 
@@ -18,7 +18,7 @@
 - 不做个人账号密码登录。
 - 不做 Google、GitHub、企业 SSO 或 LDAP。
 - 不做计费、套餐、席位购买。
-- 不做细粒度资源 ACL，例如单个 Runtime、单个 Agent、单条 Run 的授权。
+- 不做通用细粒度资源 ACL，例如单个 Runtime、单个 Agent、单条 Run 的授权；Skill 资源级权限、审核和同步边界由 `skill-management-spec.md` 定义。
 - 不做跨组织共享数据。
 - 不在前端、日志、fixture、文档或截图中保留验证码、session token、device token、邮件 API key。
 
@@ -57,7 +57,7 @@ Organization Member 表示用户在组织内的角色。
 - `admin`：管理员，可邀请成员和管理设备 token。
 - `member`：普通成员，可查看 Console 和工作数据。
 
-当前阶段只做三档角色，不做更细权限矩阵。owner 和 admin 可执行管理动作；member 只能读取组织内 Console 数据。
+当前组织基础角色只做三档。owner 和 admin 可执行组织管理动作；member 默认读取组织内 Console 数据。Skill 资源级编辑、发布、分配、同步和权限管理通过 Skill governance 模块追加控制。
 
 ### Email Login Code
 
@@ -132,11 +132,11 @@ Device token API：
 Runtime / Runs 读取 API：
 
 - Console 读取类 API 必须有有效 session。
-- v1 只按用户所属组织做最小隔离，不在 React 页面里推导权限。
+- 读取 API 按用户所属组织做最小隔离，不在 React 页面里推导权限。
 
 ## 邮件发送
 
-邮箱验证码通过可替换的 Email Provider 发送。第一版使用 Sender / Resend 类 HTTP 邮件服务均可，但 API key 只允许通过环境变量注入。
+邮箱验证码通过可替换的 Email Provider 发送。当前使用 Sender / Resend 类 HTTP 邮件服务均可，但 API key 只允许通过环境变量注入。
 
 实现要求：
 

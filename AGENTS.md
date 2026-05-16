@@ -12,7 +12,7 @@ Current source of truth:
 - `docs/product/ui-design.md`: product object model, information architecture, pages, flows, and implementation priorities.
 - `docs/product/design/README.md`: design system source of truth for visual language, tokens, typography, color, layout, components, icons, interaction, content, responsive behavior, page patterns, and UI review harness.
 - `docs/product/catalog-page-spec.md`: TinySpec for the first Catalog / Registry page.
-- `docs/product/runtime-device-registration-spec.md`: TinySpec for v1 device registration, collector, runtime adapters, and runtime inventory snapshots.
+- `docs/product/runtime-device-registration-spec.md`: TinySpec for current device registration, collector, runtime adapters, and runtime inventory snapshots.
 - `docs/product/runtime-fleet-page-spec.md`: TinySpec for the first Runtime Fleet management page.
 - `docs/product/runtime-work-state-probe.md`: platform probe matrix for work items, conversations, and runtime executions.
 - `docs/product/runtime-listening-acceptance-spec.md`: TinySpec for whether OpenClaw, Multica, and Slock listening is sufficient for Runs and future task management.
@@ -39,7 +39,7 @@ Current source of truth:
 - `src/HomePage.tsx`: public homepage entry for the current Lorume value proposition and implemented capabilities.
 - `src/catalog/catalog-object.ts`: initial TypeScript source of truth for Catalog Object shape.
 - `src/catalog/catalog-seed.ts`: first reviewable seed data for the Catalog page.
-- `src/runtime/runtime-normalize.ts`: TypeScript source of truth for v1 runtime inventory normalization.
+- `src/runtime/runtime-normalize.ts`: TypeScript source of truth for runtime inventory normalization.
 - `src/runtime/runtime-work-state.ts`: TypeScript source of truth for work item, conversation, execution, and observation capability models.
 - `src/runtime/runtime-work-state-adapters.ts`: adapter normalization for OpenClaw, Multica, and Slock work-state inputs.
 - `src/runtime/runtime-work-state-query.ts`: frontend-facing query model for the read-only Runs / Work Board page.
@@ -48,9 +48,9 @@ Current source of truth:
 - `src/runtime/runtime-listening-acceptance.ts`: TypeScript source of truth for source-specific listening readiness and Runs lane policy.
 - `src/runtime/runtime-collection-health.ts`: TypeScript source of truth for product-level collection health derived from collector ingestion records.
 - `src/runtime/runtime-inventory-query.ts`: query and detail model for the Runtime Fleet page.
-- `src/server/runtime-inventory-store.ts`: internal snapshot and command state store used for collector validation and the v1 device control channel.
+- `src/server/runtime-inventory-store.ts`: internal snapshot and command state store used for collector validation and the device control channel.
 - `src/server/postgres-store.ts`: Postgres-backed repository for normalized inventory and work-state ingestion.
-- `src/server/runtime-control-channel.ts`: in-memory v1 device control channel for connection, heartbeat, and refresh command lifecycle.
+- `src/server/runtime-control-channel.ts`: in-memory device control channel for connection, heartbeat, and refresh command lifecycle.
 - `src/server/runtime-http-api.ts`: backend HTTP API for collector ingestion, Runtime Fleet / Runs query endpoints, refresh commands, and ingestion diagnostics.
 - `src/backend/backend-server.ts`: standalone local-first backend service that composes auth, Operation / Notification, Skill, Runtime / Runs HTTP APIs, in-process Operation runner, and the device WebSocket control channel outside Vite.
 - `src/ui/PixelLogo.tsx` and `public/favicon.svg`: shared brand mark source for app chrome and browser tab metadata.

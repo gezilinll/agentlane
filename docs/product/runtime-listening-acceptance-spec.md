@@ -2,7 +2,7 @@
 
 版本：TinySpec v0.9
 
-本文定义 Lorume v1 对 OpenClaw、Multica、Slock 三个平台“真实监听到位”的验收口径。它不是 UI 设计稿，也不是平台能力承诺；它是 adapter、collector、Runs 看板和后续任务管理共同遵循的质量门槛。
+本文定义 Lorume 对 OpenClaw、Multica、Slock 三个平台“真实监听到位”的验收口径。它不是 UI 设计稿，也不是平台能力承诺；它是 adapter、collector、Runs 看板和任务管理共同遵循的质量门槛。
 
 ## 分层原则
 
@@ -72,8 +72,8 @@ Slock：
 - task `done/cancelled/closed` -> `closed`，其中 Slock 官方 `closed` 在 Lorume work item 中归一为 `cancelled`
 - task `blocked/unknown` -> `attention`
 - Slock task board 官方状态是 `todo/in_progress/in_review/done/closed`，必须以这些字段作为 WorkItem 阶段来源。
-- Slock task `in_progress` 是 v1 Runs 的直接阶段证据，足以让 Lorume 的 Agent WorkStage 进入 `processing`，并让归属 Runtime 的粗粒度运行状态进入 `working`。
-- Slock Activity 官方运行态包括 `Working`、`Thinking`、`Sending message`、`Idle` 等。这类状态只作为未来更细实时忙闲证据，不是 v1 工作看板和 Runtime `working` 的前置条件，也不应原样展示为 Lorume 产品状态。
+- Slock task `in_progress` 是 Runs 的直接阶段证据，足以让 Lorume 的 Agent WorkStage 进入 `processing`，并让归属 Runtime 的粗粒度运行状态进入 `working`。
+- Slock Activity 官方运行态包括 `Working`、`Thinking`、`Sending message`、`Idle` 等。这类状态只作为更细实时忙闲证据，不是当前工作看板和 Runtime `working` 的前置条件，也不应原样展示为 Lorume 产品状态。
 - execution 状态若要从 Slock 补齐，必须来自 `agent:activity`、event、observer 或 proxy 证据；不能由 `server active` 推断。但 executionStatus 暂时为 `unknown` 不阻塞 task board 进入 Runs。
 
 ## 验收标准
