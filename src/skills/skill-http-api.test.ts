@@ -272,6 +272,121 @@ Edited in Lorume.
       await database.drop();
     }
   });
+
+  it("archives skills through the formal API without returning them in normal lists", async () => {
+    const database = await createTemporaryPostgresDatabase();
+    try {
+      runMigrationsScript(database.url);
+      const authStore = createPostgresAuthStore({ connectionString: database.url });
+      const skillStore = createPostgresSkillStore({ connectionString: database.url });
+      try {
+        const user = await authStore.upsertUserForEmail("skill-archive-api@example.com");
+        const organization = await authStore.createOrganization({
+          createdByUserId: user.id,
+          name: "Archive API Org",
+          slug: "archive-api-org",
+        });
+        const session: AuthSessionContext = {
+          id: "ses_test",
+          organizations: await authStore.listOrganizationsForUser(user.id),
+          user,
+        };
+        const { baseUrl } = await startSkillApi({
+          requireUserSession: async () => session,
+          skillStore,
+        });
+        const importResponse = await postJson(`${baseUrl}/api/skills/import`, {
+          organizationId: organization.id,
+          source: {
+            content: `---
+name: Archivable Skill
+description: Archive through API.
+license: MIT
+compatibility: openclaw
+---
+
+# Archivable Skill
+`,
+            type: "markdown",
+          },
+        });
+        const imported = await importResponse.json();
+
+        const archiveResponse = await postJson(`${baseUrl}/api/skills/${encodeURIComponent(imported.skill.id)}/archive`, {});
+        const archivePayload = await archiveResponse.json();
+        const listResponse = await fetch(`${baseUrl}/api/skills?organizationId=${encodeURIComponent(organization.id)}`);
+        const detailResponse = await fetch(`${baseUrl}/api/skills/${encodeURIComponent(imported.skill.id)}`);
+
+        expect(archiveResponse.status).toBe(200);
+        expect(archivePayload).toMatchObject({
+          skill: expect.objectContaining({ id: imported.skill.id, status: "archived" }),
+        });
+        await expect(listResponse.json()).resolves.toEqual({ skills: [] });
+        await expect(detailResponse.json()).resolves.toMatchObject({
+          skill: expect.objectContaining({ id: imported.skill.id, status: "archived" }),
+        });
+      } finally {
+        await Promise.all([authStore.close(), skillStore.close()]);
+      }
+    } finally {
+      await database.drop();
+    }
+  });
+
+  it("deletes draft skills through the formal API", async () => {
+    const database = await createTemporaryPostgresDatabase();
+    try {
+      runMigrationsScript(database.url);
+      const authStore = createPostgresAuthStore({ connectionString: database.url });
+      const skillStore = createPostgresSkillStore({ connectionString: database.url });
+      try {
+        const user = await authStore.upsertUserForEmail("skill-delete-api@example.com");
+        const organization = await authStore.createOrganization({
+          createdByUserId: user.id,
+          name: "Delete API Org",
+          slug: "delete-api-org",
+        });
+        const session: AuthSessionContext = {
+          id: "ses_test",
+          organizations: await authStore.listOrganizationsForUser(user.id),
+          user,
+        };
+        const { baseUrl } = await startSkillApi({
+          requireUserSession: async () => session,
+          skillStore,
+        });
+        const importResponse = await postJson(`${baseUrl}/api/skills/import`, {
+          organizationId: organization.id,
+          source: {
+            content: `---
+name: Deletable Draft
+description: Draft can be deleted before publication.
+license: MIT
+compatibility: openclaw
+---
+
+# Deletable Draft
+`,
+            type: "markdown",
+          },
+        });
+        const imported = await importResponse.json();
+
+        const deleteResponse = await fetch(`${baseUrl}/api/skills/${encodeURIComponent(imported.skill.id)}`, {
+          method: "DELETE",
+        });
+        const detailResponse = await fetch(`${baseUrl}/api/skills/${encodeURIComponent(imported.skill.id)}`);
+
+        expect(deleteResponse.status).toBe(200);
+        await expect(deleteResponse.json()).resolves.toEqual({ deletedSkillId: imported.skill.id });
+        expect(detailResponse.status).toBe(404);
+      } finally {
+        await Promise.all([authStore.close(), skillStore.close()]);
+      }
+    } finally {
+      await database.drop();
+    }
+  });
 });
 
 async function startSkillApi(options: Parameters<typeof createSkillHttpApiHandler>[0]) {

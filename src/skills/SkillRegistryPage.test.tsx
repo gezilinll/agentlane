@@ -274,6 +274,18 @@ function installSkillRegistryFetchMock(options: {
         version: nextDetail.versions[0],
       }, 201);
     }
+    if (url.includes("/api/skills/skill_cost/archive") && method === "POST") {
+      return jsonResponse({
+        skill: {
+          ...detailResponse.skill,
+          archivedAt: "2026-05-14T09:40:00.000Z",
+          status: "archived",
+        },
+      });
+    }
+    if (url.includes("/api/skills/skill_cost") && method === "DELETE") {
+      return jsonResponse({ deletedSkillId: "skill_cost" });
+    }
     if (url.includes("/api/skill-assignments/assignment_1/sync") && method === "POST") {
       return jsonResponse({
         operation: {
@@ -555,6 +567,21 @@ compatibility: openclaw
         type: "markdown",
       },
       summary: "Manual Skill edit",
+    });
+  });
+
+  it("archives and removes Skills from the active registry list", async () => {
+    const user = userEvent.setup();
+    const calls = installSkillRegistryFetchMock();
+    render(<SkillRegistryPage organizationId="org_1" />);
+
+    await screen.findByRole("heading", { name: "Cost Review" });
+    await user.click(screen.getByRole("button", { name: "归档 Skill" }));
+
+    await waitFor(() => expect(screen.getByText("Skill 已归档。")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /Cost Review/ })).not.toBeInTheDocument();
+    expect(calls.find((call) => call.url.includes("/api/skills/skill_cost/archive"))).toMatchObject({
+      method: "POST",
     });
   });
 });

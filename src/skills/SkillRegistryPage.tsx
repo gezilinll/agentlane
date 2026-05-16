@@ -516,6 +516,56 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
     }
   }
 
+  async function handleArchiveSkill() {
+    if (!selectedSkill) return;
+    setIsSubmitting(true);
+    setStatusMessage("");
+    setErrorMessage("");
+    try {
+      await fetchJson<{ skill?: SkillSummary }>(`/api/skills/${encodeURIComponent(selectedSkill.id)}/archive`, {
+        body: JSON.stringify({}),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      });
+      const nextSkills = skills.filter((skill) => skill.id !== selectedSkill.id);
+      setSkills(nextSkills);
+      setSelectedSkillId(nextSkills[0]?.id ?? "");
+      setDetail(null);
+      setFiles([]);
+      setTargetSkillSet([]);
+      setStatusMessage("Skill 已归档。");
+      await refreshActivity();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "归档 Skill 失败");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleDeleteDraftSkill() {
+    if (!selectedSkill) return;
+    setIsSubmitting(true);
+    setStatusMessage("");
+    setErrorMessage("");
+    try {
+      await fetchJson<{ deletedSkillId?: string }>(`/api/skills/${encodeURIComponent(selectedSkill.id)}`, {
+        method: "DELETE",
+      });
+      const nextSkills = skills.filter((skill) => skill.id !== selectedSkill.id);
+      setSkills(nextSkills);
+      setSelectedSkillId(nextSkills[0]?.id ?? "");
+      setDetail(null);
+      setFiles([]);
+      setTargetSkillSet([]);
+      setStatusMessage("草稿 Skill 已删除。");
+      await refreshActivity();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "删除草稿 Skill 失败");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   if (!organizationId) {
     return (
       <section className="workspace">
@@ -672,7 +722,9 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
           targetSkillSetTarget={targetSkillSetTarget}
           targets={targets}
           onAssign={() => void handleAssign()}
+          onArchive={() => void handleArchiveSkill()}
           onApprovalDecision={(approval, decision) => void handleApprovalDecision(approval, decision)}
+          onDeleteDraft={() => void handleDeleteDraftSkill()}
           onEditorChange={setEditorContent}
           onEditorModeChange={setEditorMode}
           onPublish={() => void handlePublish()}
@@ -699,7 +751,9 @@ function SkillDetailPanel({
   isSubmitting,
   latestVersion,
   onAssign,
+  onArchive,
   onApprovalDecision,
+  onDeleteDraft,
   onEditorChange,
   onEditorModeChange,
   onPublish,
@@ -731,7 +785,9 @@ function SkillDetailPanel({
   targetSkillSetTarget: TargetSkillSetResponse["target"] | null;
   targets: SkillTargetOption[];
   onAssign: () => void;
+  onArchive: () => void;
   onApprovalDecision: (approval: ApprovalRequest, decision: "approve" | "reject") => void;
+  onDeleteDraft: () => void;
   onEditorChange: (value: string) => void;
   onEditorModeChange: (mode: "source" | "preview") => void;
   onPublish: () => void;
@@ -951,6 +1007,21 @@ function SkillDetailPanel({
           </ul>
         )}
       </div>
+
+      <div className="detailBlock">
+        <h3>归档与删除</h3>
+        <p className="mutedText">归档会保留版本、文件、分配和审计历史；物理删除只允许未发布且未被引用的草稿。</p>
+        <div className="skillInlineActions">
+          <button className="secondaryButton compactButton dangerButton" disabled={isSubmitting} type="button" onClick={onArchive}>
+            归档 Skill
+          </button>
+          {detail.skill.status === "draft" ? (
+            <button className="secondaryButton compactButton dangerButton" disabled={isSubmitting} type="button" onClick={onDeleteDraft}>
+              删除草稿
+            </button>
+          ) : null}
+        </div>
+      </div>
     </aside>
   );
 }
@@ -1139,6 +1210,7 @@ function canSyncAssignment(status: AssignmentStatus): boolean {
 function approvalActionLabel(action: string): string {
   if (action === "publish_skill") return "发布 Skill";
   if (action === "assign_skill") return "分配 Skill";
+  if (action === "archive_skill") return "归档 Skill";
   if (action === "delete_skill") return "删除 Skill";
   if (action === "manage_permissions") return "管理权限";
   return action;

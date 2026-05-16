@@ -16,7 +16,7 @@
 - Skill 分配和后续同步必须通过可审计的 Operation / Job Runner 表达状态；不在页面内假装同步已经完成。
 - 支持资源级权限和审核流，避免普通成员直接编辑、发布或下发到非本人管理的目标。
 - 所有平台差异必须由 adapter 转换成 Lorume 的 Skill 语义，UI 不直接判断 OpenClaw、Multica 或 Slock 的本地目录规则。
-- UI 只能暴露已有 HTTP API、权限规则和 harness 覆盖的动作。归档、删除、target support 原因等能力如果没有 API 与 harness，不出现在页面动作中。
+- UI 只能暴露已有 HTTP API、权限规则和 harness 覆盖的动作。target support 原因等能力如果没有 API 与 harness，不出现在页面动作中。
 
 ## 非目标
 
@@ -24,7 +24,7 @@
 - 不把外部 GitHub 仓库、Marketplace 条目或设备本地路径当成组织 Skill 的唯一存储。
 - 不承诺静态校验可以证明第三方脚本绝对安全。
 - 不做跨组织共享 Skill。
-- 不做复杂工作流引擎。审核只覆盖 Skill 编辑、发布、分配、下发和归档所需的最小状态。
+- 不做复杂工作流引擎。审核只覆盖 Skill 编辑、发布、分配和下发所需的最小状态。
 - 不在前端、日志、fixture、测试或文档中保存平台 token、GitHub token、设备 token 或 Skill 中疑似密钥的完整值。
 
 ## 对象边界
@@ -159,7 +159,6 @@ Approval Request 表示一次需要人工批准的动作。审核必须保存结
 - 无 `publish` 权限的用户请求发布 Skill 版本。
 - 把 Skill 分配或下发到非本人管理的 Agent。
 - 把 Skill 分配或下发到共享 Device、共享 Runtime、生产目标或缺失 owner 的目标。
-- 删除或归档已发布且仍有 Assignment 的 Skill。
 - 高风险 Skill 包请求发布或下发。
 
 字段：
@@ -258,7 +257,7 @@ Skill 生命周期：
 - 发布草稿会标记当前草稿版本为已发布，并把 Skill 状态置为 `published`。
 - 已发布版本不可变。
 - 归档 Skill 不删除历史文件、Assignment 和同步记录。
-- 删除只允许用于未发布草稿或未被引用的版本。
+- 删除只允许用于未发布且未被 Assignment 引用的草稿 Skill。
 - 组织级 Skill 被提升后保存独立副本，来源设备或 runtime 删除本地 Skill 不影响组织副本。
 
 ## 权限与审核
@@ -277,7 +276,8 @@ Skill 生命周期：
 - 发布版本：需要 `skill.publish`，没有权限时创建审核。
 - 分配 Skill 到目标：需要 `skill.view`，并且对目标有 `manage_skills` 或获得目标 owner 审核。
 - 触发同步：Assignment 必须已批准，且用户对目标有 `manage_skills` 或是该 Assignment 的申请人 / 审批人。
-- 归档或删除：需要 `skill.archive`；如果存在已批准 Assignment，必须审核。
+- 归档：需要 `skill.archive`，归档保留 Assignment 和同步记录，不需要额外审核。
+- 删除：需要 `skill.archive`，并且只允许未发布且未被 Assignment 引用的草稿 Skill；其他情况必须归档。
 - 管理 Skill 授权：需要 `skill.manage_access`。
 
 目标 owner 规则：
@@ -404,6 +404,8 @@ Skill API：
 - `GET /api/skills/:skillId`：读取可查看 Skill 的详情。
 - `GET /api/skills/:skillId/versions/:versionId/files`：读取可查看版本文件树。
 - `POST /api/skills/:skillId/versions`：对可编辑 Skill 创建新的草稿版本。当前页面编辑器提交 Markdown 源文，后端按 `manual_edit` 来源重新规范化、校验并保存文件副本。
+- `POST /api/skills/:skillId/archive`：归档可归档 Skill。归档是软删除，默认列表不再返回，但详情、版本和文件历史仍可读取。
+- `DELETE /api/skills/:skillId`：只删除未发布且未被 Assignment 引用的草稿 Skill；已发布、已归档或被引用 Skill 返回阻断错误。
 - `POST /api/skills/:skillId/publish`：创建发布 Operation 或创建发布审核。
 
 Resource Permission API：
@@ -430,7 +432,7 @@ Operation / Notification API：
 - `GET /api/notifications`：按组织读取页面内通知线程。
 - `GET /api/notifications/:threadId`：读取通知线程和投递明细。
 
-当前 Skill Registry 页面从 Runtime Fleet 查询结果中派生可分配目标，并在用户选择目标后调用 Skill target HTTP API 展示目标 Skill Set 与安装状态。页面不得在前端自行拼接生效规则，也不得调用不存在的归档、删除或 target support 原因 API。
+当前 Skill Registry 页面从 Runtime Fleet 查询结果中派生可分配目标，并在用户选择目标后调用 Skill target HTTP API 展示目标 Skill Set 与安装状态。页面不得在前端自行拼接生效规则，也不得调用不存在的 target support 原因 API。
 当前 Skill Registry 页面可以对已批准、已同步、失败或不支持的 Assignment 触发“同步到目标”；该动作只创建 Operation，不直接写设备。
 
 ## UI 规则
@@ -446,12 +448,14 @@ Skill Registry 页面必须支持：
 - 选择目标后展示后端解析出的 Target Skill Set，包含 Skill 名称和待同步、同步中、已安装、同步失败或不支持等安装状态。
 - 待处理审核必须能在 Skill 详情内批准或拒绝；处理后刷新相关 Operation、通知、分配和审批状态。
 - 已批准、已同步、失败或不支持的 Assignment 必须能触发“同步到目标”，并在同步 Operation 排队后刷新相关状态。
+- 可归档 Skill 必须能从详情页归档；归档后从组织 Skill 活跃列表移除，但历史版本和文件仍保留在后端。
+- 未发布且未被引用的草稿 Skill 可以物理删除；已发布或被引用 Skill 只能归档，不能删除。
 - 最新版本未发布时，分配按钮必须禁用并明确提示先发布。
 - 目标 ID 可能包含 `:`、`/` 或其他分隔符，页面传参必须编码和解码，不能截断。
 - 页面内通知展示状态摘要和跳转语义，不展示完整原始日志。
 
 UI 不展示原始 token、完整脚本风险日志、外部平台私有 API 返回体或调试字段。
-UI 不展示未实现入口。没有 API 与 harness 的归档、删除和 target support 原因入口不出现在页面中。
+UI 不展示未实现入口。没有 API 与 harness 的 target support 原因入口不出现在页面中。
 
 ## Harness
 
@@ -495,6 +499,8 @@ UI：
 - ZIP 导入把文件名和 base64 内容提交到正式 Skill API，不伪装成 Markdown。
 - GitHub URL 和 Marketplace URL 导入进入同一 `POST /api/skills/import` 路径。
 - 单文件 `SKILL.md` 的 Skill 源文编辑器能在源文和预览之间切换，保存后调用 `POST /api/skills/:skillId/versions`，显示草稿保存状态，并刷新最新版本和文件内容。
+- 归档 Skill 调用 `POST /api/skills/:skillId/archive`，成功后从活跃组织 Skill 列表移除，并显示归档状态。
+- 删除草稿调用 `DELETE /api/skills/:skillId`，只允许后端确认未发布且未被引用的草稿；阻断错误不得在前端绕过。
 - 发布、分配和审批动作返回 Operation 或 Approval 后，页面刷新相关 Operation、通知、分配和审批状态。
 - 已批准 Assignment 的“同步到目标”按钮调用 `POST /api/skill-assignments/:assignmentId/sync`，返回 Operation 后显示排队状态并刷新相关数据。
 - 选择目标后调用 `GET /api/skill-targets/:targetType/:targetId/skill-set`，页面只展示后端解析出的 Target Skill Set，不把组织 Skill 库里的未分配 Skill 当作目标已生效 Skill。

@@ -130,6 +130,20 @@ export interface SkillDraftVersionInput {
   summary?: string;
 }
 
+/** Input for archiving an organization-owned Skill. */
+export interface SkillArchiveInput {
+  /** Existing Skill id. */
+  skillId: string;
+  /** User performing the archive action. */
+  archivedByUserId?: string;
+}
+
+/** Input for deleting an unreferenced draft Skill. */
+export interface SkillDeleteDraftInput {
+  /** Existing draft Skill id. */
+  skillId: string;
+}
+
 /** Skill list query input. */
 export interface SkillListInput {
   /** Organization whose Skills should be listed. */
@@ -156,6 +170,10 @@ export interface SkillStore {
   importSkillVersion: (input: SkillImportInput) => Promise<SkillImportResult>;
   /** Create an immutable draft version for an existing organization-owned Skill. */
   createSkillDraftVersion: (input: SkillDraftVersionInput) => Promise<SkillImportResult>;
+  /** Archive a Skill while keeping versions, files, assignments, and audit history readable. */
+  archiveSkill: (input: SkillArchiveInput) => Promise<SkillRow>;
+  /** Delete only an unreferenced draft Skill that has never been published. */
+  deleteDraftSkill: (input: SkillDeleteDraftInput) => Promise<SkillRow>;
   /** List Skills for an organization. */
   listSkills: (input: SkillListInput) => Promise<SkillListRow[]>;
   /** Read one Skill with latest files. */
@@ -236,6 +254,12 @@ export function createPostgresSkillStore(options: PostgresSkillStoreOptions = {}
         return { files, skill, version };
       });
     },
+    archiveSkill(input) {
+      return archiveSkill(pool, input);
+    },
+    deleteDraftSkill(input) {
+      return deleteDraftSkill(pool, input);
+    },
     async listSkills(input) {
       const result = await pool.query<SkillListRow>(`
         SELECT
@@ -314,6 +338,89 @@ export function createPostgresSkillStore(options: PostgresSkillStoreOptions = {}
       return pool.end();
     },
   };
+}
+
+/** Error thrown when a physical draft delete would break Skill governance rules. */
+export class SkillDeleteBlockedError extends Error {}
+
+async function archiveSkill(pool: pg.Pool, input: SkillArchiveInput): Promise<SkillRow> {
+  const result = await pool.query<SkillRow>(`
+    UPDATE skills
+    SET
+      status = 'archived',
+      archived_at = COALESCE(archived_at, now()),
+      updated_at = now()
+    WHERE id = $1
+    RETURNING
+      id,
+      organization_id AS "organizationId",
+      slug,
+      name,
+      description,
+      owner_user_id AS "ownerUserId",
+      status,
+      source,
+      created_at AS "createdAt",
+      updated_at AS "updatedAt",
+      archived_at AS "archivedAt"
+  `, [input.skillId]);
+  const skill = result.rows[0];
+  if (!skill) throw new Error("skill not found");
+  return skill;
+}
+
+async function deleteDraftSkill(pool: pg.Pool, input: SkillDeleteDraftInput): Promise<SkillRow> {
+  return withTransaction(pool, async (client) => {
+    const skillResult = await client.query<SkillRow>(`
+      SELECT
+        id,
+        organization_id AS "organizationId",
+        slug,
+        name,
+        description,
+        owner_user_id AS "ownerUserId",
+        status,
+        source,
+        created_at AS "createdAt",
+        updated_at AS "updatedAt",
+        archived_at AS "archivedAt"
+      FROM skills
+      WHERE id = $1
+      LIMIT 1
+      FOR UPDATE
+    `, [input.skillId]);
+    const skill = skillResult.rows[0];
+    if (!skill) throw new Error("skill not found");
+    if (skill.status !== "draft") {
+      throw new SkillDeleteBlockedError("published Skill cannot be deleted");
+    }
+
+    const publishedResult = await client.query<{ exists: boolean }>(`
+      SELECT EXISTS (
+        SELECT 1
+        FROM skill_versions
+        WHERE skill_id = $1
+          AND published_at IS NOT NULL
+      ) AS "exists"
+    `, [input.skillId]);
+    if (publishedResult.rows[0]?.exists) {
+      throw new SkillDeleteBlockedError("published Skill cannot be deleted");
+    }
+
+    const assignmentResult = await client.query<{ exists: boolean }>(`
+      SELECT EXISTS (
+        SELECT 1
+        FROM skill_assignments
+        WHERE skill_id = $1
+      ) AS "exists"
+    `, [input.skillId]);
+    if (assignmentResult.rows[0]?.exists) {
+      throw new SkillDeleteBlockedError("referenced Skill cannot be deleted");
+    }
+
+    await client.query("DELETE FROM skills WHERE id = $1", [input.skillId]);
+    return skill;
+  });
 }
 
 async function upsertSkill(

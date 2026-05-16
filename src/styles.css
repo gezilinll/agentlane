@@ -745,6 +745,15 @@ h1 {
   border-color: var(--lorume-color-line);
 }
 
+.dangerButton {
+  color: var(--lorume-color-red);
+}
+
+.dangerButton:hover {
+  background: var(--lorume-color-pink);
+  color: var(--lorume-color-ink);
+}
+
 .compactButton {
   height: 30px;
   padding: 0 10px;

@@ -9,7 +9,7 @@ import {
   type SkillPackageSource,
 } from "./skill-package";
 import type { SkillGovernanceStore } from "./skill-governance-store";
-import type { SkillStore } from "./skill-store";
+import { SkillDeleteBlockedError, type SkillStore } from "./skill-store";
 
 const maxJsonBodyChars = 10_000_000;
 
@@ -131,6 +131,30 @@ export function createSkillHttpApiHandler(options: SkillHttpApiHandlerOptions): 
       return;
     }
 
+    const archiveMatch = requestUrl.pathname.match(/^\/api\/skills\/([^/]+)\/archive$/);
+    if (request.method === "POST" && archiveMatch) {
+      const session = await requireSession(request, response, options);
+      if (!session) return;
+      const skillId = decodeURIComponent(archiveMatch[1] ?? "");
+      const detail = await options.skillStore.readSkillDetail({ skillId });
+      if (!detail) {
+        sendJson(response, 404, { error: "skill_not_found" });
+        return;
+      }
+      const membership = readOrganizationMembership(session, detail.skill.organizationId);
+      if (!ensureOrganizationMember(response, detail.skill.organizationId, membership)) return;
+      if (!(await canArchiveSkill(options, session, membership, detail.skill.organizationId, detail.skill.id))) {
+        sendJson(response, 403, { error: "forbidden" });
+        return;
+      }
+      const skill = await options.skillStore.archiveSkill({
+        archivedByUserId: session.user.id,
+        skillId: detail.skill.id,
+      });
+      sendJson(response, 200, { skill });
+      return;
+    }
+
     const filesMatch = requestUrl.pathname.match(/^\/api\/skills\/([^/]+)\/versions\/([^/]+)\/files$/);
     if (request.method === "GET" && filesMatch) {
       const session = await requireSession(request, response, options);
@@ -158,6 +182,34 @@ export function createSkillHttpApiHandler(options: SkillHttpApiHandlerOptions): 
     }
 
     const detailMatch = requestUrl.pathname.match(/^\/api\/skills\/([^/]+)$/);
+    if (request.method === "DELETE" && detailMatch) {
+      const session = await requireSession(request, response, options);
+      if (!session) return;
+      const skillId = decodeURIComponent(detailMatch[1] ?? "");
+      const detail = await options.skillStore.readSkillDetail({ skillId });
+      if (!detail) {
+        sendJson(response, 404, { error: "skill_not_found" });
+        return;
+      }
+      const membership = readOrganizationMembership(session, detail.skill.organizationId);
+      if (!ensureOrganizationMember(response, detail.skill.organizationId, membership)) return;
+      if (!(await canArchiveSkill(options, session, membership, detail.skill.organizationId, detail.skill.id))) {
+        sendJson(response, 403, { error: "forbidden" });
+        return;
+      }
+      try {
+        const deleted = await options.skillStore.deleteDraftSkill({ skillId: detail.skill.id });
+        sendJson(response, 200, { deletedSkillId: deleted.id });
+      } catch (error) {
+        if (error instanceof SkillDeleteBlockedError) {
+          sendJson(response, 409, { error: "skill_delete_blocked", message: error.message });
+          return;
+        }
+        throw error;
+      }
+      return;
+    }
+
     if (request.method === "GET" && detailMatch) {
       const session = await requireSession(request, response, options);
       if (!session) return;
@@ -269,6 +321,24 @@ async function canEditSkill(
     organizationId,
     organizationRole: membership.role,
     permission: "edit",
+    resourceId: skillId,
+    resourceType: "skill",
+    userId: session.user.id,
+  });
+}
+
+async function canArchiveSkill(
+  options: SkillHttpApiHandlerOptions,
+  session: AuthSessionContext,
+  membership: AuthOrganizationMembership,
+  organizationId: string,
+  skillId: string,
+): Promise<boolean> {
+  if (!options.governanceStore) return true;
+  return options.governanceStore.hasResourcePermission({
+    organizationId,
+    organizationRole: membership.role,
+    permission: "archive",
     resourceId: skillId,
     resourceType: "skill",
     userId: session.user.id,
