@@ -28,6 +28,70 @@ describe("device collector scripts", () => {
     expect(snapshot.device.id).toBe("fixture-mac");
     expect(snapshot.runtimes.map((runtime: { kind: string }) => runtime.kind)).toContain("openclaw");
     expect(snapshot.agents.map((agent: { name: string }) => agent.name)).toContain("tester");
+    expect(snapshot.skillDiscoveries).toEqual([]);
+  });
+
+  it("discovers configured target Skill directories in once mode", () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-skill-discovery-home-"));
+    const configDir = mkdtempSync(path.join(tmpdir(), "lorume-skill-discovery-config-"));
+    const openclawDir = path.join(fakeHome, ".openclaw");
+    const skillRoot = path.join(fakeHome, "openclaw-skills");
+    const skillDir = path.join(skillRoot, "runtime-review");
+    mkdirSync(openclawDir, { recursive: true });
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(path.join(openclawDir, "openclaw.json"), JSON.stringify({
+      agents: { list: [{ id: "main", default: true }] },
+      bindings: [{ agentId: "main", match: { channel: "dingtalk", accountId: "default" } }],
+    }));
+    writeFileSync(path.join(skillDir, "SKILL.md"), `---
+name: Runtime Review
+description: Review runtime changes.
+---
+
+# Runtime Review
+`);
+    const configPath = path.join(configDir, "config.json");
+    writeFileSync(configPath, JSON.stringify({
+      deviceId: "skill-device",
+      skillDiscoveryTargets: [
+        {
+          source: "openclaw",
+          targetType: "agent",
+          runtimeExternalId: "gateway-local",
+          agentExternalId: "main",
+          root: skillRoot,
+        },
+      ],
+    }));
+
+    const output = execFileSync(process.execPath, [
+      collectorScript,
+      "--once",
+      "--config",
+      configPath,
+      "--print-only",
+    ], {
+      encoding: "utf8",
+      env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
+    });
+
+    const snapshot = JSON.parse(output);
+
+    expect(snapshot.skillDiscoveries).toHaveLength(1);
+    expect(snapshot.skillDiscoveries[0]).toMatchObject({
+      source: "openclaw",
+      targetType: "agent",
+      targetId: "skill-device:openclaw:gateway-local:agent:main",
+      name: "Runtime Review",
+      description: "Review runtime changes.",
+      skillPath: skillDir,
+      files: [
+        {
+          path: "SKILL.md",
+          contentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+        },
+      ],
+    });
   });
 
   it("installs the collector from a local source path and runs a once check", () => {

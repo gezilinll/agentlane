@@ -98,6 +98,26 @@ const runtimeFleetResponse = {
   ],
 };
 
+const skillDiscoveriesResponse = {
+  skillDiscoveries: [
+    {
+      id: "gezilinll-claw:openclaw:gateway-local:agent:main:skill:review",
+      deviceId: "gezilinll-claw",
+      source: "openclaw",
+      targetType: "agent",
+      targetId: "gezilinll-claw:openclaw:gateway-local:agent:main",
+      targetName: "main",
+      runtimeId: "gezilinll-claw:openclaw:gateway-local",
+      agentId: "gezilinll-claw:openclaw:gateway-local:agent:main",
+      name: "Review Skill",
+      description: "Review local changes.",
+      packageHash: "hash-review",
+      skillPath: "/Users/dev/.openclaw/skills/review",
+      lastSeenAt: "2026-05-14T08:31:00.000Z",
+    },
+  ],
+};
+
 const pendingApprovalsResponse = {
   approvalRequests: [
     {
@@ -230,6 +250,18 @@ function installSkillRegistryFetchMock(options: {
         files: skillDetailResponse.files,
       }, 201);
     }
+    if (url.includes("/api/skill-discoveries/gezilinll-claw%3Aopenclaw%3Agateway-local%3Aagent%3Amain%3Askill%3Areview/promote") && method === "POST") {
+      return jsonResponse({
+        skill: {
+          ...skillListResponse.skills[0],
+          id: "skill_review",
+          name: "Review Skill",
+          source: { type: "device_discovery", filename: "review" },
+        },
+        version: { ...skillDetailResponse.versions[0], id: "skillver_review", skillId: "skill_review" },
+        files: skillDetailResponse.files,
+      }, 201);
+    }
     if (url.includes("/api/skills/skill_cost/publish") && method === "POST") {
       return jsonResponse({
         operation: {
@@ -344,6 +376,7 @@ function installSkillRegistryFetchMock(options: {
       return jsonResponse(detailResponse);
     }
     if (url.includes("/api/skills?")) return jsonResponse(skillListResponse);
+    if (url.includes("/api/skill-discoveries")) return jsonResponse(skillDiscoveriesResponse);
     if (url.includes("/api/runtime-fleet")) return jsonResponse(runtimeFleetResponse);
     if (url.includes("/api/skill-assignments")) return jsonResponse(assignmentsResponse);
     if (url.includes("/api/approval-requests")) return jsonResponse(approvalsResponse);
@@ -432,6 +465,24 @@ describe("SkillRegistryPage", () => {
         filename: "cost-skill.zip",
         type: "zip",
       },
+    });
+  });
+
+  it("shows device-discovered Skills and promotes them into organization storage", async () => {
+    const user = userEvent.setup();
+    const calls = installSkillRegistryFetchMock();
+    render(<SkillRegistryPage organizationId="org_1" />);
+
+    await screen.findByRole("heading", { name: "Cost Review" });
+    expect(screen.getByRole("heading", { name: "设备发现" })).toBeInTheDocument();
+    expect(screen.getByText("Review Skill")).toBeInTheDocument();
+    expect(screen.getByText("Agent · main · 2026/05/14 16:31")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "提升为组织 Skill" }));
+
+    await waitFor(() => expect(screen.getByText("Review Skill 已提升为组织 Skill。")).toBeInTheDocument());
+    expect(calls.find((call) => call.url.includes("/api/skill-discoveries/") && call.method === "POST")?.body).toEqual({
+      organizationId: "org_1",
     });
   });
 

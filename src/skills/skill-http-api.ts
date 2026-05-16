@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { AuthOrganizationMembership, AuthSessionContext } from "../auth/auth-store";
 import {
+  createSkillPackageFromFiles,
   createSkillPackageFromGithubUrl,
   createSkillPackageFromMarketplaceUrl,
   createSkillPackageFromMarkdown,
@@ -8,6 +9,7 @@ import {
   SkillPackageValidationError,
   type SkillPackageSource,
 } from "./skill-package";
+import type { PostgresStore } from "../server/postgres-store";
 import type { SkillGovernanceStore } from "./skill-governance-store";
 import { SkillDeleteBlockedError, type SkillStore } from "./skill-store";
 
@@ -27,6 +29,8 @@ export interface SkillHttpApiHandlerOptions {
   governanceStore?: SkillGovernanceStore;
   /** User-session auth guard. */
   requireUserSession: SkillHttpAuth["requireUserSession"];
+  /** Optional runtime repository used to list and promote device-discovered Skills. */
+  runtimeStore?: Pick<PostgresStore, "listSkillDiscoveries" | "readSkillDiscovery">;
   /** Skill repository. */
   skillStore: SkillStore;
 }
@@ -61,6 +65,20 @@ export function createSkillHttpApiHandler(options: SkillHttpApiHandlerOptions): 
       return;
     }
 
+    if (request.method === "GET" && requestUrl.pathname === "/api/skill-discoveries") {
+      const session = await requireSession(request, response, options);
+      if (!session) return;
+      const organizationId = requestUrl.searchParams.get("organizationId") ?? "";
+      const membership = readOrganizationMembership(session, organizationId);
+      if (!ensureOrganizationMember(response, organizationId, membership)) return;
+      const deviceId = requestUrl.searchParams.get("deviceId") ?? undefined;
+      const skillDiscoveries = options.runtimeStore
+        ? await options.runtimeStore.listSkillDiscoveries({ deviceId })
+        : [];
+      sendJson(response, 200, { skillDiscoveries });
+      return;
+    }
+
     if (request.method === "POST" && requestUrl.pathname === "/api/skills/import") {
       const session = await requireSession(request, response, options);
       if (!session) return;
@@ -84,6 +102,49 @@ export function createSkillHttpApiHandler(options: SkillHttpApiHandlerOptions): 
         }
         if (error instanceof UnsupportedSkillSourceError) {
           sendJson(response, 400, { error: "unsupported_skill_source", message: error.message });
+          return;
+        }
+        throw error;
+      }
+      return;
+    }
+
+    const discoveryPromoteMatch = requestUrl.pathname.match(/^\/api\/skill-discoveries\/([^/]+)\/promote$/);
+    if (request.method === "POST" && discoveryPromoteMatch) {
+      const session = await requireSession(request, response, options);
+      if (!session) return;
+      const body = await readJsonBody(request);
+      const organizationId = readString(body, "organizationId");
+      const membership = readOrganizationMembership(session, organizationId);
+      if (!ensureOrganizationMember(response, organizationId, membership)) return;
+      if (!options.runtimeStore) {
+        sendJson(response, 404, { error: "skill_discovery_not_found" });
+        return;
+      }
+      const discoveryId = decodeURIComponent(discoveryPromoteMatch[1] ?? "");
+      const discovery = await options.runtimeStore.readSkillDiscovery(discoveryId);
+      if (!discovery) {
+        sendJson(response, 404, { error: "skill_discovery_not_found" });
+        return;
+      }
+      try {
+        const skillPackage = createSkillPackageFromFiles({
+          files: discovery.files.map((file) => ({ content: file.content, path: file.path })),
+          source: {
+            filename: discovery.skillPath.split("/").pop() || undefined,
+            resolvedRef: discovery.packageHash,
+            type: "device_discovery",
+          },
+        });
+        const imported = await options.skillStore.importSkillVersion({
+          createdByUserId: session.user.id,
+          organizationId,
+          package: skillPackage,
+        });
+        sendJson(response, 201, imported);
+      } catch (error) {
+        if (error instanceof SkillPackageValidationError) {
+          sendJson(response, 422, { error: "skill_package_blocked", validation: error.validation });
           return;
         }
         throw error;

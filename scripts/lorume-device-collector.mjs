@@ -10,6 +10,8 @@ const DEFAULT_INTERVAL_MS = 60_000;
 const DEFAULT_SLOCK_SERVER_URL = process.env.SLOCK_DEFAULT_SERVER_URL || "https://api.slock.ai";
 const DEFAULT_PROBE_MAX_BUFFER_BYTES = 20 * 1024 * 1024;
 const POST_RETRY_DELAYS_MS = [0, 500, 1500];
+const DEFAULT_SKILL_DISCOVERY_MAX_FILES = 64;
+const DEFAULT_SKILL_DISCOVERY_MAX_FILE_BYTES = 256 * 1024;
 
 function parseArgs(argv) {
   const args = {
@@ -486,6 +488,295 @@ function mergeParts(parts) {
   };
 }
 
+function collectSkillDiscoveries(config, device, inventory, observedAt) {
+  const targets = buildSkillDiscoveryTargets(config, device, inventory);
+  const discoveries = [];
+  for (const target of targets) {
+    for (const skillDir of listSkillDirectories(target.root)) {
+      const discovery = readSkillDiscoveryDirectory(target, skillDir, observedAt);
+      if (discovery) discoveries.push(discovery);
+    }
+  }
+  return discoveries;
+}
+
+function buildSkillDiscoveryTargets(config, device, inventory) {
+  const configuredTargets = Array.isArray(config.skillDiscoveryTargets)
+    ? config.skillDiscoveryTargets
+    : Array.isArray(config.skillDiscoveryRoots)
+      ? config.skillDiscoveryRoots
+      : [];
+  const targets = configuredTargets.flatMap((entry) => {
+    const target = normalizeConfiguredSkillDiscoveryTarget(entry, device, inventory);
+    return target ? [target] : [];
+  });
+
+  targets.push(...defaultSlockSkillDiscoveryTargets(inventory));
+  targets.push(...defaultOpenClawSkillDiscoveryTargets(inventory));
+  targets.push(...defaultMulticaSkillDiscoveryTargets(inventory));
+
+  const deduped = new Map();
+  for (const target of targets) {
+    if (!target.deviceId) continue;
+    deduped.set(`${target.targetId}:${target.root}`, target);
+  }
+  return Array.from(deduped.values());
+}
+
+function normalizeConfiguredSkillDiscoveryTarget(entry, device, inventory) {
+  if (!entry || typeof entry !== "object") return null;
+  const root = typeof entry.root === "string" ? path.resolve(entry.root) : "";
+  if (!root || !existsSync(root)) return null;
+  const source = String(entry.source || "manual");
+  const targetType = entry.targetType === "device" || entry.targetType === "runtime" || entry.targetType === "agent"
+    ? entry.targetType
+    : "agent";
+
+  if (targetType === "device") {
+    return {
+      root,
+      source,
+      deviceId: device.id,
+      targetType,
+      targetId: device.id,
+      targetName: device.name,
+    };
+  }
+
+  const runtime = findRuntimeForSkillTarget(inventory, source, entry.runtimeExternalId || entry.runtimeId);
+  if (!runtime) return null;
+
+  if (targetType === "runtime") {
+    return {
+      root,
+      source,
+      deviceId: device.id,
+      targetType,
+      targetId: runtime.id,
+      targetName: runtime.name,
+      runtimeId: runtime.id,
+      runtimeExternalId: runtime.sourceRefs?.[0]?.externalId,
+    };
+  }
+
+  const agent = findAgentForSkillTarget(inventory, runtime.id, source, entry.agentExternalId || entry.agentId);
+  if (!agent) return null;
+  return {
+    root,
+    source,
+    deviceId: device.id,
+    targetType,
+    targetId: agent.id,
+    targetName: agent.name,
+    runtimeId: runtime.id,
+    runtimeExternalId: runtime.sourceRefs?.[0]?.externalId,
+    agentId: agent.id,
+    agentExternalId: agent.sourceRefs?.[0]?.externalId,
+  };
+}
+
+function findRuntimeForSkillTarget(inventory, source, externalId) {
+  const runtimes = inventory.runtimes.filter((runtime) => runtime.sourceRefs?.some((ref) => ref.source === source));
+  if (!externalId) return runtimes.length === 1 ? runtimes[0] : null;
+  return runtimes.find((runtime) => runtime.id === externalId || runtime.sourceRefs?.some((ref) => ref.externalId === externalId)) || null;
+}
+
+function findAgentForSkillTarget(inventory, runtimeId, source, externalId) {
+  const agents = inventory.agents.filter((agent) => agent.runtimeId === runtimeId && agent.sourceRefs?.some((ref) => ref.source === source));
+  if (!externalId) return agents.length === 1 ? agents[0] : null;
+  return agents.find((agent) => agent.id === externalId || agent.sourceRefs?.some((ref) => ref.externalId === externalId)) || null;
+}
+
+function defaultSlockSkillDiscoveryTargets(inventory) {
+  const targets = [];
+  for (const agent of inventory.agents) {
+    const sourceRef = agent.sourceRefs?.find((ref) => ref.source === "slock");
+    if (!sourceRef) continue;
+    const root = path.join(homeDir(), ".slock", "agents", sourceRef.externalId, "skills");
+    if (!existsSync(root)) continue;
+    targets.push({
+      root,
+      source: "slock",
+      deviceId: inventory.runtimes.find((runtime) => runtime.id === agent.runtimeId)?.deviceId,
+      targetType: "agent",
+      targetId: agent.id,
+      targetName: agent.name,
+      runtimeId: agent.runtimeId,
+      agentId: agent.id,
+      agentExternalId: sourceRef.externalId,
+    });
+  }
+  return targets;
+}
+
+function defaultOpenClawSkillDiscoveryTargets(inventory) {
+  const targets = [];
+  for (const agent of inventory.agents) {
+    const sourceRef = agent.sourceRefs?.find((ref) => ref.source === "openclaw");
+    if (!sourceRef) continue;
+    for (const root of [
+      path.join(homeDir(), ".openclaw", "agents", sourceRef.externalId, "skills"),
+      path.join(homeDir(), ".openclaw", "skills", sourceRef.externalId),
+    ]) {
+      if (!existsSync(root)) continue;
+      targets.push({
+        root,
+        source: "openclaw",
+        deviceId: inventory.runtimes.find((runtime) => runtime.id === agent.runtimeId)?.deviceId,
+        targetType: "agent",
+        targetId: agent.id,
+        targetName: agent.name,
+        runtimeId: agent.runtimeId,
+        agentId: agent.id,
+        agentExternalId: sourceRef.externalId,
+      });
+    }
+  }
+  for (const runtime of inventory.runtimes) {
+    const sourceRef = runtime.sourceRefs?.find((ref) => ref.source === "openclaw");
+    if (!sourceRef) continue;
+    const root = path.join(homeDir(), ".openclaw", "skills");
+    if (!existsSync(root)) continue;
+    targets.push({
+      root,
+      source: "openclaw",
+      deviceId: runtime.deviceId,
+      targetType: "runtime",
+      targetId: runtime.id,
+      targetName: runtime.name,
+      runtimeId: runtime.id,
+      runtimeExternalId: sourceRef.externalId,
+    });
+  }
+  return targets;
+}
+
+function defaultMulticaSkillDiscoveryTargets(inventory) {
+  const targets = [];
+  for (const agent of inventory.agents) {
+    const sourceRef = agent.sourceRefs?.find((ref) => ref.source === "multica");
+    if (!sourceRef) continue;
+    const root = path.join(homeDir(), ".multica", "agents", sourceRef.externalId, "skills");
+    if (!existsSync(root)) continue;
+    targets.push({
+      root,
+      source: "multica",
+      deviceId: inventory.runtimes.find((runtime) => runtime.id === agent.runtimeId)?.deviceId,
+      targetType: "agent",
+      targetId: agent.id,
+      targetName: agent.name,
+      runtimeId: agent.runtimeId,
+      agentId: agent.id,
+      agentExternalId: sourceRef.externalId,
+    });
+  }
+  return targets;
+}
+
+function listSkillDirectories(root) {
+  if (!existsSync(root)) return [];
+  if (existsSync(path.join(root, "SKILL.md"))) return [root];
+  try {
+    return readdirSync(root, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => path.join(root, entry.name))
+      .filter((candidate) => existsSync(path.join(candidate, "SKILL.md")));
+  } catch {
+    return [];
+  }
+}
+
+function readSkillDiscoveryDirectory(target, skillDir, observedAt) {
+  const files = readSkillFiles(skillDir);
+  if (!files.some((file) => file.path === "SKILL.md")) return null;
+  const skillFile = files.find((file) => file.path === "SKILL.md");
+  const metadata = parseSkillMetadata(skillFile?.content || "", path.basename(skillDir));
+  const packageHash = hashSkillFiles(files);
+  return {
+    id: `${target.targetId}:skill:${sanitizeId(path.basename(skillDir))}`,
+    deviceId: target.deviceId,
+    source: target.source,
+    targetType: target.targetType,
+    targetId: target.targetId,
+    targetName: target.targetName,
+    runtimeId: target.runtimeId,
+    agentId: target.agentId,
+    name: metadata.name,
+    description: metadata.description,
+    packageHash,
+    skillPath: skillDir,
+    files,
+    lastSeenAt: observedAt,
+  };
+}
+
+function readSkillFiles(skillDir) {
+  const files = [];
+  const visit = (currentDir) => {
+    if (files.length >= DEFAULT_SKILL_DISCOVERY_MAX_FILES) return;
+    let entries = [];
+    try {
+      entries = readdirSync(currentDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (files.length >= DEFAULT_SKILL_DISCOVERY_MAX_FILES) return;
+      if (entry.name === ".git" || entry.name === "node_modules") continue;
+      const absolutePath = path.join(currentDir, entry.name);
+      const relativePath = path.relative(skillDir, absolutePath).split(path.sep).join("/");
+      if (entry.isDirectory()) {
+        visit(absolutePath);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      let stats;
+      try {
+        stats = statSync(absolutePath);
+      } catch {
+        continue;
+      }
+      if (stats.size > DEFAULT_SKILL_DISCOVERY_MAX_FILE_BYTES) continue;
+      const content = readFileSync(absolutePath, "utf8");
+      files.push({
+        path: relativePath,
+        content,
+        contentHash: createHash("sha256").update(content).digest("hex"),
+        sizeBytes: Buffer.byteLength(content),
+      });
+    }
+  };
+  visit(skillDir);
+  return files.sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function hashSkillFiles(files) {
+  const hash = createHash("sha256");
+  for (const file of files) {
+    hash.update(file.path);
+    hash.update("\0");
+    hash.update(file.content);
+    hash.update("\0");
+  }
+  return hash.digest("hex");
+}
+
+function parseSkillMetadata(content, fallbackName) {
+  const frontmatter = content.match(/^---\n([\s\S]*?)\n---/);
+  const metadata = {};
+  if (frontmatter?.[1]) {
+    for (const line of frontmatter[1].split("\n")) {
+      const match = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
+      if (match) metadata[match[1].toLowerCase()] = match[2].replace(/^["']|["']$/g, "").trim();
+    }
+  }
+  const heading = content.split("\n").find((line) => line.startsWith("# "))?.replace(/^#\s+/, "").trim();
+  return {
+    name: metadata.name || heading || fallbackName,
+    description: metadata.description || "",
+  };
+}
+
 function applyDeviceOverrides(snapshot, config) {
   if (!config.deviceId && !config.deviceName) return snapshot;
   const nextDevice = {
@@ -511,7 +802,15 @@ function applyDeviceOverrides(snapshot, config) {
       runtimeId: nextRuntimeId,
     };
   });
-  return { ...snapshot, device: nextDevice, runtimes, agents };
+  const skillDiscoveries = (snapshot.skillDiscoveries || []).map((discovery) => ({
+    ...discovery,
+    id: discovery.id.replace(`${snapshot.device.id}:`, `${nextDevice.id}:`),
+    deviceId: String(discovery.deviceId || snapshot.device.id).replace(`${snapshot.device.id}`, `${nextDevice.id}`),
+    targetId: discovery.targetId.replace(`${snapshot.device.id}:`, `${nextDevice.id}:`),
+    ...(discovery.runtimeId ? { runtimeId: discovery.runtimeId.replace(`${snapshot.device.id}:`, `${nextDevice.id}:`) } : {}),
+    ...(discovery.agentId ? { agentId: discovery.agentId.replace(`${snapshot.device.id}:`, `${nextDevice.id}:`) } : {}),
+  }));
+  return { ...snapshot, device: nextDevice, runtimes, agents, skillDiscoveries };
 }
 
 function collectSnapshot(config, args) {
@@ -543,6 +842,7 @@ function collectSnapshot(config, args) {
     collectCliRuntime(device.id, observedAt, "codex", "codex", "Codex CLI"),
     collectCliRuntime(device.id, observedAt, "claude", "claude_code", "Claude Code"),
   ]);
+  const skillDiscoveries = collectSkillDiscoveries(mergedConfig, device, collected, observedAt);
   const deviceStatus = rollupDeviceStatus(collector.status, collected.runtimes);
 
   return {
@@ -551,6 +851,7 @@ function collectSnapshot(config, args) {
     device: { ...device, status: deviceStatus },
     runtimes: collected.runtimes,
     agents: collected.agents,
+    skillDiscoveries,
     reports: [],
   };
 }

@@ -161,6 +161,7 @@ export function createLorumeBackendServer(
     ? createSkillHttpApiHandler({
       governanceStore: skillGovernanceStore ?? undefined,
       requireUserSession: authGuards.requireUserSession,
+      runtimeStore: postgresStore ?? undefined,
       skillStore,
     })
     : undefined;

@@ -44,6 +44,7 @@ describeDb("database migrations", () => {
           "organization_members",
           "organizations",
           "resource_permissions",
+          "runtime_skill_discoveries",
           "runtimes",
           "schema_migrations",
           "sessions",
@@ -64,6 +65,7 @@ describeDb("database migrations", () => {
           "0004_skill_governance",
           "0005_operations_notifications",
           "0006_operation_manual_steps",
+          "0007_runtime_skill_discoveries",
         ]);
       } finally {
         await client.end();

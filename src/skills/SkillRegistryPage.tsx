@@ -141,6 +141,22 @@ interface RuntimeFleetResponse {
   agents?: Array<{ id: string; name: string; runtimeId: string; origin: string }>;
 }
 
+interface SkillDiscovery {
+  id: string;
+  deviceId: string;
+  source: string;
+  targetType: AssignmentTargetType;
+  targetId: string;
+  targetName?: string;
+  runtimeId?: string;
+  agentId?: string;
+  name: string;
+  description: string;
+  packageHash: string;
+  skillPath: string;
+  lastSeenAt?: string;
+}
+
 interface SkillTargetOption {
   id: string;
   label: string;
@@ -197,6 +213,7 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
   const [operations, setOperations] = useState<Operation[]>([]);
   const [notifications, setNotifications] = useState<NotificationThread[]>([]);
+  const [skillDiscoveries, setSkillDiscoveries] = useState<SkillDiscovery[]>([]);
   const [targets, setTargets] = useState<SkillTargetOption[]>([]);
   const [targetSkillSet, setTargetSkillSet] = useState<TargetSkillSetEntry[]>([]);
   const [targetSkillSetTarget, setTargetSkillSetTarget] = useState<TargetSkillSetResponse["target"] | null>(null);
@@ -234,7 +251,7 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
       setIsLoading(true);
       setErrorMessage("");
       try {
-        const [skillsPayload, assignmentsPayload, approvalsPayload, operationsPayload, notificationsPayload, runtimePayload] =
+        const [skillsPayload, assignmentsPayload, approvalsPayload, operationsPayload, notificationsPayload, runtimePayload, discoveriesPayload] =
           await Promise.all([
             fetchJson<{ skills?: SkillSummary[] }>(`/api/skills?organizationId=${encodeURIComponent(scopedOrganizationId)}`),
             fetchJson<{ assignments?: SkillAssignment[] }>(`/api/skill-assignments?organizationId=${encodeURIComponent(scopedOrganizationId)}`),
@@ -242,6 +259,7 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
             fetchJson<{ operations?: Operation[] }>(`/api/operations?organizationId=${encodeURIComponent(scopedOrganizationId)}&resourceType=skill&limit=20`),
             fetchJson<{ threads?: NotificationThread[] }>(`/api/notifications?organizationId=${encodeURIComponent(scopedOrganizationId)}`),
             fetchJson<RuntimeFleetResponse>("/api/runtime-fleet"),
+            fetchJson<{ skillDiscoveries?: SkillDiscovery[] }>(`/api/skill-discoveries?organizationId=${encodeURIComponent(scopedOrganizationId)}`),
           ]);
         if (cancelled) return;
         const nextSkills = skillsPayload.skills ?? [];
@@ -250,6 +268,7 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
         setApprovals(approvalsPayload.approvalRequests ?? []);
         setOperations(operationsPayload.operations ?? []);
         setNotifications(notificationsPayload.threads ?? []);
+        setSkillDiscoveries(discoveriesPayload.skillDiscoveries ?? []);
         setTargets(runtimeFleetTargets(runtimePayload));
         setSelectedSkillId((current) => current || nextSkills[0]?.id || "");
       } catch (error) {
@@ -328,16 +347,18 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
 
   async function refreshActivity() {
     if (!organizationId) return;
-    const [operationsPayload, notificationsPayload, assignmentsPayload, approvalsPayload] = await Promise.all([
+    const [operationsPayload, notificationsPayload, assignmentsPayload, approvalsPayload, discoveriesPayload] = await Promise.all([
       fetchJson<{ operations?: Operation[] }>(`/api/operations?organizationId=${encodeURIComponent(organizationId)}&resourceType=skill&limit=20`),
       fetchJson<{ threads?: NotificationThread[] }>(`/api/notifications?organizationId=${encodeURIComponent(organizationId)}`),
       fetchJson<{ assignments?: SkillAssignment[] }>(`/api/skill-assignments?organizationId=${encodeURIComponent(organizationId)}`),
       fetchJson<{ approvalRequests?: ApprovalRequest[] }>(`/api/approval-requests?organizationId=${encodeURIComponent(organizationId)}&status=pending`),
+      fetchJson<{ skillDiscoveries?: SkillDiscovery[] }>(`/api/skill-discoveries?organizationId=${encodeURIComponent(organizationId)}`),
     ]);
     setOperations(operationsPayload.operations ?? []);
     setNotifications(notificationsPayload.threads ?? []);
     setAssignments(assignmentsPayload.assignments ?? []);
     setApprovals(approvalsPayload.approvalRequests ?? []);
+    setSkillDiscoveries(discoveriesPayload.skillDiscoveries ?? []);
     const nextTargetSkillSet = await loadTargetSkillSet();
     if (nextTargetSkillSet) {
       setTargetSkillSet(nextTargetSkillSet.targetSkillSet ?? []);
@@ -419,6 +440,35 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
       await refreshActivity();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "导入 Skill 失败");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handlePromoteDiscovery(discovery: SkillDiscovery) {
+    if (!organizationId) return;
+    setIsSubmitting(true);
+    setStatusMessage("");
+    setErrorMessage("");
+    try {
+      const result = await fetchJson<{ skill?: SkillSummary }>(
+        `/api/skill-discoveries/${encodeURIComponent(discovery.id)}/promote`,
+        {
+          body: JSON.stringify({ organizationId }),
+          headers: { "content-type": "application/json" },
+          method: "POST",
+        },
+      );
+      if (result.skill) {
+        setSkills((current) => [result.skill as SkillSummary, ...current.filter((skill) => skill.id !== result.skill?.id)]);
+        setSelectedSkillId(result.skill.id);
+        setStatusMessage(`${result.skill.name} 已提升为组织 Skill。`);
+      } else {
+        setStatusMessage("已提升为组织 Skill。");
+      }
+      await refreshActivity();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "提升设备 Skill 失败");
     } finally {
       setIsSubmitting(false);
     }
@@ -648,6 +698,40 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
             </button>
             {statusMessage ? <p className="skillStatusMessage">{statusMessage}</p> : null}
             {errorMessage ? <p className="skillErrorMessage">{errorMessage}</p> : null}
+          </div>
+        </section>
+
+        <section className="tablePanel skillDiscoveryPanel" aria-label="设备发现 Skill">
+          <div className="runtimePanelHeader">
+            <div>
+              <h2>设备发现</h2>
+              <p>{skillDiscoveries.length} 个本地 Skill 可提升</p>
+            </div>
+          </div>
+          <div className="skillActivityList">
+            {skillDiscoveries.length === 0 ? (
+              <p className="emptyAsset">暂无设备发现 Skill。</p>
+            ) : (
+              skillDiscoveries.map((discovery) => (
+                <article className="skillActivityItem" key={discovery.id}>
+                  <strong>{discovery.name}</strong>
+                  <span>{discovery.description || "暂无描述"}</span>
+                  <small>
+                    {targetLabel(discovery.targetType)}
+                    {discovery.targetName ? ` · ${discovery.targetName}` : ""}
+                    {discovery.lastSeenAt ? ` · ${formatDateTime(discovery.lastSeenAt)}` : ""}
+                  </small>
+                  <button
+                    className="secondaryButton"
+                    disabled={isSubmitting}
+                    type="button"
+                    onClick={() => void handlePromoteDiscovery(discovery)}
+                  >
+                    提升为组织 Skill
+                  </button>
+                </article>
+              ))
+            )}
           </div>
         </section>
 

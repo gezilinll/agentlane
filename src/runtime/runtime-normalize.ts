@@ -132,6 +132,77 @@ export interface RuntimeActivityStats {
   maxConcurrency?: number;
 }
 
+/** Lorume target level that owns a discovered Skill package on a device. */
+export type RuntimeSkillDiscoveryTargetType = "device" | "runtime" | "agent";
+
+/** One text file found inside a discovered Skill package. */
+export interface RuntimeSkillDiscoveryFile {
+  /** Package-relative file path. */
+  path: string;
+  /** UTF-8 file content used when promoting this Skill into organization storage. */
+  content: string;
+  /** Optional content hash reported by the collector. */
+  contentHash?: string;
+  /** Optional file size in bytes reported by the collector. */
+  sizeBytes?: number;
+}
+
+/** Skill package discovery reported by one adapter before normalization. */
+export interface RuntimeSkillDiscoveryReport {
+  /** Adapter-local Skill id, usually the local directory name. */
+  externalId: string;
+  /** Target level that currently owns the Skill package. */
+  targetType: RuntimeSkillDiscoveryTargetType;
+  /** Adapter-local runtime id when the target is a runtime or agent. */
+  runtimeExternalId?: string;
+  /** Adapter-local agent id when the target is an agent. */
+  agentExternalId?: string;
+  /** Human-readable Skill name. */
+  name: string;
+  /** Human-readable Skill description. */
+  description: string;
+  /** Stable package hash reported by the collector. */
+  packageHash: string;
+  /** Local path on the device where the Skill was discovered. */
+  path: string;
+  /** Text files captured from the package for promotion. */
+  files: RuntimeSkillDiscoveryFile[];
+  /** ISO timestamp when this Skill was last observed. */
+  lastSeenAt?: string;
+}
+
+/** Normalized Skill package discovered from a registered device/runtime/agent target. */
+export interface RuntimeSkillDiscovery {
+  /** Stable Lorume discovery id. */
+  id: string;
+  /** Device id that owns this local Skill package. */
+  deviceId: string;
+  /** Adapter or runtime source that found this package. */
+  source: RuntimeSource;
+  /** Target level that currently owns the Skill package. */
+  targetType: RuntimeSkillDiscoveryTargetType;
+  /** Stable Lorume target id. */
+  targetId: string;
+  /** Human-readable target name when available. */
+  targetName?: string;
+  /** Stable Lorume runtime id when the target is a runtime or agent. */
+  runtimeId?: string;
+  /** Stable Lorume agent id when the target is an agent. */
+  agentId?: string;
+  /** Human-readable Skill name. */
+  name: string;
+  /** Human-readable Skill description. */
+  description: string;
+  /** Stable package hash reported by the collector. */
+  packageHash: string;
+  /** Local path on the device where the Skill was discovered. */
+  skillPath: string;
+  /** Text files captured from the package for promotion. */
+  files: RuntimeSkillDiscoveryFile[];
+  /** ISO timestamp when this Skill was last observed. */
+  lastSeenAt?: string;
+}
+
 /** Agent view after adapter reports are normalized. */
 export interface ManagedRuntimeAgent {
   /** Stable Lorume agent id. */
@@ -210,6 +281,8 @@ export interface RuntimeAdapterReport {
   runtimes: RuntimeDiscovery[];
   /** Agents discovered by this adapter. */
   agents: AgentDiscovery[];
+  /** Optional Skill packages discovered from this adapter's device/runtime/agent targets. */
+  skillDiscoveries?: RuntimeSkillDiscoveryReport[];
   /** Optional adapter warnings that should not fail the whole snapshot. */
   warnings?: string[];
 }
@@ -226,6 +299,8 @@ export interface RuntimeInventorySnapshot {
   runtimes: LorumeRuntime[];
   /** Normalized agents on the device. */
   agents: ManagedRuntimeAgent[];
+  /** Normalized local Skill packages discovered on the device. */
+  skillDiscoveries: RuntimeSkillDiscovery[];
   /** Adapter reports that contributed to this snapshot. */
   reports: RuntimeAdapterReport[];
 }
@@ -331,10 +406,12 @@ export function createRuntimeInventorySnapshot(
   input: CreateRuntimeInventorySnapshotInput,
 ): RuntimeInventorySnapshot {
   const runtimeIdBySourceAndExternalId = new Map<string, string>();
+  const runtimeNameById = new Map<string, string>();
   const runtimes = input.reports.flatMap((report) =>
     report.runtimes.map((runtime) => {
       const id = runtimeId(input.device.id, report.source, runtime.externalId);
       runtimeIdBySourceAndExternalId.set(`${report.source}:${runtime.externalId}`, id);
+      runtimeNameById.set(id, runtime.name);
       return {
         id,
         deviceId: input.device.id,
@@ -351,13 +428,18 @@ export function createRuntimeInventorySnapshot(
     }),
   );
 
+  const agentIdBySourceRuntimeAndExternalId = new Map<string, string>();
+  const agentNameById = new Map<string, string>();
   const agents = input.reports.flatMap((report) =>
     report.agents.map((agent) => {
       const resolvedRuntimeId =
         runtimeIdBySourceAndExternalId.get(`${report.source}:${agent.runtimeExternalId}`) ??
         runtimeId(input.device.id, report.source, agent.runtimeExternalId);
+      const id = agentId(resolvedRuntimeId, agent.externalId);
+      agentIdBySourceRuntimeAndExternalId.set(`${report.source}:${agent.runtimeExternalId}:${agent.externalId}`, id);
+      agentNameById.set(id, agent.name);
       return {
-        id: agentId(resolvedRuntimeId, agent.externalId),
+        id,
         runtimeId: resolvedRuntimeId,
         name: agent.name,
         origin: agent.origin,
@@ -368,6 +450,20 @@ export function createRuntimeInventorySnapshot(
         load: agent.load,
       };
     }),
+  );
+
+  const skillDiscoveries = input.reports.flatMap((report) =>
+    (report.skillDiscoveries ?? []).flatMap((discovery) =>
+      normalizeSkillDiscovery({
+        device: input.device,
+        discovery,
+        report,
+        runtimeIdBySourceAndExternalId,
+        runtimeNameById,
+        agentIdBySourceRuntimeAndExternalId,
+        agentNameById,
+      }),
+    ),
   );
 
   const deviceStatus = rollupDeviceStatus(input.collector, runtimes);
@@ -382,8 +478,66 @@ export function createRuntimeInventorySnapshot(
     },
     runtimes,
     agents,
+    skillDiscoveries,
     reports: input.reports,
   };
+}
+
+function normalizeSkillDiscovery({
+  agentIdBySourceRuntimeAndExternalId,
+  agentNameById,
+  device,
+  discovery,
+  report,
+  runtimeIdBySourceAndExternalId,
+  runtimeNameById,
+}: {
+  agentIdBySourceRuntimeAndExternalId: Map<string, string>;
+  agentNameById: Map<string, string>;
+  device: RuntimeDevice;
+  discovery: RuntimeSkillDiscoveryReport;
+  report: RuntimeAdapterReport;
+  runtimeIdBySourceAndExternalId: Map<string, string>;
+  runtimeNameById: Map<string, string>;
+}): RuntimeSkillDiscovery[] {
+  const runtimeIdForDiscovery = discovery.runtimeExternalId
+    ? runtimeIdBySourceAndExternalId.get(`${report.source}:${discovery.runtimeExternalId}`) ??
+      runtimeId(device.id, report.source, discovery.runtimeExternalId)
+    : undefined;
+  const agentIdForDiscovery = discovery.targetType === "agent" && discovery.runtimeExternalId && discovery.agentExternalId
+    ? agentIdBySourceRuntimeAndExternalId.get(`${report.source}:${discovery.runtimeExternalId}:${discovery.agentExternalId}`) ??
+      agentId(runtimeIdForDiscovery ?? runtimeId(device.id, report.source, discovery.runtimeExternalId), discovery.agentExternalId)
+    : undefined;
+
+  const targetId = discovery.targetType === "device"
+    ? device.id
+    : discovery.targetType === "runtime"
+      ? runtimeIdForDiscovery
+      : agentIdForDiscovery;
+  if (!targetId) return [];
+
+  const targetName = discovery.targetType === "device"
+    ? device.name
+    : discovery.targetType === "runtime"
+      ? runtimeIdForDiscovery ? runtimeNameById.get(runtimeIdForDiscovery) : undefined
+      : agentIdForDiscovery ? agentNameById.get(agentIdForDiscovery) : undefined;
+
+  return [{
+    agentId: agentIdForDiscovery,
+    description: discovery.description,
+    deviceId: device.id,
+    files: discovery.files,
+    id: `${targetId}:skill:${slugPart(discovery.externalId || discovery.name || discovery.path)}`,
+    lastSeenAt: discovery.lastSeenAt ?? report.collectedAt,
+    name: discovery.name,
+    packageHash: discovery.packageHash,
+    runtimeId: runtimeIdForDiscovery,
+    skillPath: discovery.path,
+    source: report.source,
+    targetId,
+    targetName,
+    targetType: discovery.targetType,
+  }];
 }
 
 /** Summarize a normalized runtime inventory snapshot. */

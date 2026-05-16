@@ -377,6 +377,7 @@ function runtimeFleetSnapshotFromQueryResponse(value: unknown): RuntimeInventory
     device: value.devices[0],
     runtimes: value.runtimes,
     agents: value.agents,
+    skillDiscoveries: [],
     reports: [],
   };
 }
@@ -395,6 +396,7 @@ function createEmptyRuntimeInventorySnapshot(): RuntimeInventorySnapshot {
     },
     runtimes: [],
     agents: [],
+    skillDiscoveries: [],
     reports: [],
   };
 }

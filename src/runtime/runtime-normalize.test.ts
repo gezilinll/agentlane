@@ -110,6 +110,81 @@ describe("runtime inventory normalization", () => {
     expect(snapshot.agents[0]?.lastSeenAt).toBe("2026-05-08T08:00:02.000Z");
   });
 
+  it("normalizes discovered Skill packages to the target that owns them", () => {
+    const snapshot = createRuntimeInventorySnapshot({
+      device: fixtureDevice,
+      observedAt: "2026-05-08T08:00:03.000Z",
+      collector: { version: "0.1.0", status: "online" },
+      reports: [
+        {
+          source: "openclaw",
+          collectedAt: "2026-05-08T08:00:02.000Z",
+          runtimes: [
+            {
+              externalId: "gateway-18789",
+              kind: "openclaw",
+              name: "OpenClaw Gateway",
+              status: "online",
+              capabilities: ["skill:discover"],
+            },
+          ],
+          agents: [
+            {
+              externalId: "main",
+              runtimeExternalId: "gateway-18789",
+              name: "main",
+              origin: "openclaw",
+              status: "idle",
+              channelBindings: [{ kind: "dingtalk", label: "DingTalk", status: "enabled" }],
+            },
+          ],
+          skillDiscoveries: [
+            {
+              agentExternalId: "main",
+              description: "Review local OpenClaw changes.",
+              externalId: "review-skill",
+              files: [
+                {
+                  content: `---
+name: Review Skill
+description: Review local OpenClaw changes.
+license: MIT
+compatibility: openclaw
+---
+
+# Review Skill
+`,
+                  path: "SKILL.md",
+                },
+              ],
+              name: "Review Skill",
+              packageHash: "hash-review-skill",
+              path: "/Users/dev/.openclaw/skills/review-skill",
+              runtimeExternalId: "gateway-18789",
+              targetType: "agent",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(snapshot.skillDiscoveries).toEqual([
+      expect.objectContaining({
+        agentId: "gezilinll-claw:openclaw:gateway-18789:agent:main",
+        deviceId: "gezilinll-claw",
+        files: [expect.objectContaining({ path: "SKILL.md" })],
+        id: "gezilinll-claw:openclaw:gateway-18789:agent:main:skill:review-skill",
+        name: "Review Skill",
+        packageHash: "hash-review-skill",
+        runtimeId: "gezilinll-claw:openclaw:gateway-18789",
+        skillPath: "/Users/dev/.openclaw/skills/review-skill",
+        source: "openclaw",
+        targetId: "gezilinll-claw:openclaw:gateway-18789:agent:main",
+        targetType: "agent",
+      }),
+    ]);
+  });
+
   it("keeps Slock and Multica as source kinds while preserving underlying runtime kinds", () => {
     const reports: RuntimeAdapterReport[] = [
       {

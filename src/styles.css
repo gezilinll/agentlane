@@ -1495,6 +1495,7 @@ button.tableRow:hover,
 
 .skillImportPanel,
 .skillListPanel,
+.skillDiscoveryPanel,
 .skillActivityPanel,
 .skillDetailPanel {
   min-width: 0;
@@ -1502,19 +1503,27 @@ button.tableRow:hover,
 
 .skillImportPanel {
   grid-column: 1;
+  grid-row: 1;
 }
 
 .skillListPanel {
   grid-column: 2;
+  grid-row: 1;
+}
+
+.skillDiscoveryPanel {
+  grid-column: 1 / span 2;
+  grid-row: 2;
 }
 
 .skillActivityPanel {
   grid-column: 1 / span 2;
+  grid-row: 3;
 }
 
 .skillDetailPanel {
   grid-column: 3;
-  grid-row: 1 / span 2;
+  grid-row: 1 / span 3;
 }
 
 .skillForm {
@@ -1753,6 +1762,7 @@ button.tableRow:hover,
 
   .skillImportPanel,
   .skillListPanel,
+  .skillDiscoveryPanel,
   .skillActivityPanel,
   .skillDetailPanel {
     grid-column: auto;

@@ -3,7 +3,13 @@ import path from "node:path";
 import { strFromU8, unzipSync } from "fflate";
 
 /** Supported source channels for an imported Skill package. */
-export type SkillPackageSourceType = "upload_md" | "upload_zip" | "github_url" | "marketplace_url" | "manual_edit";
+export type SkillPackageSourceType =
+  | "upload_md"
+  | "upload_zip"
+  | "github_url"
+  | "marketplace_url"
+  | "manual_edit"
+  | "device_discovery";
 
 /** Durable source metadata recorded with an imported Skill package. */
 export interface SkillPackageSource {

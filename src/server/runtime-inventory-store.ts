@@ -182,7 +182,12 @@ export function validateRuntimeInventorySnapshot(value: unknown): value is Runti
   if (!isRecord(value.device) || typeof value.device.id !== "string" || typeof value.device.name !== "string") {
     return false;
   }
-  if (!Array.isArray(value.runtimes) || !Array.isArray(value.agents) || !Array.isArray(value.reports)) {
+  if (
+    !Array.isArray(value.runtimes) ||
+    !Array.isArray(value.agents) ||
+    !Array.isArray(value.skillDiscoveries) ||
+    !Array.isArray(value.reports)
+  ) {
     return false;
   }
 
