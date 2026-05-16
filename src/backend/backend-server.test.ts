@@ -80,6 +80,50 @@ describe("standalone Lorume backend server", () => {
     socket.close();
   });
 
+  it("keeps authenticated control messages sent during token verification", async () => {
+    const backend = await startBackend({
+      authPepper: "test-pepper",
+      authStore: createDeviceTokenAuthStore("device-token-ok", { verifyDelayMs: 20 }),
+      createCommandId: () => "cmd-secured-refresh",
+      deviceTokenRequired: true,
+    });
+    const socket = new WebSocket(`${backend.wsUrl}/api/device-control/ws`);
+    await waitForOpen(socket);
+
+    const helloAckPromise = waitForMessage(socket);
+    socket.send(JSON.stringify({
+      type: "hello",
+      deviceId: "secured-device",
+      deviceToken: "device-token-ok",
+    }));
+    socket.send(JSON.stringify({
+      type: "heartbeat",
+      deviceId: "secured-device",
+      observedAt: "2026-05-17T00:00:00.000Z",
+    }));
+    const helloAck = await helloAckPromise;
+
+    expect(helloAck).toMatchObject({ type: "hello.ack", deviceId: "secured-device" });
+
+    const commandPromise = waitForMessage(socket);
+    const refreshResponse = await fetch(`${backend.url}/api/devices/secured-device/refresh`, { method: "POST" });
+    const refreshBody = await refreshResponse.json();
+    const command = await commandPromise;
+
+    expect(refreshResponse.status).toBe(202);
+    expect(refreshBody).toMatchObject({
+      commandId: "cmd-secured-refresh",
+      status: "sent",
+    });
+    expect(command).toMatchObject({
+      type: "inventory.refresh",
+      commandId: "cmd-secured-refresh",
+      deviceId: "secured-device",
+    });
+
+    socket.close();
+  });
+
   it("closes device control websocket when the hello device token is invalid", async () => {
     const backend = await startBackend({
       authPepper: "test-pepper",
@@ -329,14 +373,17 @@ async function startBackend(options: {
   return backend;
 }
 
-function createDeviceTokenAuthStore(validToken: string): AuthStore {
+function createDeviceTokenAuthStore(validToken: string, options: { verifyDelayMs?: number } = {}): AuthStore {
   const validHash = hashSecret(validToken, "device-token", "test-pepper");
   return {
-    verifyDeviceToken: async (tokenHash: string) => (
-      tokenHash === validHash
+    verifyDeviceToken: async (tokenHash: string) => {
+      if (options.verifyDelayMs) {
+        await new Promise((resolve) => setTimeout(resolve, options.verifyDelayMs));
+      }
+      return tokenHash === validHash
         ? { id: "devtok_1", organizationId: "org_1", tokenPrefix: "agt_device_" }
-        : null
-    ),
+        : null;
+    },
   } as unknown as AuthStore;
 }
 

@@ -377,6 +377,8 @@ function attachDeviceControlWebSocket(
 ): void {
   let controlSocket: RuntimeControlSocket | undefined;
   let authenticated = !options.deviceTokenRequired;
+  let authenticating = false;
+  const pendingMessages: string[] = [];
 
   const ensureControlSocket = () => {
     if (controlSocket) return controlSocket;
@@ -392,23 +394,36 @@ function attachDeviceControlWebSocket(
   if (!options.deviceTokenRequired) ensureControlSocket();
 
   webSocket.on("message", (message) => {
+    const rawMessage = message.toString();
     void (async () => {
       if (!authenticated) {
-        const hello = parseControlHello(message.toString());
+        if (authenticating) {
+          pendingMessages.push(rawMessage);
+          return;
+        }
+        authenticating = true;
+        const hello = parseControlHello(rawMessage);
         if (!hello || !hello.deviceToken || !(await options.authGuards?.verifyDeviceTokenValue(hello.deviceToken))) {
           webSocket.close(1008, "invalid device token");
           return;
         }
+        if (webSocket.readyState !== WebSocket.OPEN) return;
         authenticated = true;
         const socket = ensureControlSocket();
         delete hello.deviceToken;
         receiveControlMessage(options.controlChannel, socket, JSON.stringify(hello));
+        const queuedMessages = pendingMessages.splice(0);
+        for (const queuedMessage of queuedMessages) {
+          receiveControlMessage(options.controlChannel, socket, queuedMessage);
+        }
         return;
       }
 
-      receiveControlMessage(options.controlChannel, ensureControlSocket(), message.toString());
+      receiveControlMessage(options.controlChannel, ensureControlSocket(), rawMessage);
     })().catch(() => {
       webSocket.close(1008, "invalid control message");
+    }).finally(() => {
+      if (!authenticated) authenticating = false;
     });
   });
 
