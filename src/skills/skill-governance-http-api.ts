@@ -10,6 +10,7 @@ import type {
   SkillGovernanceStore,
 } from "./skill-governance-store";
 import type { SkillStore, SkillVersionRow } from "./skill-store";
+import { resolveTargetSkillAssignments, type SkillAssignmentTargetRef } from "./skill-effective";
 
 const maxJsonBodyChars = 1_000_000;
 
@@ -27,8 +28,26 @@ export interface SkillGovernanceHttpApiHandlerOptions {
   governanceStore: SkillGovernanceStore;
   /** Operation repository used for asynchronous Skill effects. */
   operationStore?: OperationStore;
+  /** Runtime inventory reader used to resolve Device -> Runtime -> Agent target ancestry. */
+  readRuntimeFleet?: () => Promise<SkillTargetInventory>;
   /** Skill content repository. */
   skillStore: SkillStore;
+}
+
+/** Minimal inventory shape needed by Skill target resolution. */
+export interface SkillTargetInventory {
+  /** Registered devices in the organization inventory. */
+  devices: Array<{ id: string; name: string }>;
+  /** Registered runtimes with owning device ids. */
+  runtimes: Array<{ deviceId: string; id: string; name: string }>;
+  /** Registered agents with owning runtime ids. */
+  agents: Array<{ id: string; name: string; runtimeId: string }>;
+}
+
+interface SkillTargetSummary {
+  id: string;
+  name: string;
+  type: SkillAssignmentTargetType;
 }
 
 /** Skill governance API middleware compatible with other backend API handlers. */
@@ -171,6 +190,44 @@ export function createSkillGovernanceHttpApiHandler(
       }
       const assignments = await options.governanceStore.listSkillAssignments({ organizationId });
       sendJson(response, 200, { assignments });
+      return;
+    }
+
+    const targetSkillSetMatch = requestUrl.pathname.match(/^\/api\/skill-targets\/(device|runtime|agent)\/([^/]+)\/skill-set$/);
+    if (request.method === "GET" && targetSkillSetMatch) {
+      const session = await requireSession(request, response, options);
+      if (!session) return;
+      const organizationId = requestUrl.searchParams.get("organizationId") ?? "";
+      const membership = readMembership(session, organizationId);
+      if (!membership) {
+        sendJson(response, organizationId ? 403 : 400, { error: organizationId ? "forbidden" : "organization_id_required" });
+        return;
+      }
+      if (!options.readRuntimeFleet) {
+        sendJson(response, 503, { error: "runtime_fleet_unavailable" });
+        return;
+      }
+      const targetType = normalizeTargetType(targetSkillSetMatch[1] ?? "");
+      const targetId = decodeURIComponent(targetSkillSetMatch[2] ?? "");
+      if (!targetType || !targetId) {
+        sendJson(response, 400, { error: "skill_target_required" });
+        return;
+      }
+      const targetResolution = resolveSkillTargetLineage(await options.readRuntimeFleet(), targetType, targetId);
+      if (!targetResolution) {
+        sendJson(response, 404, { error: "skill_target_not_found" });
+        return;
+      }
+      const assignments = await options.governanceStore.listSkillAssignments({ organizationId });
+      const targetSkillSet = resolveTargetSkillAssignments({
+        assignments,
+        targetLineage: targetResolution.targetLineage,
+      });
+      sendJson(response, 200, {
+        target: targetResolution.target,
+        targetLineage: targetResolution.targetLineage,
+        targetSkillSet,
+      });
       return;
     }
 
@@ -332,6 +389,50 @@ export function createSkillGovernanceHttpApiHandler(
     }
 
     next();
+  };
+}
+
+function resolveSkillTargetLineage(
+  inventory: SkillTargetInventory,
+  targetType: SkillAssignmentTargetType,
+  targetId: string,
+): { target: SkillTargetSummary; targetLineage: SkillAssignmentTargetRef[] } | null {
+  if (targetType === "device") {
+    const device = inventory.devices.find((item) => item.id === targetId);
+    if (!device) return null;
+    return {
+      target: { id: device.id, name: device.name, type: "device" },
+      targetLineage: [{ targetId: device.id, targetType: "device" }],
+    };
+  }
+
+  if (targetType === "runtime") {
+    const runtime = inventory.runtimes.find((item) => item.id === targetId);
+    if (!runtime) return null;
+    const device = inventory.devices.find((item) => item.id === runtime.deviceId);
+    if (!device) return null;
+    return {
+      target: { id: runtime.id, name: runtime.name, type: "runtime" },
+      targetLineage: [
+        { targetId: device.id, targetType: "device" },
+        { targetId: runtime.id, targetType: "runtime" },
+      ],
+    };
+  }
+
+  const agent = inventory.agents.find((item) => item.id === targetId);
+  if (!agent) return null;
+  const runtime = inventory.runtimes.find((item) => item.id === agent.runtimeId);
+  if (!runtime) return null;
+  const device = inventory.devices.find((item) => item.id === runtime.deviceId);
+  if (!device) return null;
+  return {
+    target: { id: agent.id, name: agent.name, type: "agent" },
+    targetLineage: [
+      { targetId: device.id, targetType: "device" },
+      { targetId: runtime.id, targetType: "runtime" },
+      { targetId: agent.id, targetType: "agent" },
+    ],
   };
 }
 

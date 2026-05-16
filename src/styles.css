@@ -1598,6 +1598,21 @@ button.tableRow:hover,
   margin-left: 8px;
 }
 
+.skillTargetSet {
+  border: var(--lorume-border-thin);
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 10px;
+}
+
+.skillTargetSet h4 {
+  color: var(--lorume-color-ink);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  margin: 0;
+}
+
 .emptyState {
   align-items: center;
   display: grid;

@@ -9,11 +9,11 @@ import {
   shouldRunPostgresTests,
 } from "../test/postgres";
 import { createSkillGovernanceHttpApiHandler } from "./skill-governance-http-api";
-import { createPostgresSkillGovernanceStore } from "./skill-governance-store";
+import { createPostgresSkillGovernanceStore, type SkillAssignmentRow, type SkillGovernanceStore } from "./skill-governance-store";
 import { createSkillOperationJobHandlers } from "./skill-operation-handlers";
 import { createSkillPackageFromMarkdown } from "./skill-package";
 import { createSkillHttpApiHandler } from "./skill-http-api";
-import { createPostgresSkillStore } from "./skill-store";
+import { createPostgresSkillStore, type SkillStore } from "./skill-store";
 
 const describeDb = shouldRunPostgresTests() ? describe : describe.skip;
 const servers: Server[] = [];
@@ -504,6 +504,124 @@ compatibility: codex
   });
 });
 
+describe("skill governance target Skill set API", () => {
+  it("resolves an agent Skill set from explicit Device, Runtime, and Agent assignments", async () => {
+    const now = new Date("2026-05-16T00:00:00.000Z");
+    const assignments: SkillAssignmentRow[] = [
+      skillAssignment({
+        id: "assignment-device-shared",
+        skillId: "skill-shared",
+        skillVersionId: "version-device",
+        status: "synced",
+        targetId: "device-1",
+        targetType: "device",
+        updatedAt: now,
+      }),
+      skillAssignment({
+        id: "assignment-runtime-observe",
+        skillId: "skill-observe",
+        skillVersionId: "version-runtime",
+        status: "approved",
+        targetId: "runtime-1",
+        targetType: "runtime",
+        updatedAt: now,
+      }),
+      skillAssignment({
+        id: "assignment-agent-shared",
+        skillId: "skill-shared",
+        skillVersionId: "version-agent",
+        status: "approved",
+        targetId: "agent-1",
+        targetType: "agent",
+        updatedAt: now,
+      }),
+      skillAssignment({
+        id: "assignment-disabled",
+        skillId: "skill-disabled",
+        status: "disabled",
+        targetId: "agent-1",
+        targetType: "agent",
+        updatedAt: now,
+      }),
+    ];
+    const governanceStore = {
+      listSkillAssignments: async ({ organizationId }: { organizationId: string }) => (
+        organizationId === "org_1" ? assignments : []
+      ),
+    } as unknown as SkillGovernanceStore;
+    const { baseUrl } = await startGovernanceApi({
+      governanceStore,
+      readRuntimeFleet: async () => ({
+        agents: [{
+          channelBindings: [],
+          id: "agent-1",
+          lastSeenAt: "2026-05-16T00:00:00.000Z",
+          name: "Main Agent",
+          origin: "openclaw",
+          runtimeId: "runtime-1",
+          sourceRefs: [],
+          status: "idle",
+        }],
+        devices: [{
+          connectionMode: "collector",
+          hostname: "device-1.local",
+          id: "device-1",
+          lastSeenAt: "2026-05-16T00:00:00.000Z",
+          name: "Device One",
+          os: "darwin",
+          status: "online",
+        }],
+        observedAt: "2026-05-16T00:00:00.000Z",
+        runtimes: [{
+          capabilities: [],
+          deviceId: "device-1",
+          id: "runtime-1",
+          kind: "openclaw",
+          lastSeenAt: "2026-05-16T00:00:00.000Z",
+          name: "OpenClaw",
+          sourceRefs: [],
+          status: "online",
+        }],
+        summary: { agentCount: 1, deviceCount: 1, runtimeCount: 1 },
+      }),
+      requireUserSession: async () => ({
+        id: "ses_1",
+        organizations: [{ organizationId: "org_1", role: "member" }],
+        user: { createdAt: now, email: "member@example.com", id: "user_1", updatedAt: now },
+      }),
+      skillStore: {} as SkillStore,
+    } as Parameters<typeof createSkillGovernanceHttpApiHandler>[0]);
+
+    const response = await fetch(`${baseUrl}/api/skill-targets/agent/agent-1/skill-set?organizationId=org_1`);
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload).toMatchObject({
+      target: { id: "agent-1", name: "Main Agent", type: "agent" },
+      targetLineage: [
+        { targetId: "device-1", targetType: "device" },
+        { targetId: "runtime-1", targetType: "runtime" },
+        { targetId: "agent-1", targetType: "agent" },
+      ],
+      targetSkillSet: [
+        expect.objectContaining({
+          id: "assignment-runtime-observe",
+          resolutionState: "pending_sync",
+          skillId: "skill-observe",
+          targetType: "runtime",
+        }),
+        expect.objectContaining({
+          id: "assignment-agent-shared",
+          overriddenAssignmentIds: ["assignment-device-shared"],
+          resolutionState: "pending_sync",
+          skillId: "skill-shared",
+          skillVersionId: "version-agent",
+          targetType: "agent",
+        }),
+      ],
+    });
+  });
+});
+
 async function joinOrganization(
   authStore: ReturnType<typeof createPostgresAuthStore>,
   input: {
@@ -529,6 +647,27 @@ async function joinOrganization(
     tokenHash,
     userId: input.userId,
   });
+}
+
+function skillAssignment(
+  input: Pick<SkillAssignmentRow, "id" | "skillId" | "status" | "targetId" | "targetType" | "updatedAt">
+    & Partial<SkillAssignmentRow>,
+): SkillAssignmentRow {
+  const createdAt = input.createdAt ?? input.updatedAt;
+  return {
+    approvedByUserId: input.approvedByUserId ?? "user_1",
+    createdAt,
+    createdByUserId: input.createdByUserId ?? "user_1",
+    id: input.id,
+    lastSyncJobId: input.lastSyncJobId ?? null,
+    organizationId: input.organizationId ?? "org_1",
+    skillId: input.skillId,
+    skillVersionId: input.skillVersionId ?? `version-${input.skillId}`,
+    status: input.status,
+    targetId: input.targetId,
+    targetType: input.targetType,
+    updatedAt: input.updatedAt,
+  };
 }
 
 async function startSkillApi(options: Parameters<typeof createSkillHttpApiHandler>[0]) {

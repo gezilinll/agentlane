@@ -5,6 +5,7 @@ type SkillStatus = "draft" | "published" | "archived";
 type ValidationStatus = "passed" | "warning" | "blocked";
 type AssignmentTargetType = "device" | "runtime" | "agent";
 type AssignmentStatus = "pending_review" | "approved" | "syncing" | "synced" | "failed" | "unsupported" | "disabled";
+type TargetSkillResolutionState = "pending_sync" | "syncing" | "installed" | "failed" | "unsupported";
 type OperationStatus =
   | "queued"
   | "running"
@@ -74,6 +75,25 @@ interface SkillAssignment {
   targetId: string;
   status: AssignmentStatus;
   updatedAt: string;
+}
+
+interface TargetSkillSetEntry extends SkillAssignment {
+  overriddenAssignmentIds?: string[];
+  resolutionState: TargetSkillResolutionState;
+  specificity?: number;
+}
+
+interface TargetSkillSetResponse {
+  target?: {
+    id: string;
+    name: string;
+    type: AssignmentTargetType;
+  };
+  targetLineage?: Array<{
+    targetId: string;
+    targetType: AssignmentTargetType;
+  }>;
+  targetSkillSet?: TargetSkillSetEntry[];
 }
 
 interface ApprovalRequest {
@@ -153,6 +173,14 @@ const assignmentStatusLabels: Record<AssignmentStatus, string> = {
   unsupported: "不支持",
 };
 
+const targetResolutionStateLabels: Record<TargetSkillResolutionState, string> = {
+  failed: "同步失败",
+  installed: "已安装",
+  pending_sync: "待同步",
+  syncing: "同步中",
+  unsupported: "不支持",
+};
+
 /** Organization-scoped Skill management page backed by formal Skill, Operation, and Notification APIs. */
 export function SkillRegistryPage({ organizationId }: { organizationId?: string }) {
   const [skills, setSkills] = useState<SkillSummary[]>([]);
@@ -164,6 +192,8 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
   const [operations, setOperations] = useState<Operation[]>([]);
   const [notifications, setNotifications] = useState<NotificationThread[]>([]);
   const [targets, setTargets] = useState<SkillTargetOption[]>([]);
+  const [targetSkillSet, setTargetSkillSet] = useState<TargetSkillSetEntry[]>([]);
+  const [targetSkillSetTarget, setTargetSkillSetTarget] = useState<TargetSkillSetResponse["target"] | null>(null);
   const [sourceType, setSourceType] = useState("markdown");
   const [sourceUrl, setSourceUrl] = useState("");
   const [filename, setFilename] = useState("SKILL.md");
@@ -173,6 +203,7 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingTargetSkillSet, setIsLoadingTargetSkillSet] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const selectedSkill = detail?.skill ?? skills.find((skill) => skill.id === selectedSkillId) ?? null;
@@ -253,6 +284,42 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
     };
   }, [selectedSkillId]);
 
+  useEffect(() => {
+    if (!organizationId || !selectedTargetValue) {
+      setTargetSkillSet([]);
+      setTargetSkillSetTarget(null);
+      return;
+    }
+    let cancelled = false;
+    async function load() {
+      const result = await loadTargetSkillSet(selectedTargetValue);
+      if (cancelled) return;
+      setTargetSkillSet(result?.targetSkillSet ?? []);
+      setTargetSkillSetTarget(result?.target ?? null);
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [organizationId, selectedTargetValue]);
+
+  async function loadTargetSkillSet(targetValue = selectedTargetValue): Promise<TargetSkillSetResponse | null> {
+    if (!organizationId || !targetValue) return null;
+    const selectedTarget = parseTargetOptionValue(targetValue);
+    if (!selectedTarget) return null;
+    setIsLoadingTargetSkillSet(true);
+    try {
+      return await fetchJson<TargetSkillSetResponse>(
+        `/api/skill-targets/${selectedTarget.type}/${encodeURIComponent(selectedTarget.id)}/skill-set?organizationId=${encodeURIComponent(organizationId)}`,
+      );
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "读取目标 Skill Set 失败");
+      return null;
+    } finally {
+      setIsLoadingTargetSkillSet(false);
+    }
+  }
+
   async function refreshActivity() {
     if (!organizationId) return;
     const [operationsPayload, notificationsPayload, assignmentsPayload, approvalsPayload] = await Promise.all([
@@ -265,6 +332,11 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
     setNotifications(notificationsPayload.threads ?? []);
     setAssignments(assignmentsPayload.assignments ?? []);
     setApprovals(approvalsPayload.approvalRequests ?? []);
+    const nextTargetSkillSet = await loadTargetSkillSet();
+    if (nextTargetSkillSet) {
+      setTargetSkillSet(nextTargetSkillSet.targetSkillSet ?? []);
+      setTargetSkillSetTarget(nextTargetSkillSet.target ?? null);
+    }
   }
 
   async function handleImport() {
@@ -537,9 +609,13 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
           approvals={selectedApprovals}
           detail={detail}
           files={files}
+          isLoadingTargetSkillSet={isLoadingTargetSkillSet}
           latestVersion={latestVersion}
           operations={operations}
           selectedTargetValue={selectedTargetValue}
+          skills={skills}
+          targetSkillSet={targetSkillSet}
+          targetSkillSetTarget={targetSkillSetTarget}
           targets={targets}
           onAssign={() => void handleAssign()}
           onApprovalDecision={(approval, decision) => void handleApprovalDecision(approval, decision)}
@@ -558,6 +634,7 @@ function SkillDetailPanel({
   approvals,
   detail,
   files,
+  isLoadingTargetSkillSet,
   isSubmitting,
   latestVersion,
   onAssign,
@@ -567,16 +644,23 @@ function SkillDetailPanel({
   onTargetChange,
   operations,
   selectedTargetValue,
+  skills,
+  targetSkillSet,
+  targetSkillSetTarget,
   targets,
 }: {
   assignments: SkillAssignment[];
   approvals: ApprovalRequest[];
   detail: SkillDetailResponse | null;
   files: SkillFile[];
+  isLoadingTargetSkillSet: boolean;
   isSubmitting: boolean;
   latestVersion: SkillVersion | null;
   operations: Operation[];
   selectedTargetValue: string;
+  skills: SkillSummary[];
+  targetSkillSet: TargetSkillSetEntry[];
+  targetSkillSetTarget: TargetSkillSetResponse["target"] | null;
   targets: SkillTargetOption[];
   onAssign: () => void;
   onApprovalDecision: (approval: ApprovalRequest, decision: "approve" | "reject") => void;
@@ -595,6 +679,7 @@ function SkillDetailPanel({
 
   const scopedOperations = operations.filter((operation) => operation.resourceId === detail.skill.id);
   const latestVersionIsPublished = Boolean(latestVersion?.publishedAt);
+  const skillNameById = new Map(skills.map((skill) => [skill.id, skill.name]));
 
   return (
     <aside className="detailPanel skillDetailPanel" aria-label="Skill 详情">
@@ -674,6 +759,30 @@ function SkillDetailPanel({
               </li>
             ))}
           </ul>
+        ) : null}
+        {selectedTargetValue ? (
+          <div className="skillTargetSet">
+            <h4>目标 Skill Set</h4>
+            {targetSkillSetTarget ? (
+              <p className="mutedText">
+                {targetLabel(targetSkillSetTarget.type)} · {targetSkillSetTarget.name}
+              </p>
+            ) : null}
+            {isLoadingTargetSkillSet ? (
+              <p className="mutedText">读取中。</p>
+            ) : targetSkillSet.length === 0 ? (
+              <p className="mutedText">当前目标暂无显式生效 Skill。</p>
+            ) : (
+              <ul>
+                {targetSkillSet.map((entry) => (
+                  <li key={entry.id}>
+                    {skillNameById.get(entry.skillId) ?? entry.skillId} ·{" "}
+                    {targetResolutionStateLabels[entry.resolutionState] ?? entry.resolutionState}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         ) : null}
       </div>
 

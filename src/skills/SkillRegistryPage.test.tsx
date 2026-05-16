@@ -141,6 +141,31 @@ const approvedAssignmentsResponse = {
     },
   ],
 };
+const targetSkillSetResponse = {
+  target: {
+    id: "gezilinll-claw:openclaw:gateway-local:agent:main",
+    name: "main",
+    type: "agent",
+  },
+  targetLineage: [
+    { targetId: "gezilinll-claw", targetType: "device" },
+    { targetId: "gezilinll-claw:openclaw:gateway-local", targetType: "runtime" },
+    { targetId: "gezilinll-claw:openclaw:gateway-local:agent:main", targetType: "agent" },
+  ],
+  targetSkillSet: [
+    {
+      id: "assignment_1",
+      skillId: "skill_cost",
+      skillVersionId: "skillver_cost_1",
+      targetType: "agent",
+      targetId: "gezilinll-claw:openclaw:gateway-local:agent:main",
+      status: "approved",
+      resolutionState: "pending_sync",
+      overriddenAssignmentIds: [],
+      updatedAt: "2026-05-14T08:19:00.000Z",
+    },
+  ],
+};
 const emptyApprovalsResponse: ApprovalsResponse = { approvalRequests: [] };
 const operationsResponse = {
   operations: [
@@ -265,6 +290,9 @@ function installSkillRegistryFetchMock(options: {
     }
     if (url.includes("/api/skills/skill_cost/versions/skillver_cost_1/files")) {
       return jsonResponse({ files: detailResponse.files });
+    }
+    if (url.includes("/api/skill-targets/agent/gezilinll-claw%3Aopenclaw%3Agateway-local%3Aagent%3Amain/skill-set")) {
+      return jsonResponse(targetSkillSetResponse);
     }
     if (url.includes("/api/skills/skill_cost")) {
       return jsonResponse(detailResponse);
@@ -438,5 +466,21 @@ describe("SkillRegistryPage", () => {
     expect(calls.find((call) => call.url.includes("/api/skill-assignments/assignment_1/sync"))).toMatchObject({
       method: "POST",
     });
+  });
+
+  it("loads the resolved target Skill set after a target is selected", async () => {
+    const user = userEvent.setup();
+    const calls = installSkillRegistryFetchMock({ assignments: approvedAssignmentsResponse });
+    render(<SkillRegistryPage organizationId="org_1" />);
+
+    await screen.findByRole("heading", { name: "Cost Review" });
+    await user.selectOptions(screen.getByLabelText("分配目标"), screen.getByRole("option", { name: "Agent · main" }));
+
+    expect(await screen.findByText("目标 Skill Set")).toBeInTheDocument();
+    expect(screen.getByText("Cost Review · 待同步")).toBeInTheDocument();
+    expect(calls.some((call) => (
+      call.url.includes("/api/skill-targets/agent/gezilinll-claw%3Aopenclaw%3Agateway-local%3Aagent%3Amain/skill-set")
+      && call.url.includes("organizationId=org_1")
+    ))).toBe(true);
   });
 });

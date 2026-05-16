@@ -412,6 +412,7 @@ Assignment API：
 - `GET /api/skill-assignments`：列出分配。
 - `POST /api/skill-assignments`：创建分配 Operation 或创建分配审核。
 - `POST /api/skill-assignments/:assignmentId/sync`：为已批准或可重试的 Assignment 创建 `skill_sync` Operation，并由 Job Runner 异步下发到目标设备。
+- `GET /api/skill-targets/:targetType/:targetId/skill-set`：根据 Runtime Fleet 中的 Device -> Runtime -> Agent 父子关系和显式 Assignment，返回某个目标当前解析出的 Target Skill Set。组织资产库中的未分配 Skill 不会出现在结果中。
 
 Approval API：
 
@@ -426,7 +427,7 @@ Operation / Notification API：
 - `GET /api/notifications`：按组织读取页面内通知线程。
 - `GET /api/notifications/:threadId`：读取通知线程和投递明细。
 
-当前 Skill Registry 页面从 Runtime Fleet 查询结果中派生可分配目标，不单独暴露 Skill target HTTP API。页面不得调用不存在的编辑、归档、删除或 effective-skill API。
+当前 Skill Registry 页面从 Runtime Fleet 查询结果中派生可分配目标，并在用户选择目标后调用 Skill target HTTP API 展示目标 Skill Set 与安装状态。页面不得在前端自行拼接生效规则，也不得调用不存在的编辑、归档、删除或 target support 原因 API。
 当前 Skill Registry 页面可以对已批准、已同步、失败或不支持的 Assignment 触发“同步到目标”；该动作只创建 Operation，不直接写设备。
 
 ## UI 规则
@@ -438,6 +439,7 @@ Skill Registry 页面必须支持：
 - 导入 Markdown、ZIP、GitHub URL 和 Marketplace URL。ZIP 文件由页面转成 base64 后进入同一个 `POST /api/skills/import` 校验链路。
 - 发布版本或提交发布审核。
 - 选择 Device、Runtime 或 Agent 目标并创建分配 Operation 或提交分配审核。
+- 选择目标后展示后端解析出的 Target Skill Set，包含 Skill 名称和待同步、同步中、已安装、同步失败或不支持等安装状态。
 - 待处理审核必须能在 Skill 详情内批准或拒绝；处理后刷新相关 Operation、通知、分配和审批状态。
 - 已批准、已同步、失败或不支持的 Assignment 必须能触发“同步到目标”，并在同步 Operation 排队后刷新相关状态。
 - 最新版本未发布时，分配按钮必须禁用并明确提示先发布。
@@ -489,6 +491,7 @@ UI：
 - GitHub URL 和 Marketplace URL 导入进入同一 `POST /api/skills/import` 路径。
 - 发布、分配和审批动作返回 Operation 或 Approval 后，页面刷新相关 Operation、通知、分配和审批状态。
 - 已批准 Assignment 的“同步到目标”按钮调用 `POST /api/skill-assignments/:assignmentId/sync`，返回 Operation 后显示排队状态并刷新相关数据。
+- 选择目标后调用 `GET /api/skill-targets/:targetType/:targetId/skill-set`，页面只展示后端解析出的 Target Skill Set，不把组织 Skill 库里的未分配 Skill 当作目标已生效 Skill。
 - 最新版本未发布时不能创建分配。
 - 包含 `:` 的 target ID 在选择和提交分配时不丢失。
 - 风险提示和审核状态可见。
