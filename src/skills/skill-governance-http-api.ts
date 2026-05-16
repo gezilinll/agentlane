@@ -665,7 +665,9 @@ async function findReadableAssignment(
       resourceType: assignment.targetType,
       userId: session.user.id,
     });
-    if (canViewSkill && canManageTarget) return assignment;
+    const isAssignmentActor = assignment.createdByUserId === session.user.id
+      || assignment.approvedByUserId === session.user.id;
+    if (canViewSkill && (canManageTarget || isAssignmentActor)) return assignment;
     return "forbidden";
   }
   return null;

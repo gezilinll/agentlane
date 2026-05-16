@@ -436,6 +436,146 @@ compatibility: codex
     }
   });
 
+  it("allows assignment requesters and target managers to sync approved assignments", async () => {
+    const database = await createTemporaryPostgresDatabase();
+    try {
+      runMigrationsScript(database.url);
+      const authStore = createPostgresAuthStore({ connectionString: database.url });
+      const skillStore = createPostgresSkillStore({ connectionString: database.url });
+      const governanceStore = createPostgresSkillGovernanceStore({ connectionString: database.url });
+      const operationStore = createPostgresOperationStore({ connectionString: database.url });
+      try {
+        const owner = await authStore.upsertUserForEmail("sync-matrix-owner@example.com");
+        const requester = await authStore.upsertUserForEmail("sync-matrix-requester@example.com");
+        const targetManager = await authStore.upsertUserForEmail("sync-matrix-target-manager@example.com");
+        const viewer = await authStore.upsertUserForEmail("sync-matrix-viewer@example.com");
+        const organization = await authStore.createOrganization({
+          createdByUserId: owner.id,
+          name: "Sync Matrix Team",
+          slug: "sync-matrix-team",
+        });
+        await Promise.all([
+          joinOrganization(authStore, {
+            email: requester.email,
+            invitedByUserId: owner.id,
+            organizationId: organization.id,
+            userId: requester.id,
+          }),
+          joinOrganization(authStore, {
+            email: targetManager.email,
+            invitedByUserId: owner.id,
+            organizationId: organization.id,
+            userId: targetManager.id,
+          }),
+          joinOrganization(authStore, {
+            email: viewer.email,
+            invitedByUserId: owner.id,
+            organizationId: organization.id,
+            userId: viewer.id,
+          }),
+        ]);
+        const imported = await skillStore.importSkillVersion({
+          createdByUserId: owner.id,
+          organizationId: organization.id,
+          package: createSkillPackageFromMarkdown({
+            content: `---
+name: Sync Permission Skill
+description: Validate sync permission matrix.
+license: MIT
+compatibility: codex
+---
+
+# Sync Permission Skill
+`,
+            source: { type: "upload_md" },
+          }),
+        });
+        await governanceStore.publishSkillVersion({
+          publishedByUserId: owner.id,
+          skillId: imported.skill.id,
+          skillVersionId: imported.version.id,
+        });
+        await Promise.all([requester, targetManager, viewer].map((user) => governanceStore.grantResourcePermission({
+          grantedByUserId: owner.id,
+          organizationId: organization.id,
+          permission: "view",
+          resourceId: imported.skill.id,
+          resourceType: "skill",
+          subjectUserId: user.id,
+        })));
+        await governanceStore.grantResourcePermission({
+          grantedByUserId: owner.id,
+          organizationId: organization.id,
+          permission: "manage_skills",
+          resourceId: "agent-sync-matrix",
+          resourceType: "agent",
+          subjectUserId: targetManager.id,
+        });
+        const assignment = await governanceStore.createSkillAssignment({
+          approvedByUserId: owner.id,
+          createdByUserId: requester.id,
+          organizationId: organization.id,
+          skillId: imported.skill.id,
+          skillVersionId: imported.version.id,
+          status: "approved",
+          targetId: "agent-sync-matrix",
+          targetType: "agent",
+        });
+
+        let currentSession: AuthSessionContext = {
+          id: "ses_requester",
+          organizations: await authStore.listOrganizationsForUser(requester.id),
+          user: requester,
+        };
+        const { baseUrl } = await startGovernanceApi({
+          governanceStore,
+          operationStore,
+          requireUserSession: async () => currentSession,
+          skillStore,
+        });
+
+        const requesterResponse = await postJson(`${baseUrl}/api/skill-assignments/${encodeURIComponent(assignment.id)}/sync`, {});
+        currentSession = {
+          id: "ses_viewer",
+          organizations: await authStore.listOrganizationsForUser(viewer.id),
+          user: viewer,
+        };
+        const viewerResponse = await postJson(`${baseUrl}/api/skill-assignments/${encodeURIComponent(assignment.id)}/sync`, {});
+        currentSession = {
+          id: "ses_target_manager",
+          organizations: await authStore.listOrganizationsForUser(targetManager.id),
+          user: targetManager,
+        };
+        const targetManagerResponse = await postJson(`${baseUrl}/api/skill-assignments/${encodeURIComponent(assignment.id)}/sync`, {});
+        const operations = await operationStore.listOperations({
+          organizationId: organization.id,
+          targetId: assignment.targetId,
+          targetType: assignment.targetType,
+        });
+
+        expect(requesterResponse.status).toBe(202);
+        expect(viewerResponse.status).toBe(403);
+        expect(targetManagerResponse.status).toBe(202);
+        expect(operations).toEqual(expect.arrayContaining([
+          expect.objectContaining({
+            requestedByUserId: requester.id,
+            metadata: expect.objectContaining({ assignmentId: assignment.id }),
+            type: "skill_sync",
+          }),
+          expect.objectContaining({
+            requestedByUserId: targetManager.id,
+            metadata: expect.objectContaining({ assignmentId: assignment.id }),
+            type: "skill_sync",
+          }),
+        ]));
+      } finally {
+        await Promise.all([authStore.close(), skillStore.close(), governanceStore.close(), operationStore.close()]);
+      }
+    } finally {
+      await database.drop();
+    }
+  });
+
   it("requires the configured resolver role for approval decisions", async () => {
     const database = await createTemporaryPostgresDatabase();
     try {
