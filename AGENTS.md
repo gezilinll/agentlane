@@ -178,7 +178,7 @@ Run the full repository harness before handing off changes:
 ./scripts/verify.sh
 ```
 
-Equivalent package entry points are `npm run verify`, `npm run check`, and `npm run harness`. The full harness verifies required product documents/assets, local Markdown links, Postgres migration checks, backend store/control/API checks, backend bundle and deploy config checks, collector script behavior, TypeScript typecheck, unit/component tests, production build, and the Playwright responsive layout harness.
+Equivalent package entry points are `npm run verify`, `npm run check`, and `npm run harness`. If the local agent runtime has Node but no `npm` binary, `./scripts/verify.sh` falls back to `scripts/run-package-script.mjs` so the same harness still runs. The full harness verifies required product documents/assets, local Markdown links, Postgres migration checks, backend store/control/API checks, backend bundle and deploy config checks, collector script behavior, TypeScript typecheck, unit/component tests, production build, and the Playwright responsive layout harness.
 
 If the local Playwright browser is missing, install the current test browser once:
 

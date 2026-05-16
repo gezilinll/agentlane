@@ -4,14 +4,22 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-npm run check:repo
-npm run check:commit-message
-npm run check:db
-npm run check:backend
-npm run check:quick
-npm run check:build
-npm run check:deploy
-npm run check:e2e
-npm run check:e2e:auth
+run_package_script() {
+  if command -v npm >/dev/null 2>&1; then
+    npm run "$1"
+  else
+    node scripts/run-package-script.mjs "$1"
+  fi
+}
+
+run_package_script check:repo
+run_package_script check:commit-message
+run_package_script check:db
+run_package_script check:backend
+run_package_script check:quick
+run_package_script check:build
+run_package_script check:deploy
+run_package_script check:e2e
+run_package_script check:e2e:auth
 
 echo "verify: ok"

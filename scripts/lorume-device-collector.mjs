@@ -159,9 +159,8 @@ function findExecutable(command) {
   }
 
   try {
-    const resolved = execFileSync("command", ["-v", command], {
+    const resolved = execFileSync("sh", ["-c", `command -v -- ${shellQuote(command)}`], {
       encoding: "utf8",
-      shell: true,
       env: { ...process.env, PATH: commandSearchDirs().join(path.delimiter) },
       stdio: ["ignore", "pipe", "ignore"],
     }).trim();
@@ -169,6 +168,10 @@ function findExecutable(command) {
   } catch {
     return null;
   }
+}
+
+function shellQuote(value) {
+  return `'${String(value).replaceAll("'", "'\"'\"'")}'`;
 }
 
 function runJson(command, args, timeoutMs = 10_000) {
