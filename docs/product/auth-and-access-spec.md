@@ -136,13 +136,15 @@ Runtime / Runs 读取 API：
 
 ## 邮件发送
 
-邮箱验证码通过可替换的 Email Provider 发送。当前使用 Sender / Resend 类 HTTP 邮件服务均可，但 API key 只允许通过环境变量注入。
+邮箱验证码通过可替换的 Email Provider 发送。当前生产实现支持 SMTP 邮箱账号，适配阿里企业邮箱等企业邮箱服务；Sender / Resend 类 HTTP 邮件服务仍属于同一 Provider 边界的可替换实现。SMTP 密码、API key 或客户端安全密码只允许通过环境变量注入。
 
 实现要求：
 
 - 本地测试使用 fake provider，不发真实邮件。
 - 开发环境可以输出一次性调试码，但该能力必须由显式环境变量开启。
 - 生产环境没有邮件 provider 配置时，发送验证码接口必须失败并给出可排查错误。
+- SMTP Provider 使用 `LORUME_EMAIL_PROVIDER=smtp` 开启，读取 `LORUME_SMTP_HOST`、`LORUME_SMTP_PORT`、`LORUME_SMTP_SECURE`、`LORUME_SMTP_USER`、`LORUME_SMTP_PASSWORD` 和 `LORUME_EMAIL_FROM`。
+- 发信账号应使用专用系统邮箱，例如 `noreply@lorume.com`；不要使用个人邮箱或管理员邮箱作为验证码发件账号。
 
 ## UI 规则
 

@@ -26,6 +26,7 @@ import {
 import { createSkillHttpApiHandler } from "../skills/skill-http-api";
 import { createSkillOperationJobHandlers } from "../skills/skill-operation-handlers";
 import { createPostgresSkillStore, type SkillStore } from "../skills/skill-store";
+import { createBackendEmailProvider } from "./email-provider";
 
 /** Construction options for the standalone Lorume backend. */
 export interface LorumeBackendServerOptions {
@@ -456,18 +457,6 @@ function parseControlHello(rawMessage: string): ({ deviceToken?: string } & Reco
   const record = message as Record<string, unknown>;
   if (record.type !== "hello" || typeof record.deviceToken !== "string") return null;
   return record as { deviceToken?: string } & Record<string, unknown>;
-}
-
-function createBackendEmailProvider(): AuthEmailProvider {
-  return {
-    async sendLoginCode({ code, email }) {
-      if (process.env.LORUME_AUTH_DEBUG_CODES === "1") {
-        process.stdout.write(`Lorume login code for ${email}: ${code}\n`);
-        return;
-      }
-      throw new Error("email_provider_not_configured");
-    },
-  };
 }
 
 function closeWebSocketServer(webSocketServer: WebSocketServer): Promise<void> {
