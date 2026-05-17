@@ -21,6 +21,13 @@ services:
       DATABASE_URL: postgres://lorume:${LORUME_POSTGRES_PASSWORD:-lorume}@postgres:5432/lorume
       LORUME_BACKEND_HOST: 0.0.0.0
       LORUME_BACKEND_PORT: 4173
+      LORUME_EMAIL_PROVIDER: ${LORUME_EMAIL_PROVIDER:-}
+      LORUME_EMAIL_FROM: ${LORUME_EMAIL_FROM:-}
+      LORUME_SMTP_HOST: ${LORUME_SMTP_HOST:-}
+      LORUME_SMTP_PASSWORD: ${LORUME_SMTP_PASSWORD:-}
+      LORUME_SMTP_PORT: ${LORUME_SMTP_PORT:-}
+      LORUME_SMTP_SECURE: ${LORUME_SMTP_SECURE:-}
+      LORUME_SMTP_USER: ${LORUME_SMTP_USER:-}
     depends_on:
       postgres:
         condition: service_healthy
