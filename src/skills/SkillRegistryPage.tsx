@@ -284,6 +284,18 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
   }, [organizationId]);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const targetType = params.get("targetType");
+    const targetId = params.get("targetId");
+    if (!targetType || !targetId) return;
+    if (targetType !== "agent" && targetType !== "runtime" && targetType !== "device") return;
+    const nextValue = targetOptionValue({ id: targetId, type: targetType });
+    if (targets.some((target) => targetOptionValue(target) === nextValue)) {
+      setSelectedTargetValue((current) => current || nextValue);
+    }
+  }, [targets]);
+
+  useEffect(() => {
     if (!selectedSkillId) {
       setDetail(null);
       setFiles([]);
@@ -621,8 +633,8 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
       <section className="workspace">
         <header className="pageHeader">
           <div>
-            <p className="eyebrow">Skill / Registry</p>
-            <h1>Skill Registry</h1>
+            <p className="eyebrow">Skill / Management</p>
+            <h1>Skill 管理</h1>
             <p className="pageSubtitle">请选择组织后管理 Skill。</p>
           </div>
         </header>
@@ -634,9 +646,9 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
     <section className="workspace">
       <header className="pageHeader">
         <div>
-          <p className="eyebrow">Skill / Registry</p>
-          <h1>Skill Registry</h1>
-          <p className="pageSubtitle">统一导入、发布、分配和观察组织 Skill 的异步同步状态。</p>
+          <p className="eyebrow">Skill / Management</p>
+          <h1>Skill 管理</h1>
+          <p className="pageSubtitle">统一管理组织 Skill 资产、目标 Skill Set、设备发现、审批、同步任务和通知。</p>
         </div>
       </header>
 
@@ -704,7 +716,7 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
         <section className="tablePanel skillDiscoveryPanel" aria-label="设备发现 Skill">
           <div className="runtimePanelHeader">
             <div>
-              <h2>设备发现</h2>
+              <h2>设备发现 Skill</h2>
               <p>{skillDiscoveries.length} 个本地 Skill 可提升</p>
             </div>
           </div>

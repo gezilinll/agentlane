@@ -55,8 +55,12 @@ type RuntimeFleetSelection = {
   id: string;
 };
 
+interface RuntimeFleetPageProps {
+  onOpenSkillTarget?: (target: { type: "agent"; id: string }) => void;
+}
+
 /** First Runtime Fleet surface: inspect registered device, runtimes, agents, and channel exposure. */
-export function RuntimeFleetPage() {
+export function RuntimeFleetPage({ onOpenSkillTarget }: RuntimeFleetPageProps = {}) {
   const allowFixtureFallback = isFixtureFallbackAllowed();
   const [snapshot, setSnapshot] = useState<RuntimeInventorySnapshot>(
     allowFixtureFallback ? fixtureRuntimeSnapshot : createEmptyRuntimeInventorySnapshot(),
@@ -339,7 +343,12 @@ export function RuntimeFleetPage() {
             onSelect={(agent) => setSelection({ kind: "agent", id: agent.id })}
           />
         </div>
-        <RuntimeDetail detail={detail} />
+        <RuntimeDetail
+          detail={detail}
+          isRefreshing={isRefreshRunning}
+          onOpenSkillTarget={onOpenSkillTarget}
+          onRefreshSkillList={() => void handleRefresh()}
+        />
       </section>
     </section>
   );
@@ -715,7 +724,17 @@ function AgentTable({
   );
 }
 
-function RuntimeDetail({ detail }: { detail: RuntimeFleetDetail | null }) {
+function RuntimeDetail({
+  detail,
+  isRefreshing = false,
+  onOpenSkillTarget,
+  onRefreshSkillList,
+}: {
+  detail: RuntimeFleetDetail | null;
+  isRefreshing?: boolean;
+  onOpenSkillTarget?: (target: { type: "agent"; id: string }) => void;
+  onRefreshSkillList?: () => void;
+}) {
   if (!detail) {
     return (
       <aside className="detailPanel" aria-label="运行资产详情">
@@ -734,6 +753,26 @@ function RuntimeDetail({ detail }: { detail: RuntimeFleetDetail | null }) {
         </div>
         <StatusBadge label={detail.statusLabel} status={detail.status} />
       </div>
+      {detail.kind === "agent" ? (
+        <div className="runtimeDetailActions" aria-label="Agent Skill 操作">
+          <button
+            className="secondaryButton compactButton"
+            disabled={!onOpenSkillTarget}
+            type="button"
+            onClick={() => onOpenSkillTarget?.({ type: "agent", id: detail.id })}
+          >
+            查看 Skill
+          </button>
+          <button
+            className="secondaryButton compactButton"
+            disabled={isRefreshing || !onRefreshSkillList}
+            type="button"
+            onClick={onRefreshSkillList}
+          >
+            {isRefreshing ? "刷新中" : "刷新 Skill 清单"}
+          </button>
+        </div>
+      ) : null}
       <DetailBlock title="概览">{detail.subtitle}</DetailBlock>
       {detail.sections.map((section) => (
         <DetailList key={section.title} title={section.title} items={section.items} />

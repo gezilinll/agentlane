@@ -14,7 +14,7 @@ afterEach(() => {
 
 describe("auth pages", () => {
   it("guards the console behind email-code login", async () => {
-    window.history.pushState({}, "", "/catalog");
+    window.history.pushState({}, "", "/runtime");
     globalThis.fetch = vi.fn(async (input) => {
       const url = input.toString();
       if (url.endsWith("/api/me")) {
@@ -26,7 +26,7 @@ describe("auth pages", () => {
     render(<App authMode="required" />);
 
     expect(await screen.findByRole("heading", { name: "登录 Lorume" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "对象目录" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "运行资产" })).not.toBeInTheDocument();
   });
 
   it("does not surface anonymous session probe errors on the login page", async () => {
@@ -88,7 +88,7 @@ describe("auth pages", () => {
     await user.type(screen.getByLabelText("验证码"), "246810");
     await user.click(screen.getByRole("button", { name: "进入控制台" }));
 
-    expect(await screen.findByRole("heading", { name: "对象目录" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "运行资产" })).toBeInTheDocument();
     expect(requests).toContainEqual({
       url: "/api/auth/email-code",
       body: { email: "zhangliang@gaoding.com" },
@@ -101,7 +101,7 @@ describe("auth pages", () => {
 
   it("asks a signed-in user without organizations to create one", async () => {
     const user = userEvent.setup();
-    window.history.pushState({}, "", "/catalog");
+    window.history.pushState({}, "", "/runtime");
     globalThis.fetch = vi.fn(async (input, init) => {
       const url = input.toString();
       if (url.endsWith("/api/me")) return jsonResponse(sessionResponse({ organizations: [] }));
@@ -121,7 +121,7 @@ describe("auth pages", () => {
     await user.type(screen.getByLabelText("组织标识"), "growth-eng");
     await user.click(screen.getByRole("button", { name: "创建并进入" }));
 
-    expect(await screen.findByRole("heading", { name: "对象目录" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "运行资产" })).toBeInTheDocument();
   });
 
   it("accepts an invitation link after the invited email signs in", async () => {
@@ -142,12 +142,12 @@ describe("auth pages", () => {
     expect(await screen.findByRole("heading", { name: "加入组织" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "加入并进入" }));
 
-    expect(await screen.findByRole("heading", { name: "对象目录" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "运行资产" })).toBeInTheDocument();
   });
 
   it("logs out and returns to the login page", async () => {
     const user = userEvent.setup();
-    window.history.pushState({}, "", "/catalog");
+    window.history.pushState({}, "", "/runtime");
     globalThis.fetch = vi.fn(async (input) => {
       const url = input.toString();
       if (url.endsWith("/api/me")) {
@@ -161,7 +161,7 @@ describe("auth pages", () => {
 
     render(<App authMode="required" />);
 
-    expect(await screen.findByRole("heading", { name: "对象目录" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "运行资产" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "退出登录" }));
 
     await waitFor(() => {

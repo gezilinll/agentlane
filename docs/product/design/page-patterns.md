@@ -4,7 +4,7 @@
 
 ## Home
 
-Purpose: 说明 Lorume 是 Agent Network 控制平面，并展示已经可用的 Runtime Fleet、Runs、Catalog 等能力。
+Purpose: 说明 Lorume 是 Agent Network 控制平面，并展示已经可用的 Runtime Fleet、Skill 管理、Runs、任务中心、通知中心等能力。
 
 Rules:
 
@@ -36,12 +36,25 @@ Rules:
 - 链接过期、邮箱不匹配、已加入、成功加入都需要明确状态。
 - 不把 token 原文显示给用户。
 
-## Catalog
+## Skill 管理
+
+Purpose: 管理组织 Skill 资产、设备发现 Skill、目标 Skill Set、审批、同步任务和通知。
+
+Rules:
+
+- 组织 Skill、设备发现、目标 Skill Set、审批、Operation、Notification 必须分区清晰。
+- Runtime Fleet 的 Agent 详情只提供 `查看 Skill` 和 `刷新 Skill 清单`，不提供绕过 Skill 管理的分配快捷入口。
+- Skill 管理从 URL `targetType` / `targetId` 预选目标时，必须等待 Runtime Fleet 目标数据存在后再选中。
+- 编辑、发布、分配和同步入口必须对应已实现 API、权限和 harness。
+- 不展示没有后端链路的“分配组织 Skill”或临时 mock 入口。
+
+## Object Catalog
 
 Purpose: 查看正式对象、owner、生命周期和依赖关系。
 
 Rules:
 
+- Object Catalog 当前不在主导航中；重新进入实现前必须重新补齐页面 spec、数据链路、权限和 harness。
 - Catalog 是 Console Surface，信息密度优先。
 - 筛选、列表、详情应对齐并响应式适配。
 - 对象类型、生命周期、owner 状态使用统一 badge。
@@ -72,3 +85,34 @@ Rules:
 - 时间范围筛选支持全部、快捷范围、自定义起止和清除。
 - 卡片标题、摘要、详情标题必须处理长文本。
 - Raw id、cid、phone、opaque conversation id 不直接作为会话名。
+- 宽屏下详情面板应保持在可视区域内；用户滚动看板列表时，已选工作项详情不能消失到视野外。
+
+## Operations
+
+Purpose: 查看异步 Operation / Job 的用户可见状态、资源、目标、错误和最近更新时间。
+
+Rules:
+
+- 页面按组织读取数据；无组织时不请求 API。
+- 列表展示状态、类型、目标和最近更新时间，详情展示 Job 级别的状态。
+- 不展示后端原始 payload、token、设备密钥或调试字段。
+
+## Notifications
+
+Purpose: 查看同步、采集、审核和恢复类通知线程。
+
+Rules:
+
+- 页面按组织读取数据；无组织时不请求 API。
+- 列表展示 severity、状态、标题和更新时间，详情展示摘要、资源、动作和投递状态。
+- 通知页是排查入口，不替代 Operation 详情或后端日志。
+
+## Organization Settings
+
+Purpose: 查看当前组织、成员身份，并创建邀请链接。
+
+Rules:
+
+- 无组织时提示创建或通过邀请加入组织。
+- owner/admin 可以创建邀请链接；其他角色只查看自己的组织身份。
+- 邀请链接只展示给当前操作者，不写入日志或测试截图。

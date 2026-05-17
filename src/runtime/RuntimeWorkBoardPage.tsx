@@ -550,7 +550,7 @@ function WorkItemDetail({
 }) {
   if (!item) {
     return (
-      <aside className="detailPanel" aria-label="工作项详情">
+      <aside className="detailPanel workBoardDetailPanel" aria-label="工作项详情">
         <h2>工作项详情</h2>
         <p>选择一个工作项查看详情。</p>
       </aside>
@@ -558,7 +558,7 @@ function WorkItemDetail({
   }
 
   return (
-    <aside className="detailPanel" aria-label="工作项详情">
+    <aside className="detailPanel workBoardDetailPanel" aria-label="工作项详情">
       <div className="detailHeader">
         <div>
           <p className="eyebrow">工作项</p>

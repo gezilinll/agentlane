@@ -24,7 +24,6 @@ required_paths=(
   "docs/product/design/responsive-and-accessibility.md"
   "docs/product/design/page-patterns.md"
   "docs/product/design/review-and-harness.md"
-  "docs/product/catalog-page-spec.md"
   "docs/product/runtime-device-registration-spec.md"
   "docs/product/runtime-fleet-page-spec.md"
   "docs/product/runtime-work-state-probe.md"
@@ -32,13 +31,15 @@ required_paths=(
   "docs/product/backend-service-spec.md"
   "docs/product/auth-and-access-spec.md"
   "playwright.config.ts"
-  "e2e/catalog-layout.spec.ts"
-  "e2e/catalog-workflow.spec.ts"
   "e2e/db.ts"
   "e2e/runtime-fleet.spec.ts"
   "e2e/runtime-work-board.spec.ts"
+  "e2e/skill-registry-auth.spec.ts"
   "src/catalog/catalog-object.ts"
   "src/catalog/index.ts"
+  "src/notifications/NotificationsPage.tsx"
+  "src/operations/OperationsPage.tsx"
+  "src/settings/OrganizationSettingsPage.tsx"
   "src/runtime/runtime-inventory-query.ts"
   "src/runtime/runtime-normalize.ts"
   "src/backend/backend-server.ts"
@@ -99,7 +100,6 @@ markdown_files = [
     Path("docs/product/design/responsive-and-accessibility.md"),
     Path("docs/product/design/page-patterns.md"),
     Path("docs/product/design/review-and-harness.md"),
-    Path("docs/product/catalog-page-spec.md"),
     Path("docs/product/runtime-device-registration-spec.md"),
     Path("docs/product/runtime-fleet-page-spec.md"),
     Path("docs/product/runtime-work-state-probe.md"),

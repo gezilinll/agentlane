@@ -11,7 +11,7 @@
 - 支持把设备、runtime 或 agent 上已有的 Skill 提升为组织级 Skill。
 - 组织级 Skill 必须保存自己的内容副本和版本，不能只引用来源设备上的路径。
 - 支持发布 Skill 版本；发布权限不足或风险较高时进入审核。
-- 支持在 Skill Registry 内编辑当前最新 Markdown 源文，并保存为新的草稿版本。
+- 支持在 Skill 管理内编辑当前最新 Markdown 源文，并保存为新的草稿版本。
 - 支持把组织级 Skill 分配到 Device、Runtime 或 Agent。
 - Skill 分配和后续同步必须通过可审计的 Operation / Job Runner 表达状态；不在页面内假装同步已经完成。
 - 支持资源级权限和审核流，避免普通成员直接编辑、发布或下发到非本人管理的目标。
@@ -462,12 +462,12 @@ Operation / Notification API：
 - `GET /api/notifications`：按组织读取页面内通知线程。
 - `GET /api/notifications/:threadId`：读取通知线程和投递明细。
 
-当前 Skill Registry 页面从 Runtime Fleet 查询结果中派生可分配目标，并在用户选择目标后调用 Skill target HTTP API 展示目标 Skill Set 与安装状态。页面不得在前端自行拼接生效规则，也不得调用不存在的 target support 原因 API。
-当前 Skill Registry 页面可以对已批准、已同步、失败或不支持的 Assignment 触发“同步到目标”；该动作只创建 Operation，不直接写设备。
+当前 Skill 管理页面从 Runtime Fleet 查询结果中派生可分配目标，并在用户选择目标后调用 Skill target HTTP API 展示目标 Skill Set 与安装状态。页面不得在前端自行拼接生效规则，也不得调用不存在的 target support 原因 API。
+当前 Skill 管理页面可以对已批准、已同步、失败或不支持的 Assignment 触发“同步到目标”；该动作只创建 Operation，不直接写设备。
 
 ## UI 规则
 
-Skill Registry 页面必须支持：
+Skill 管理页面必须支持：
 
 - 在用户已选组织后读取组织 Skill、分配、待处理审核、相关 Operation、通知和 Runtime Fleet 目标。
 - 展示设备发现到的本地 Skill，并支持把发现结果提升为独立组织 Skill。
@@ -527,8 +527,8 @@ Adapter contract：
 UI：
 
 - 无组织上下文时不请求 Skill API，并提示先选择组织。
-- Skill Registry 覆盖导入、查看详情、查看版本文件、发布 / 发布审核、分配 / 分配审核、Operation 状态和通知展示。
-- Skill Registry 覆盖设备发现 Skill 列表和提升为组织 Skill；提升调用正式 `POST /api/skill-discoveries/:discoveryId/promote`，不在前端拼接 Skill 内容。
+- Skill 管理覆盖导入、查看详情、查看版本文件、发布 / 发布审核、分配 / 分配审核、Operation 状态和通知展示。
+- Skill 管理覆盖设备发现 Skill 列表和提升为组织 Skill；提升调用正式 `POST /api/skill-discoveries/:discoveryId/promote`，不在前端拼接 Skill 内容。
 - Markdown 导入调用正式 Skill API，不绕过后端校验。
 - ZIP 导入把文件名和 base64 内容提交到正式 Skill API，不伪装成 Markdown。
 - GitHub URL 和 Marketplace URL 导入进入同一 `POST /api/skills/import` 路径。

@@ -51,7 +51,7 @@ export function HomePage() {
           </div>
           <div className="homeConsole__body">
             <nav className="homeConsole__menu" aria-label="预览导航">
-              <span>对象目录</span>
+              <span>Skill</span>
               <strong>Runtime</strong>
               <span>Runs</span>
             </nav>

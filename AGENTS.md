@@ -4,14 +4,13 @@ Root guide for coding agents working in this repository. This file is operationa
 
 ## Project State
 
-Lorume is currently in product definition and early engineering setup. The repository is becoming the control plane for operating an Agent Network. It now has a Chinese-first Catalog page, a Runtime Fleet page, a read-only Runs / Work Board page, collector-backed runtime inventory and work-state models, organization-based auth/access, a tokenized Cream Arcade UI system, and a standalone backend with Postgres-backed query APIs, production-like Docker / Nginx deployment files, an initial ECS deployment at `lorume.com`, plus an outbound WebSocket device control channel. It does not yet have multi-device orchestration or runtime execution control.
+Lorume is currently in product definition and early engineering setup. The repository is becoming the control plane for operating an Agent Network. It now has a Runtime Fleet page, a Skill 管理 page, a read-only Runs / Work Board page, user-facing Operations and Notifications pages, organization settings for invitations, collector-backed runtime inventory and work-state models, organization-based auth/access, a tokenized Cream Arcade UI system, and a standalone backend with Postgres-backed query APIs, production-like Docker / Nginx deployment files, an initial ECS deployment at `lorume.com`, plus an outbound WebSocket device control channel. It does not yet have multi-device orchestration or runtime execution control.
 
 Current source of truth:
 
 - `README.md`: public project overview and operating model.
 - `docs/product/ui-design.md`: product object model, information architecture, pages, flows, and implementation priorities.
 - `docs/product/design/README.md`: design system source of truth for visual language, tokens, typography, color, layout, components, icons, interaction, content, responsive behavior, page patterns, and UI review harness.
-- `docs/product/catalog-page-spec.md`: TinySpec for the first Catalog / Registry page.
 - `docs/product/runtime-device-registration-spec.md`: TinySpec for current device registration, collector, runtime adapters, and runtime inventory snapshots.
 - `docs/product/runtime-fleet-page-spec.md`: TinySpec for the first Runtime Fleet management page.
 - `docs/product/runtime-work-state-probe.md`: platform probe matrix for work items, conversations, and runtime executions.
@@ -29,7 +28,10 @@ Current source of truth:
 - `src/skills/skill-governance-http-api.ts`: Skill governance HTTP API for permission grants, publish approvals, approval decisions, target assignment requests, and target Skill Set queries.
 - `src/skills/skill-operation-handlers.ts`: executable Skill Operation handlers that apply approved publish, assignment, and deterministic target sync jobs to the governance store and device control channel.
 - `src/skills/skill-effective.ts`: TypeScript source of truth for resolving explicit Device / Runtime / Agent Skill assignments into a target Skill set; organization Skills are reusable assets and do not default-apply.
-- `src/skills/SkillRegistryPage.tsx`: protected Skill Registry page for organization Skill import, discovered target Skill promotion, source edit/preview, draft-version save, detail, publish, assignment, target Skill Set display, target sync, Operation, approval, and notification status.
+- `src/skills/SkillRegistryPage.tsx`: protected Skill 管理 page for organization Skill import, discovered target Skill promotion, source edit/preview, draft-version save, detail, publish, assignment, target Skill Set display, target sync, Operation, approval, and notification status.
+- `src/operations/OperationsPage.tsx`: protected Operations page for user-visible asynchronous Operation and Job status.
+- `src/notifications/NotificationsPage.tsx`: protected Notifications page for user-visible notification threads and delivery status.
+- `src/settings/OrganizationSettingsPage.tsx`: protected Organization Settings page for current organization context and member invitations.
 - `src/operations/operation-store.ts`: Postgres repository for asynchronous Operations and executable Jobs.
 - `src/operations/operation-http-api.ts`: authenticated Operation query API for user-visible asynchronous status and job details.
 - `src/operations/job-runner.ts`: minimal backend job runner over OperationStore claim, lease, handler, retry, and completion semantics.
@@ -38,7 +40,7 @@ Current source of truth:
 - `src/migration/agent-migration-plan.ts`: deterministic Agent migration capability and plan model for known runtime recipes and manual-step boundaries.
 - `src/HomePage.tsx`: public homepage entry for the current Lorume value proposition and implemented capabilities.
 - `src/catalog/catalog-object.ts`: initial TypeScript source of truth for Catalog Object shape.
-- `src/catalog/catalog-seed.ts`: first reviewable seed data for the Catalog page.
+- `src/catalog/catalog-seed.ts`: first reviewable Catalog Object seed data for future object directory work.
 - `src/runtime/runtime-normalize.ts`: TypeScript source of truth for runtime inventory normalization.
 - `src/runtime/runtime-work-state.ts`: TypeScript source of truth for work item, conversation, execution, and observation capability models.
 - `src/runtime/runtime-work-state-adapters.ts`: adapter normalization for OpenClaw, Multica, and Slock work-state inputs.
@@ -62,11 +64,9 @@ Current source of truth:
 - `Dockerfile.backend`, `Dockerfile.frontend`, `nginx.lorume.conf`, `docker-compose.prod-like.yml`: production-like local deployment shape before ECS.
 - `scripts/lorume-device-collector.mjs`: device-side collector / Device Agent script.
 - `scripts/install-device-collector.sh`: local-path collector installer for development and remote-device testing.
-- `e2e/catalog-workflow.spec.ts`: browser-level user workflow harness for the Catalog page.
-- `e2e/catalog-layout.spec.ts`: browser-level responsive layout harness for the Catalog page.
 - `e2e/runtime-fleet.spec.ts`: browser-level Runtime Fleet workflow and responsive layout harness.
 - `e2e/runtime-work-board.spec.ts`: browser-level Runs / Work Board workflow and responsive layout harness.
-- `e2e/skill-registry-auth.spec.ts`: browser-level authenticated Skill Registry import and publish-queue harness.
+- `e2e/skill-registry-auth.spec.ts`: browser-level authenticated Skill 管理 import and publish-queue harness.
 - `docs/product/agent-network-runtime-panorama.png`: runtime panorama.
 - `docs/product/agent-network-build-objects.png`: build object map.
 - `assets/product-ui/`: UI and flow design assets.
@@ -84,8 +84,8 @@ Current source of truth:
 - Auth/access rules belong in `docs/product/auth-and-access-spec.md` and backend auth modules. Do not implement permission decisions as ad hoc React conditionals.
 - Cream Arcade visual rules belong in `docs/product/design/` and shared UI tokens. Do not scatter one-off color, border, shadow, or font decisions across product components.
 - Product icons and decorative pixel assets must enter pages through shared `src/ui` primitives, especially `PixelIcon` and `PixelDecorations`. Do not mix icon libraries, text symbols, CSS one-offs, or business-page SVG snippets unless the shared primitive first grows that need.
-- Only expose implemented, user-verifiable capabilities in navigation, homepage CTAs, and page-level action buttons. Current Console navigation is `对象目录`, `Runtime Fleet`, `Skill Registry`, and `Runs`; future surfaces such as Agent Studio, Workflow Studio, People, Integrations, and Governance stay in docs/backlog until their page, data path, permissions, and harness exist.
-- Keep URL routes durable and minimal: `/` is the public homepage, `/login` is the auth entry, `/invite/:token` is the invitation entry, and `/catalog`, `/runtime`, `/skills`, `/runs` are the current protected Console pages.
+- Only expose implemented, user-verifiable capabilities in navigation, homepage CTAs, and page-level action buttons. Current Console navigation is `Runtime Fleet`, `Skill 管理`, `Runs`, `任务中心`, `通知中心`, and `组织设置`; future surfaces such as Agent Studio, Workflow Studio, Object Catalog, People, Integrations, and Governance stay in docs/backlog until their page, data path, permissions, and harness exist.
+- Keep URL routes durable and minimal: `/` is the public homepage, `/login` is the auth entry, `/invite/:token` is the invitation entry, and `/runtime`, `/skills`, `/runs`, `/operations`, `/notifications`, `/settings` are the current protected Console pages. Removed or not-yet-built routes such as `/catalog` should fall back to the current default Console page instead of exposing fake data.
 - Keep the browser tab icon and in-app logo aligned. If `PixelLogo` changes, update `public/favicon.svg`, relevant tests, and product visual rules in the same change.
 - Runtime adapters must translate platform-specific fields into Lorume-owned semantics before UI consumption. Do not make React components infer whether OpenClaw sessions, Multica tasks, or Slock workspaces mean `active`, `idle`, `lastSeenAt`, or runtime statistics.
 - Keep Runtime and Channel separate in UI and query models. OpenClaw, Multica, Slock, Codex, and Claude Code are Runtime / platform sources; Runs Channel filters are only user-facing touchpoints such as DingTalk, Telegram, Slack, or future detected message channels.
@@ -109,10 +109,7 @@ Current spec and harness mapping:
 
 | Surface | Spec / Intent | Harness |
 |---|---|---|
-| Catalog Object model | `src/catalog/catalog-object.ts`, `docs/product/catalog-page-spec.md` | `src/catalog/catalog-query.test.ts`, `npm run check:quick` |
-| Catalog page behavior | `docs/product/catalog-page-spec.md` | `src/App.test.tsx`, `npm run check:quick` |
-| Catalog user workflow | `docs/product/catalog-page-spec.md` | `e2e/catalog-workflow.spec.ts`, `npm run check:e2e` |
-| Catalog responsive layout | `docs/product/catalog-page-spec.md` | `e2e/catalog-layout.spec.ts`, `npm run check:e2e` |
+| Catalog Object model | `src/catalog/catalog-object.ts` | `src/catalog/catalog-query.test.ts`, `npm run check:quick` |
 | Runtime device registration | `docs/product/runtime-device-registration-spec.md`, `src/runtime/runtime-normalize.ts`, `scripts/lorume-device-collector.mjs`, `scripts/install-device-collector.sh` | `src/runtime/runtime-normalize.test.ts`, `src/runtime/device-collector-script.test.ts`, `npm run check:runtime`, `npm run check:backend` |
 | Runtime work state model | `src/runtime/runtime-work-state.ts`, `docs/product/runtime-work-state-probe.md` | `src/runtime/runtime-work-state.test.ts`, `npm run check:runtime` |
 | Runtime work state adapters and board query | `src/runtime/runtime-work-state-adapters.ts`, `src/runtime/runtime-work-state-query.ts`, `docs/product/runtime-work-state-probe.md` | `src/runtime/runtime-work-state-adapters.test.ts`, `src/runtime/runtime-work-state-query.test.ts`, `npm run check:runtime` |
@@ -127,9 +124,12 @@ Current spec and harness mapping:
 | Skill storage, discovered target Skill promotion, and API | `docs/product/skill-management-spec.md`, `db/migrations/0003_skill_management.sql`, `db/migrations/0007_runtime_skill_discoveries.sql`, `src/skills/skill-store.ts`, `src/skills/skill-http-api.ts`, `src/server/postgres-store.ts`, `src/backend/backend-server.ts` | `src/skills/skill-store.test.ts`, `src/skills/skill-http-api.test.ts`, `src/server/postgres-store.test.ts`, `npm run check:backend`, `npm run check:db` |
 | Skill governance permissions, approvals, and sync | `docs/product/skill-management-spec.md`, `db/migrations/0003_skill_management.sql`, `db/migrations/0004_skill_governance.sql`, `src/skills/skill-governance-store.ts`, `src/skills/skill-governance-http-api.ts`, `src/skills/skill-operation-handlers.ts`, `src/server/runtime-control-channel.ts`, `scripts/lorume-device-collector.mjs`, `src/backend/backend-server.ts` | `src/skills/skill-governance-store.test.ts`, `src/skills/skill-governance-http-api.test.ts`, `src/skills/skill-operation-handlers.test.ts`, `src/server/runtime-control-channel.test.ts`, `src/runtime/device-collector-script.test.ts`, `src/backend/backend-server.test.ts`, `src/server/db-migrate.test.ts`, `npm run check:backend`, `npm run check:db` |
 | Skill target resolution | `docs/product/skill-management-spec.md`, `src/skills/skill-effective.ts`, `src/skills/skill-governance-store.ts`, `src/skills/skill-governance-http-api.ts`, `src/skills/SkillRegistryPage.tsx` | `src/skills/skill-effective.test.ts`, `src/skills/skill-governance-store.test.ts`, `src/skills/skill-governance-http-api.test.ts`, `src/skills/SkillRegistryPage.test.tsx`, `npm run check:backend`, `npm run check:quick` |
-| Skill Registry page | `docs/product/skill-management-spec.md`, `src/skills/SkillRegistryPage.tsx`, `src/App.tsx` | `src/skills/SkillRegistryPage.test.tsx`, `src/App.test.tsx`, `e2e/skill-registry-auth.spec.ts`, `npm run check:quick`, `npm run check:e2e:auth` |
+| Skill 管理 page | `docs/product/skill-management-spec.md`, `src/skills/SkillRegistryPage.tsx`, `src/App.tsx` | `src/skills/SkillRegistryPage.test.tsx`, `src/App.test.tsx`, `e2e/skill-registry-auth.spec.ts`, `npm run check:quick`, `npm run check:e2e:auth` |
 | Operation and Job Runner persistence/API | `docs/product/operation-job-runner-spec.md`, `db/migrations/0005_operations_notifications.sql`, `db/migrations/0006_operation_manual_steps.sql`, `src/operations/operation-store.ts`, `src/operations/operation-http-api.ts`, `src/operations/job-runner.ts` | `src/operations/operation-store.test.ts`, `src/operations/operation-http-api.test.ts`, `src/operations/job-runner.test.ts`, `src/backend/backend-server.test.ts`, `src/server/db-migrate.test.ts`, `npm run check:backend`, `npm run check:db` |
 | Notification persistence, dedupe, runtime ingestion alerts, and in-app API | `docs/product/notification-spec.md`, `db/migrations/0005_operations_notifications.sql`, `src/notifications/notification-store.ts`, `src/notifications/notification-http-api.ts`, `src/operations/job-runner.ts`, `src/server/runtime-http-api.ts` | `src/notifications/notification-store.test.ts`, `src/notifications/notification-http-api.test.ts`, `src/server/runtime-http-api-postgres.test.ts`, `src/operations/job-runner.test.ts`, `src/backend/backend-server.test.ts`, `src/server/db-migrate.test.ts`, `npm run check:backend`, `npm run check:db` |
+| Operations page | `docs/product/operation-job-runner-spec.md`, `src/operations/OperationsPage.tsx`, `src/App.tsx` | `src/operations/OperationsPage.test.tsx`, `src/App.test.tsx`, `npm run check:quick` |
+| Notifications page | `docs/product/notification-spec.md`, `src/notifications/NotificationsPage.tsx`, `src/App.tsx` | `src/notifications/NotificationsPage.test.tsx`, `src/App.test.tsx`, `npm run check:quick` |
+| Organization Settings page | `docs/product/auth-and-access-spec.md`, `src/settings/OrganizationSettingsPage.tsx`, `src/App.tsx` | `src/settings/OrganizationSettingsPage.test.tsx`, `src/App.test.tsx`, `npm run check:quick` |
 | Agent migration and bootstrap product rules | `docs/product/agent-migration-spec.md`, `docs/product/skill-management-spec.md`, `docs/product/notification-spec.md`, `src/migration/agent-migration-plan.ts`, `src/migration/agent-migration-http-api.ts` | `src/migration/agent-migration-plan.test.ts`, `src/migration/agent-migration-http-api.test.ts`, `src/operations/job-runner.test.ts`, `src/operations/operation-store.test.ts`, `npm run check:quick`, `npm run check:db` |
 | Public entry, routing, and navigation | `src/HomePage.tsx`, `src/App.tsx`, `docs/product/ui-design.md` | `src/App.test.tsx`, `npm run check:quick`, `npm run check:e2e` |
 | Cream Arcade design system | `docs/product/design/`, `src/ui/tokens.css`, `src/ui/` | `src/ui/ui-tokens.test.tsx`, `src/App.test.tsx`, `e2e/runtime-fleet.spec.ts`, `e2e/runtime-work-board.spec.ts`, `npm run check:repo`, `npm run check:quick`, `npm run check:e2e` |
@@ -153,12 +153,12 @@ Keep the test layout simple and tied to what each harness can prove:
 - Keep shared Vitest / Testing Library setup in `src/test/setup.ts`.
 - Put real-browser Playwright specs in `e2e/`. Use this for user workflows, responsive layout, browser rendering, and behavior jsdom cannot prove.
 - Keep Playwright server state isolated from manual dev/acceptance state. The default e2e web server uses `scripts/dev-e2e.ts`, an isolated `lorume_e2e` Postgres database, the standalone backend, and a Vite proxy so test fixture posts do not overwrite manual review data.
-- Keep auth harnesses and Console harnesses separated. `check:e2e` sets `VITE_LORUME_AUTH_MODE=disabled` so Catalog, Runtime Fleet, and Runs browser tests validate the Console directly; auth entry, email-code login, organization creation, and invitation flows are covered by `src/auth/*` component/API/backend tests. `check:e2e:auth` runs a separate authenticated browser harness for protected Skill Registry import and publish-queue behavior through real backend APIs.
+- Keep auth harnesses and Console harnesses separated. `check:e2e` sets `VITE_LORUME_AUTH_MODE=disabled` so Runtime Fleet and Runs browser tests validate the Console directly; auth entry, email-code login, organization creation, and invitation flows are covered by `src/auth/*` component/API/backend tests. `check:e2e:auth` runs a separate authenticated browser harness for protected Skill 管理 import and publish-queue behavior through real backend APIs.
 - Prefer adding the smallest focused test that captures the important behavior. Do not create broad `tests/`, `specs/`, or `harnesses/` directories until the project has enough surfaces to justify them.
 
 ## Agent-Ready Growth
 
-Lorume should become agent-ready by growing only the infrastructure the project actually needs. The current layer is **Catalog + Runtime Fleet + Runs Work-State + Production-Like Backend Harness Ready** for the first frontend/runtime surfaces: root guide, TinySpecs, TypeScript object models, standalone backend, Postgres-backed query APIs, backend bundle and Docker/Nginx config checks, outbound device control channel, collector snapshot harnesses, unit/component tests, browser layout harness, and one full verification entry point.
+Lorume should become agent-ready by growing only the infrastructure the project actually needs. The current layer is **Runtime Fleet + Skill 管理 + Runs Work-State + Operations / Notifications + Production-Like Backend Harness Ready** for the first frontend/runtime surfaces: root guide, TinySpecs, TypeScript object models, standalone backend, Postgres-backed query APIs, backend bundle and Docker/Nginx config checks, outbound device control channel, collector snapshot harnesses, unit/component tests, browser layout harness, and one full verification entry point.
 
 Extend this guide and `./scripts/verify.sh` only when a real project surface appears:
 
@@ -206,8 +206,8 @@ Current harness scripts:
 | `npm run start:backend` | Run the bundled backend artifact. | Manual smoke of production-like backend output after `npm run build:backend`. |
 | `npm run check:deploy` | Build backend bundle and verify Docker / Nginx / production-like compose config. | Deployment-shape, backend bundle, Dockerfile, compose, or Nginx changes. |
 | `npm run smoke:production` | Check the deployed environment health, readiness, Runtime Fleet, Runs, and device collection-health read paths. | After ECS deploy, DNS/Nginx changes, backend query changes, or collector registration changes. |
-| `npm run check:e2e` | Playwright browser harness using isolated Postgres, standalone backend, Vite proxy, and auth disabled for Console surfaces. | Catalog/Runtime Fleet/Runs interaction paths, layout, toolbar, responsive behavior, navigation shell, backend query wiring, or visual regression risk. |
-| `npm run check:e2e:auth` | Playwright browser harness using isolated Postgres, standalone backend, Vite proxy, and real email-code auth. | Protected Skill Registry import/publish flows, organization bootstrap, or auth-to-console wiring changes. |
+| `npm run check:e2e` | Playwright browser harness using isolated Postgres, standalone backend, Vite proxy, and auth disabled for Console surfaces. | Runtime Fleet/Runs interaction paths, layout, toolbar, responsive behavior, navigation shell, backend query wiring, or visual regression risk. |
+| `npm run check:e2e:auth` | Playwright browser harness using isolated Postgres, standalone backend, Vite proxy, and real email-code auth. | Protected Skill 管理 import/publish flows, organization bootstrap, or auth-to-console wiring changes. |
 | `npm run verify` | Full harness, same as `./scripts/verify.sh`. | Before handoff, commit, or review. |
 
 Local frontend development:

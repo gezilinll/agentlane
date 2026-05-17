@@ -29,7 +29,7 @@ test("imports a Skill through the authenticated organization console", async ({ 
   await page.getByLabel("组织名称").fill("Lorume E2E Team");
   await page.getByRole("button", { name: "创建并进入" }).click();
 
-  await expect(page.getByRole("heading", { name: "Skill Registry" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Skill 管理" })).toBeVisible();
   await page.getByLabel("Skill 内容").fill(`---
 name: Browser Auth Skill
 description: Skill imported by the authenticated browser harness.
@@ -39,7 +39,7 @@ compatibility: lorume
 
 # Browser Auth Skill
 
-Use this test Skill to prove the protected Skill Registry can import through the real backend.
+Use this test Skill to prove the protected Skill management page can import through the real backend.
 `);
   await page.getByRole("button", { name: "导入 Skill" }).click();
 

@@ -401,7 +401,7 @@ describe("SkillRegistryPage", () => {
 
     render(<SkillRegistryPage />);
 
-    expect(screen.getByRole("heading", { name: "Skill Registry" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Skill 管理" })).toBeInTheDocument();
     expect(screen.getByText("请选择组织后管理 Skill。")).toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
@@ -474,7 +474,7 @@ describe("SkillRegistryPage", () => {
     render(<SkillRegistryPage organizationId="org_1" />);
 
     await screen.findByRole("heading", { name: "Cost Review" });
-    expect(screen.getByRole("heading", { name: "设备发现" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "设备发现 Skill" })).toBeInTheDocument();
     expect(screen.getByText("Review Skill")).toBeInTheDocument();
     expect(screen.getByText("Agent · main · 2026/05/14 16:31")).toBeInTheDocument();
 
