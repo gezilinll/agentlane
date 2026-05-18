@@ -27,6 +27,7 @@ describeDb("database migrations", () => {
         const tableNames = await listPublicTableNames(client);
 
         expect(tableNames).toEqual([
+          "agent_skill_probe_snapshots",
           "agents",
           "channel_bindings",
           "collector_ingestions",
@@ -55,6 +56,7 @@ describeDb("database migrations", () => {
           "0002_auth_access",
           "0005_operations_notifications",
           "0008_notification_read_state",
+          "0009_agent_skill_probing",
         ]);
       } finally {
         await client.end();

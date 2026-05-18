@@ -53,6 +53,41 @@ test.describe("Runtime Fleet", () => {
     expect(seedResponse.ok()).toBe(true);
     const workStateSeedResponse = await request.post("/api/runtime-work-state-snapshots", { data: backendWorkState });
     expect(workStateSeedResponse.ok()).toBe(true);
+    const skillProbeResponse = await request.post("/api/agent-skill-probe-snapshots", {
+      data: {
+        targetAgentId: "fixture-mac:slock:slock-daemon:agent:tester",
+        targetAgentName: "tester",
+        deviceId: "fixture-mac",
+        deviceName: "Backend Fixture Mac",
+        runtimeId: "fixture-mac:slock:slock-daemon",
+        runtimeName: "Slock daemon",
+        status: "succeeded",
+        observedAt: "2026-05-18T10:00:00.000Z",
+        skills: [{
+          name: "reviewer",
+          rootPath: "/Users/example/.codex/skills/reviewer",
+          entryPath: "/Users/example/.codex/skills/reviewer/SKILL.md",
+          markdownFiles: [
+            {
+              name: "SKILL.md",
+              path: "/Users/example/.codex/skills/reviewer/SKILL.md",
+              relativePath: "SKILL.md",
+            },
+            {
+              name: "guide.md",
+              path: "/Users/example/.codex/skills/reviewer/references/guide.md",
+              relativePath: "references/guide.md",
+            },
+          ],
+          nonMarkdownFiles: [{
+            name: "probe.sh",
+            path: "/Users/example/.codex/skills/reviewer/scripts/probe.sh",
+            relativePath: "scripts/probe.sh",
+          }],
+        }],
+      },
+    });
+    expect(skillProbeResponse.ok()).toBe(true);
 
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/");
@@ -93,6 +128,11 @@ test.describe("Runtime Fleet", () => {
       hour12: false,
     }).format(new Date("2026-05-08T08:00:01.000Z"))}`);
     await expect(detail).not.toContainText("slock: tester");
+    await detail.getByRole("button", { name: "查看 Skill 探测" }).click();
+    await expect(detail.getByRole("region", { name: "Skill 探测" })).toContainText("reviewer");
+    await expect(detail.getByRole("region", { name: "Skill 探测" })).toContainText("references/guide.md");
+    await expect(detail.getByRole("region", { name: "Skill 探测" })).toContainText("scripts/probe.sh");
+    await expect(detail.getByRole("link", { name: "scripts/probe.sh" })).toHaveCount(0);
 
     await page.getByRole("button", { name: "请求设备刷新" }).click();
     await expect(page.getByRole("status")).toContainText("设备控制通道未连接");

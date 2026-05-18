@@ -1,5 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import {
+  normalizeAgentSkillProbeSnapshot,
+  type AgentSkillProbeSnapshot,
+} from "../runtime/agent-skill-probe";
 import type { RuntimeInventorySnapshot } from "../runtime";
 
 /** Device connection state tracked by the local control plane. */
@@ -30,7 +34,7 @@ export interface RuntimeDeviceConnection {
 }
 
 /** Runtime control command supported by Lorume. */
-export type RuntimeCommandType = "inventory.refresh";
+export type RuntimeCommandType = "inventory.refresh" | "agent.skill_probe";
 
 /** Runtime command lifecycle status. */
 export type RuntimeCommandStatus =
@@ -93,6 +97,10 @@ export interface RuntimeInventoryStore {
   readRuntimeCommand: (commandId: string) => RuntimeCommand | null;
   /** Merge command lifecycle changes into an existing runtime control command. */
   updateRuntimeCommand: (commandId: string, patch: Partial<RuntimeCommand>) => RuntimeCommand;
+  /** Read the latest read-only Skill probe snapshot for one Agent. */
+  readAgentSkillProbeSnapshot: (agentId: string) => AgentSkillProbeSnapshot | null;
+  /** Validate and store the latest read-only Skill probe snapshot for one Agent. */
+  writeAgentSkillProbeSnapshot: (snapshot: unknown) => AgentSkillProbeSnapshot;
 }
 
 const defaultSnapshotPath = path.resolve(".lorume", "runtime-inventory", "latest.json");
@@ -108,6 +116,7 @@ export function createRuntimeInventoryStore(
   const staleAfterMs = options.staleAfterMs ?? defaultStaleAfterMs;
   const deviceConnections = new Map<string, RuntimeDeviceConnection>();
   const runtimeCommands = new Map<string, RuntimeCommand>();
+  const skillProbeSnapshots = new Map<string, AgentSkillProbeSnapshot>();
 
   return {
     snapshotPath,
@@ -171,6 +180,16 @@ export function createRuntimeInventoryStore(
       runtimeCommands.set(commandId, nextCommand);
       return { ...nextCommand };
     },
+    readAgentSkillProbeSnapshot(agentId) {
+      const snapshot = skillProbeSnapshots.get(agentId);
+      return snapshot ? cloneJson(snapshot) : null;
+    },
+    writeAgentSkillProbeSnapshot(snapshot) {
+      const normalized = normalizeAgentSkillProbeSnapshot(snapshot);
+      if (!normalized) throw new Error("invalid agent skill probe snapshot");
+      skillProbeSnapshots.set(normalized.targetAgentId, cloneJson(normalized));
+      return cloneJson(normalized);
+    },
   };
 }
 
@@ -221,6 +240,10 @@ function isAgentLike(value: unknown): boolean {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function cloneJson<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
 }
 
 function applyConnectionFreshness(

@@ -30,6 +30,11 @@ export interface RuntimeControlChannel {
   receive: (socket: RuntimeControlSocket, rawMessage: string) => void;
   /** Dispatch an inventory refresh command to an online device. */
   requestInventoryRefresh: (deviceId: string) => RuntimeCommand;
+  /** Dispatch a read-only Agent Skill probe command to an online device. */
+  requestAgentSkillProbe: (
+    deviceId: string,
+    payload: { operationId?: string; runtimeId: string; targetAgentId: string },
+  ) => RuntimeCommand;
   /** Wait for a command to reach a terminal state. */
   waitForCommandResult: (
     commandId: string,
@@ -143,6 +148,18 @@ export function createRuntimeControlChannel(options: RuntimeControlChannelOption
         socketsByDeviceId,
         store: options.store,
         type: "inventory.refresh",
+      });
+    },
+    requestAgentSkillProbe(deviceId, payload) {
+      return dispatchCommand({
+        createCommandId,
+        deviceId,
+        now,
+        payload,
+        send,
+        socketsByDeviceId,
+        store: options.store,
+        type: "agent.skill_probe",
       });
     },
     async waitForCommandResult(commandId, waitOptions = {}) {

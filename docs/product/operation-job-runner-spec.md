@@ -6,7 +6,7 @@
 
 ## 目标
 
-- 为设备采集刷新、通知投递和后续已规格化的长耗时动作提供统一异步状态。
+- 为设备采集刷新、Agent Skill 探测、通知投递和后续已规格化的长耗时动作提供统一异步状态。
 - 用户能在页面内看到异步动作的当前状态、失败原因和需要人工处理的提示。
 - 后端能安全 claim、执行、重试和完成 Job，避免重复执行和长时间卡死。
 - 业务模块只暴露 Lorume 自己的 Operation 语义，不把某个平台的任务状态直接泄漏给 UI。
@@ -30,7 +30,7 @@ Operation 是用户可见的一次异步动作。
 
 - `id`：内部 ID。
 - `organizationId`：所属组织。
-- `type`：动作类型，例如 `device_refresh`、`notification_delivery`。
+- `type`：动作类型，例如 `device_refresh`、`agent_skill_probe`、`notification_delivery`。
 - `status`：`queued`、`running`、`succeeded`、`failed`、`unsupported`、`requires_manual_step`、`cancelled`。
 - `resourceType` / `resourceId`：主要资源，可为空。
 - `targetType` / `targetId`：目标资源，可为空。
@@ -89,6 +89,7 @@ Job 状态：
 - Job handler 必须具备幂等性：重复执行同一个 Job 不应造成重复通知或重复外部状态变更。
 - Operation 的最终状态由必要 Job 的结果汇总产生。
 - 任一必要 Job 进入 `requires_manual_step` 时，Operation 进入 `requires_manual_step` 并保留 `manualInstruction`。
+- 没有后台 Job 的业务动作也可以由所属业务 API 直接把 Operation 更新为 `running`、`succeeded`、`failed` 或 `unsupported`；当前 Agent Skill 探测请求使用该路径记录控制命令下发和后续探测结果。
 - Operation 状态变化必须可以创建 Notification Event。
 
 ## 当前实现策略
@@ -132,8 +133,9 @@ Job 状态：
 
 ## Harness
 
-- Migration 创建 `operations` 和 `operation_jobs`。
+- 设备刷新创建带 Job 的 `operations` 和 `operation_jobs`；Agent Skill 探测创建无 Job 的 `operations`，由 Runtime API 根据控制命令和设备回传结果更新状态。
 - Store 能创建 Operation、入队 Job、claim due Job、完成 Job、失败重试和标记最终 Operation 状态。
+- Store 能在无 Job 的业务 API 路径中更新 Agent Skill 探测 Operation 状态。
 - Lease 未过期的 Job 不会被重复 claim。
 - Lease 过期的 running Job 可以被重新 claim。
 - Job 成功后 Operation 进入 `succeeded`。

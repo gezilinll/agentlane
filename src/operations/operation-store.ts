@@ -26,6 +26,7 @@ export type OperationJobStatus =
 /** Operation type currently supported by Lorume. */
 export type OperationType =
   | "device_refresh"
+  | "agent_skill_probe"
   | "notification_delivery";
 
 /** Operation job type currently supported by Lorume. */
@@ -122,6 +123,13 @@ export interface OperationStore {
     status: "succeeded" | "unsupported" | "requires_manual_step";
   }) => Promise<OperationJobRow | null>;
   failJob: (input: { jobId: string; now: Date; errorSummary: string; retryAfterMs?: number }) => Promise<OperationJobRow | null>;
+  updateOperationStatus: (input: {
+    operationId: string;
+    status: OperationStatus;
+    now?: Date;
+    errorSummary?: string | null;
+    manualInstruction?: string | null;
+  }) => Promise<OperationRow | null>;
   readOperation: (input: { operationId: string }) => Promise<OperationRow | null>;
   close: () => Promise<void>;
 }
@@ -315,6 +323,34 @@ export function createPostgresOperationStore(options: PostgresOperationStoreOpti
         WHERE id = $1
         LIMIT 1
       `, [input.operationId]);
+      return result.rows[0] ?? null;
+    },
+    async updateOperationStatus(input) {
+      const now = input.now ?? new Date();
+      const result = await pool.query<OperationRow>(`
+        UPDATE operations
+        SET
+          status = $2,
+          error_summary = $3,
+          manual_instruction = $4,
+          started_at = CASE
+            WHEN $2 = 'running' THEN coalesce(started_at, $5)
+            ELSE started_at
+          END,
+          finished_at = CASE
+            WHEN $2 IN ('succeeded', 'failed', 'unsupported', 'requires_manual_step', 'cancelled') THEN $5
+            ELSE NULL
+          END,
+          updated_at = $5
+        WHERE id = $1
+        RETURNING ${operationColumns}
+      `, [
+        input.operationId,
+        input.status,
+        input.errorSummary ? sanitizeSummary(input.errorSummary) : null,
+        input.manualInstruction ?? null,
+        now,
+      ]);
       return result.rows[0] ?? null;
     },
     close() {

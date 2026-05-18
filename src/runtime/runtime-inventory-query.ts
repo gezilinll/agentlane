@@ -268,8 +268,12 @@ export type RuntimeFleetDetail =
   | (RuntimeFleetDetailBase & {
       /** Detail object kind. */
       kind: "agent";
+      /** Device that hosts the Agent runtime. */
+      deviceId: string;
       /** Runtime name that owns this agent. */
       runtimeName: string;
+      /** Runtime id that owns this agent. */
+      runtimeId: string;
     });
 
 /** Summarize one device snapshot for Runtime Fleet cards. */
@@ -424,7 +428,9 @@ export function getRuntimeFleetDetail(
       id: agent.id,
       title: agent.name,
       subtitle: `${sourceLabel(agent.origin)} · ${managedAgentStatusLabels[displayStatus]}`,
+      deviceId: snapshot.device.id,
       runtimeName: runtime?.name ?? agent.runtimeId,
+      runtimeId: agent.runtimeId,
       status: displayStatus,
       statusLabel: managedAgentStatusLabels[displayStatus],
       sections: [

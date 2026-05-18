@@ -205,6 +205,57 @@ describeDb("Postgres operation store", () => {
     }
   });
 
+  it("updates Agent Skill probe operations without an executable job", async () => {
+    const database = await createTemporaryPostgresDatabase();
+    try {
+      runMigrationsScript(database.url);
+      const authStore = createPostgresAuthStore({ connectionString: database.url });
+      const operationStore = createPostgresOperationStore({ connectionString: database.url });
+      try {
+        const user = await authStore.upsertUserForEmail("skill-probe@example.com");
+        const organization = await authStore.createOrganization({
+          createdByUserId: user.id,
+          name: "Skill Probe Team",
+          slug: "skill-probe-team",
+        });
+        const operation = await operationStore.createOperation({
+          organizationId: organization.id,
+          requestedByUserId: user.id,
+          resourceId: "agent-1",
+          resourceType: "agent",
+          summary: "探测 tester 的 Skill",
+          targetId: "device-1",
+          targetType: "device",
+          type: "agent_skill_probe",
+        });
+
+        const running = await operationStore.updateOperationStatus({
+          operationId: operation.id,
+          now: new Date("2026-05-18T10:00:00.000Z"),
+          status: "running",
+        });
+        const failed = await operationStore.updateOperationStatus({
+          errorSummary: "设备控制通道未连接",
+          operationId: operation.id,
+          now: new Date("2026-05-18T10:01:00.000Z"),
+          status: "failed",
+        });
+
+        expect(running).toMatchObject({ id: operation.id, status: "running" });
+        expect(failed).toMatchObject({
+          errorSummary: "设备控制通道未连接",
+          id: operation.id,
+          status: "failed",
+        });
+        expect(failed?.finishedAt).toBeInstanceOf(Date);
+      } finally {
+        await Promise.all([authStore.close(), operationStore.close()]);
+      }
+    } finally {
+      await database.drop();
+    }
+  });
+
   it("requeues failed jobs until max attempts and then fails the operation", async () => {
     const database = await createTemporaryPostgresDatabase();
     try {

@@ -51,7 +51,7 @@ Lorume is not a chatbot UI and not a single-agent framework. It is a product lay
 - **Integrations & Resources**: connect OpenClaw, Nowledge, DingTalk, slock.ai, BI, Xingtu, SLS, GitLab, Aetheris CLI, and other systems.
 - **Governance Center**: manage approvals, audit logs, policies, cost guard, memory governance, evals, stability, security, and lifecycle.
 
-The current product UI intentionally exposes only the implemented surfaces: public homepage, email-code login, Runtime Fleet, Runs / Work Board, and 组织设置. Operations and Notifications are available as top-right utility drawers instead of primary navigation pages. Other surfaces above are product direction and are added to navigation only after their page, data path, permissions, and harness exist.
+The current product UI intentionally exposes only the implemented surfaces: public homepage, email-code login, Runtime Fleet, Runs / Work Board, and 组织设置. Operations and Notifications are available as top-right utility drawers instead of primary navigation pages. Runtime Fleet includes a read-only Agent Skill probing detail surface for target-local metadata. Other surfaces above are product direction and are added to navigation only after their page, data path, permissions, and harness exist.
 
 ## Core Concepts
 
@@ -80,7 +80,7 @@ A single Run may contain multiple Tasks. For example, one Workflow Run may creat
 
 ## Current Status
 
-Lorume is in product definition and early engineering. The first implemented surfaces are a public homepage, email-code login with organization membership, Runtime Fleet, a read-only Runs / Work Board for Agent work-state visibility, organization settings, and top-right Operations / Notifications utility drawers. These surfaces are backed by the initial TypeScript Catalog Object model, normalized runtime inventory and work-state models, a device collector, Postgres-backed Operations and Notifications, a standalone local backend with Postgres-backed query APIs, and an outbound WebSocket device control channel for refreshing inventory plus work-state snapshots.
+Lorume is in product definition and early engineering. The first implemented surfaces are a public homepage, email-code login with organization membership, Runtime Fleet with read-only Agent Skill probing, a read-only Runs / Work Board for Agent work-state visibility, organization settings, and top-right Operations / Notifications utility drawers. These surfaces are backed by the initial TypeScript Catalog Object model, normalized runtime inventory and work-state models, target-local Skill probe metadata, a device collector, Postgres-backed Operations and Notifications, a standalone local backend with Postgres-backed query APIs, and an outbound WebSocket device control channel for refreshing inventory plus work-state snapshots.
 
 Runtime and device registration can now complete a development and ECS loop against OpenClaw, Multica, and Slock-style sources. The backend has a Postgres-backed service shape, production-like local deployment path, organization-based access, and an initial ECS deployment at `lorume.com`; backups, monitoring, multi-device orchestration, and execution control are still being built.
 
@@ -94,6 +94,7 @@ The first product design package is available here:
 - [Runtime Listening Acceptance Spec](docs/product/runtime-listening-acceptance-spec.md)
 - [Backend Service Spec](docs/product/backend-service-spec.md)
 - [CLI Device Capability Spec](docs/product/cli-device-capability-spec.md)
+- [Agent Skill Probing Spec](docs/product/agent-skill-probing-spec.md)
 - [Notification Spec](docs/product/notification-spec.md)
 - [Agent Network Runtime Panorama](docs/product/agent-network-runtime-panorama.png)
 - [Agent Network Build Object Map](docs/product/agent-network-build-objects.png)

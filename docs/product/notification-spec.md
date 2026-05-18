@@ -274,10 +274,9 @@ Operation 集成 API：
 
 业务集成：
 
-- Skill 下发失败不会每次重试都发新邮件。
+- Agent Skill 探测请求、成功、失败、不支持和设备未连接事件进入 runtime notification；重复失败按 dedupe/cooldown 聚合。
 - 认证后的 Collector inventory / work-state 上报失败会聚合为 runtime warning 通知，并按 `30min` 邮件冷却投递给组织 owner / admin。
 - Device 离线持续发生时只按阈值升级通知。
-- Migration 成功、失败、需要手动处理会通知申请人。
 - Approval 待处理会通知审批人，通过或拒绝会通知申请人。
 - 通知工具抽屉能展示未读/已读状态；选择未读 Thread 后只标记当前用户的站内投递为已读。
 

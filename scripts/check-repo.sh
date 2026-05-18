@@ -30,6 +30,7 @@ required_paths=(
   "docs/product/runtime-listening-acceptance-spec.md"
   "docs/product/backend-service-spec.md"
   "docs/product/cli-device-capability-spec.md"
+  "docs/product/agent-skill-probing-spec.md"
   "docs/product/auth-and-access-spec.md"
   "playwright.config.ts"
   "e2e/db.ts"
@@ -107,6 +108,7 @@ markdown_files = [
     Path("docs/product/runtime-listening-acceptance-spec.md"),
     Path("docs/product/backend-service-spec.md"),
     Path("docs/product/cli-device-capability-spec.md"),
+    Path("docs/product/agent-skill-probing-spec.md"),
     Path("docs/product/auth-and-access-spec.md"),
 ]
 

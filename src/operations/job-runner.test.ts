@@ -340,6 +340,17 @@ function createFakeOperationStore(claimedJob: OperationJobRow | null, initialOpe
     async readOperation() {
       return this.operation ?? null;
     },
+    async updateOperationStatus(input) {
+      if (!this.operation) return null;
+      this.operation = {
+        ...this.operation,
+        errorSummary: input.errorSummary ?? this.operation.errorSummary,
+        manualInstruction: input.manualInstruction ?? this.operation.manualInstruction,
+        status: input.status,
+        updatedAt: input.now ?? this.operation.updatedAt,
+      };
+      return this.operation;
+    },
     close: async () => {},
   };
 }

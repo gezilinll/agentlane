@@ -21,6 +21,7 @@ Runtime Fleet 必须区分“数据从哪里采集”和“产品上归属哪一
 - 支持按关键词、runtime kind、可用性过滤。Runtime kind 和可用性的候选项必须从当前 snapshot 中真实存在的 runtime 动态生成；不展示当前设备没有上报的 Runtime 类型或可用性状态。
 - Runtime Fleet 不提供 Channel 筛选，避免把 Slock、Multica、OpenClaw、Codex 等 Runtime / 平台入口误当成触达渠道。
 - 点击设备、runtime 或 agent 后，在右侧详情面板查看身份信息、连接状态、归属关系、已注册 Runtime 和关联渠道。
+- Agent 详情面板可以查看目标 Agent 本地 Skill 探测元数据；该能力只展示探测状态、Skill root / entry path、Markdown 文件名和非 Markdown 文件名，不提供编辑、导入、分配、同步或迁移。
 - 当设备控制面在线时，支持从页面请求远端设备刷新 snapshot。
 - 页面自动轮询最新 snapshot，使运行资产管理视图持续更新。
 
@@ -31,10 +32,11 @@ Runtime Fleet 必须区分“数据从哪里采集”和“产品上归属哪一
 - 不接管聊天入口。
 - 不展示所有网络接口、所有 MAC 地址或所有内部进程端口。
 - 不把 capabilities、sourceRefs 等原始 adapter 字段作为页面主信息。
+- 不做集中式 Skill Registry、组织 Skill 资产库、Skill 编辑器、Skill 下发或 Agent 迁移入口。
 
 ## 数据源
 
-页面使用 `GET /api/runtime-fleet` 读取正式后端查询结果，并用 `GET /api/runtime-work-items` 的标准化工作项辅助推导 Runtime 运行状态和 Agent 展示状态，同时读取 `GET /api/devices/:deviceId/collection-health` 展示设备采集健康。Runtime Fleet 做状态推导时必须读取完整 work-item 分页，不能只用第一页 500 条推断 Runtime / Agent 忙闲。没有后端数据或本地 backend 不可用时，页面只在非 production 模式允许使用明确标识的 `fixtures/runtime/collector-snapshot.sample.json` 做开发期离线预览；production 构建必须展示明确错误和空状态，不回退 fixture，不读取兼容期 latest API。组件不直接理解 OpenClaw、Slock 或 Multica 的内部结构，只消费标准化后的 Runtime Fleet view model。
+页面使用 `GET /api/runtime-fleet` 读取正式后端查询结果，并用 `GET /api/runtime-work-items` 的标准化工作项辅助推导 Runtime 运行状态和 Agent 展示状态，同时读取 `GET /api/devices/:deviceId/collection-health` 展示设备采集健康。Agent 详情中的 Skill 探测区块使用 `GET /api/agents/:agentId/skill-probe` 读取只读元数据，使用 `POST /api/agents/:agentId/skill-probe` 请求目标设备执行一次本地探测。Runtime Fleet 做状态推导时必须读取完整 work-item 分页，不能只用第一页 500 条推断 Runtime / Agent 忙闲。没有后端数据或本地 backend 不可用时，页面只在非 production 模式允许使用明确标识的 `fixtures/runtime/collector-snapshot.sample.json` 做开发期离线预览；production 构建必须展示明确错误和空状态，不回退 fixture，不读取兼容期 latest API。组件不直接理解 OpenClaw、Slock 或 Multica 的内部结构，只消费标准化后的 Runtime Fleet view model。
 
 页面挂载后每 30 秒读取一次后端查询结果，并显示页面自己的上次刷新时间。自动刷新只读取后端已有数据，不自动下发远端 `inventory.refresh` 命令；远端采集仍由 collector 定时上报或用户手动点击刷新触发。
 
@@ -102,6 +104,8 @@ Agent：
 - 列表展示 Agent 名称、归属 Runtime、关联渠道、状态、最近同步。
 - 归属 Runtime 使用 Runtime 列表中的同一展示名，不用 UUID 作为主识别。
 - 详情展示 `身份信息`、`归属关系`、`关联渠道`、`运行统计`。这里的 `运行统计` 仅指 Agent 工作负载统计，不应用于 Runtime 详情。
+- 详情中的 `Skill 探测` 只作为只读子区块出现。未探测时展示空状态；请求中展示已请求/等待状态；成功时展示 Skill root、entry、Markdown 文件名和非 Markdown 文件名；失败、unsupported、device disconnected 时展示用户可理解的摘要。
+- 非 Markdown / 二进制文件只展示 metadata，不作为链接、下载、预览或编辑入口。
 - sourceRefs 只用于生成平台标识或外部链接，不直接以 `source: id` 的原始形式展示。
 
 ## 验收标准
@@ -113,6 +117,7 @@ Agent：
 - 用户可以搜索 `tester` 并只看到相关 Agent。
 - Runtime Fleet 工具栏不展示 Channel 筛选；用户需要收敛某个 Agent 时使用搜索、Runtime 或可用性筛选。
 - 用户可以点击 Agent 行并在详情面板看到归属 Runtime、归属设备、关联渠道和运行统计。
+- 用户可以从 Agent 详情打开 Skill 探测区块，看到目标本地 Skill 元数据、未探测/请求中/成功/不支持/失败/设备未连接状态，并且非 Markdown 文件不渲染为链接。
 - 用户在桌面宽度滚动到 Agent 表格后点击行，详情面板仍停留在可视区域内。
 - 当旧 snapshot 缺少 Agent 级最近同步时间时，Agent 列表和详情使用归属 Runtime 或 snapshot 时间回退，不展示未知。
 - 用户可以点击 Runtime 行并在详情面板看到所属设备、Agent 数量、可用性和运行状态，不出现运行入口或任务/会话统计区块。

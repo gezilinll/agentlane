@@ -139,6 +139,13 @@ export function createLorumeBackendServer(
         listRecipientUserIds: (organizationId) => authStore.listOrganizationAdminUserIds(organizationId),
       }
       : undefined,
+    operationStore: operationStore ?? undefined,
+    skillProbeNotifications: authStore && notificationStore
+      ? {
+        createNotificationEvent: notificationStore.createNotificationEvent,
+        listRecipientUserIds: (organizationId) => authStore.listOrganizationAdminUserIds(organizationId),
+      }
+      : undefined,
   });
   const operationHandler = authGuards && operationStore
     ? createOperationHttpApiHandler({

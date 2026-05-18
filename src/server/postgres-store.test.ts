@@ -20,6 +20,7 @@ describeDb("Postgres runtime store", () => {
         await store.upsertWorkStateSnapshot(workStateSnapshot);
 
         expect(await store.readEntityCounts()).toEqual({
+          agentSkillProbeSnapshots: 0,
           agents: 2,
           channelBindings: 2,
           collectorIngestions: 2,
@@ -114,12 +115,63 @@ describeDb("Postgres runtime store", () => {
         expect(fleet.agents.map((agent) => agent.id)).toEqual([inventorySnapshot.agents[0].id]);
         expect(workItems).toEqual({ items: [], total: 0 });
         expect(await store.readEntityCounts()).toMatchObject({
+          agentSkillProbeSnapshots: 0,
           agents: 1,
           channelBindings: inventorySnapshot.agents[0].channelBindings.length,
           runtimes: 1,
           workConversations: 0,
           workExecutions: 0,
           workItems: 0,
+        });
+      } finally {
+        await store.close();
+      }
+    } finally {
+      await database.drop();
+    }
+  });
+
+  it("stores latest read-only Agent Skill probe metadata", async () => {
+    const database = await createTemporaryPostgresDatabase();
+    try {
+      runMigrationsScript(database.url);
+      const store = createPostgresStore({ connectionString: database.url });
+      try {
+        const snapshot = {
+          targetAgentId: "fixture-mac:slock:slock-daemon:agent:tester",
+          targetAgentName: "tester",
+          deviceId: "fixture-mac",
+          deviceName: "Fixture Mac",
+          runtimeId: "fixture-mac:slock:slock-daemon",
+          runtimeName: "Slock daemon",
+          status: "succeeded" as const,
+          observedAt: "2026-05-18T10:00:00.000Z",
+          skills: [{
+            name: "reviewer",
+            rootPath: "/Users/example/.codex/skills/reviewer",
+            entryPath: "/Users/example/.codex/skills/reviewer/SKILL.md",
+            markdownFiles: [{
+              name: "SKILL.md",
+              path: "/Users/example/.codex/skills/reviewer/SKILL.md",
+              relativePath: "SKILL.md",
+            }],
+            nonMarkdownFiles: [{
+              name: "probe.sh",
+              path: "/Users/example/.codex/skills/reviewer/scripts/probe.sh",
+              relativePath: "scripts/probe.sh",
+            }],
+          }],
+        };
+
+        await store.upsertAgentSkillProbeSnapshot(snapshot);
+
+        expect(await store.readAgentSkillProbeSnapshot(snapshot.targetAgentId)).toMatchObject({
+          targetAgentId: snapshot.targetAgentId,
+          status: "succeeded",
+          skills: [expect.objectContaining({ name: "reviewer" })],
+        });
+        await expect(store.readEntityCounts()).resolves.toMatchObject({
+          agentSkillProbeSnapshots: 1,
         });
       } finally {
         await store.close();
@@ -151,6 +203,7 @@ describeDb("Postgres runtime store", () => {
         });
 
         await expect(store.readEntityCounts()).resolves.toMatchObject({
+          agentSkillProbeSnapshots: 0,
           workExecutions: 2,
           workItems: 1,
         });
@@ -211,6 +264,7 @@ describeDb("Postgres runtime store", () => {
           conversationId: staleConversation.id,
         });
         await expect(store.readEntityCounts()).resolves.toMatchObject({
+          agentSkillProbeSnapshots: 0,
           workConversations: 1,
           workExecutions: 0,
           workItems: 1,

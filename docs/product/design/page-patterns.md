@@ -65,6 +65,7 @@ Rules:
 - Runtime Fleet does not provide Channel filtering.
 - Availability and operating status use Lorume-owned semantics.
 - The layout should expose summary rail, Runtime matrix/list, Agent coverage, collection health, and a detail inspector.
+- Agent Skill probing appears only as a compact read-only detail-panel section; it does not become a standalone page, editor, import flow, or migration wizard.
 - Exceptions and unknown states must be traceable in ingestion/logging without dumping debug data into UI.
 
 ## Runs / Work Board

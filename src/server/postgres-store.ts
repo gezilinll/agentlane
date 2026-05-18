@@ -15,6 +15,10 @@ import {
   deriveDeviceCollectionHealth,
   type DeviceCollectionHealth,
 } from "../runtime/runtime-collection-health";
+import {
+  normalizeAgentSkillProbeSnapshot,
+  type AgentSkillProbeSnapshot,
+} from "../runtime/agent-skill-probe";
 
 const { Pool } = pg;
 
@@ -43,6 +47,7 @@ export interface PostgresEntityCounts {
   workItems: number;
   workConversations: number;
   workExecutions: number;
+  agentSkillProbeSnapshots: number;
   collectorIngestions: number;
 }
 
@@ -135,6 +140,10 @@ export interface PostgresStore {
   listRuntimeWorkItems: (filters?: PostgresRuntimeWorkItemFilters) => Promise<PostgresRuntimeWorkItemResult>;
   /** Read one stored work item row. */
   readWorkItem: (id: string) => Promise<PostgresWorkItemRow | null>;
+  /** Upsert the latest read-only Agent Skill probe snapshot. */
+  upsertAgentSkillProbeSnapshot: (snapshot: AgentSkillProbeSnapshot) => Promise<AgentSkillProbeSnapshot>;
+  /** Read the latest read-only Agent Skill probe snapshot for one Agent. */
+  readAgentSkillProbeSnapshot: (agentId: string) => Promise<AgentSkillProbeSnapshot | null>;
   /** List collector ingestion metadata for a device. */
   listCollectorIngestions: (deviceId: string) => Promise<PostgresCollectorIngestion[]>;
   /** Read product-level collection health for one device. */
@@ -286,6 +295,7 @@ export function createPostgresStore(options: PostgresStoreOptions = {}): Postgre
           agents: await countTable(client, "agents"),
           channelBindings: await countTable(client, "channel_bindings"),
           collectorIngestions: await countTable(client, "collector_ingestions"),
+          agentSkillProbeSnapshots: await countTable(client, "agent_skill_probe_snapshots"),
           devices: await countTable(client, "devices"),
           runtimes: await countTable(client, "runtimes"),
           workConversations: await countTable(client, "work_conversations"),
@@ -402,6 +412,61 @@ export function createPostgresStore(options: PostgresStoreOptions = {}): Postgre
         WHERE id = $1
       `, [id]);
       return result.rows[0] ?? null;
+    },
+    async upsertAgentSkillProbeSnapshot(snapshot) {
+      const normalized = normalizeAgentSkillProbeSnapshot(snapshot);
+      if (!normalized) throw new Error("invalid agent skill probe snapshot");
+      await pool.query(`
+        INSERT INTO agent_skill_probe_snapshots (
+          id,
+          device_id,
+          runtime_id,
+          agent_id,
+          status,
+          observed_at,
+          probed_at,
+          operation_id,
+          command_id,
+          error_summary,
+          raw,
+          updated_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, now())
+        ON CONFLICT (id) DO UPDATE SET
+          device_id = excluded.device_id,
+          runtime_id = excluded.runtime_id,
+          agent_id = excluded.agent_id,
+          status = excluded.status,
+          observed_at = excluded.observed_at,
+          probed_at = excluded.probed_at,
+          operation_id = excluded.operation_id,
+          command_id = excluded.command_id,
+          error_summary = excluded.error_summary,
+          raw = excluded.raw,
+          updated_at = now()
+      `, [
+        agentSkillProbeSnapshotId(normalized.targetAgentId),
+        normalized.deviceId,
+        normalized.runtimeId,
+        normalized.targetAgentId,
+        normalized.status,
+        normalized.observedAt ?? null,
+        normalized.probedAt ?? null,
+        normalized.operationId ?? null,
+        normalized.commandId ?? null,
+        normalized.errorSummary ?? null,
+        JSON.stringify(normalized),
+      ]);
+      return normalized;
+    },
+    async readAgentSkillProbeSnapshot(agentId) {
+      const result = await pool.query<{ raw: unknown }>(`
+        SELECT raw
+        FROM agent_skill_probe_snapshots
+        WHERE agent_id = $1
+        LIMIT 1
+      `, [agentId]);
+      return normalizeAgentSkillProbeSnapshot(result.rows[0]?.raw);
     },
     listCollectorIngestions,
     async readDeviceCollectionHealth(deviceId) {
@@ -925,6 +990,10 @@ function createChannelBindingId(
   index: number,
 ): string {
   return `${agentId}:channel:${normalizeObjectKey(binding.kind)}:${normalizeObjectKey(binding.externalId ?? binding.label)}:${index}`;
+}
+
+function agentSkillProbeSnapshotId(agentId: string): string {
+  return `agent-skill-probe:${agentId}`;
 }
 
 function normalizeObjectKey(value: string): string {
