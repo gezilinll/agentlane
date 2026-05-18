@@ -108,7 +108,9 @@ describe("Console shell", () => {
 
     expect(screen.getByRole("heading", { name: /把分散的 Agent 变成可运营的工作网络/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "登录" })).toHaveAttribute("href", "/login");
-    expect(screen.getByTestId("home-pixel-decorations")).toHaveClass("pixel-decorations--home");
+    expect(screen.queryByTestId("home-pixel-decorations")).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "运营总览" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Agent 网络结构预览" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Agent Studio" })).not.toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
@@ -122,6 +124,8 @@ describe("Console shell", () => {
     expect(within(previewNav).getByText("Runtime")).toBeInTheDocument();
     expect(within(previewNav).getByText("Skill")).toBeInTheDocument();
     expect(within(previewNav).getByText("Runs")).toBeInTheDocument();
+    expect(screen.getByText("运行资产层")).toBeInTheDocument();
+    expect(screen.getByText("工作状态层")).toBeInTheDocument();
     expect(within(previewNav).queryByText("对象目录")).not.toBeInTheDocument();
     expect(within(previewNav).queryByText("总览")).not.toBeInTheDocument();
   });

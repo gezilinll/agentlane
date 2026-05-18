@@ -116,6 +116,7 @@ describe("auth pages", () => {
     render(<App authMode="required" />);
 
     expect(await screen.findByRole("heading", { name: "创建组织" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "运营概览" })).toBeInTheDocument();
     await user.type(screen.getByLabelText("组织名称"), "增长工程组");
     await user.clear(screen.getByLabelText("组织标识"));
     await user.type(screen.getByLabelText("组织标识"), "growth-eng");
@@ -140,6 +141,7 @@ describe("auth pages", () => {
     render(<App authMode="required" />);
 
     expect(await screen.findByRole("heading", { name: "加入组织" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "运营概览" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "加入并进入" }));
 
     expect(await screen.findByRole("heading", { name: "运行资产" })).toBeInTheDocument();

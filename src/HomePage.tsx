@@ -1,13 +1,30 @@
-import { PixelDecorations } from "./ui/PixelDecorations";
-import { PixelIcon } from "./ui/PixelIcon";
+import { PixelIcon, type PixelIconName } from "./ui/PixelIcon";
 import { PixelLogo } from "./ui/PixelLogo";
 
 const platformTags = ["OpenClaw", "Multica", "Slock", "Codex", "DingTalk"];
 
+const overviewStats = [
+  { detail: "Device / Runtime / Agent", label: "资产对象", value: "5 类" },
+  { detail: "最近 24 小时成功率", label: "Runs 健康度", value: "96.3%" },
+  { detail: "需要人工确认", label: "待处理任务", value: "2" },
+  { detail: "未读与恢复通知", label: "通知线程", value: "5" },
+] as const;
+
+const networkLayers = [
+  { items: ["Device", "Runtime", "Agent"], title: "运行资产层" },
+  { items: ["DingTalk", "Slack", "Telegram"], title: "工作状态层" },
+  { items: ["Skill Set", "Operations", "Notifications"], title: "治理编排层" },
+] as const;
+
+const consoleCards: Array<{ detail: string; icon: PixelIconName; title: string }> = [
+  { detail: "设备、Runtime、Agent 的采集状态与可用性。", icon: "server", title: "Runtime Fleet" },
+  { detail: "Skill 资产导入、版本、审批与目标同步。", icon: "tool", title: "Skill 管理" },
+  { detail: "任务上下文优先的工作看板，不暴露原始 payload。", icon: "chart", title: "Runs Board" },
+];
+
 export function HomePage() {
   return (
     <main className="homePage">
-      <PixelDecorations variant="home" testId="home-pixel-decorations" />
       <header className="homeHeader">
         <PixelLogo />
         <nav aria-label="首页导航" className="homeNav">
@@ -18,10 +35,7 @@ export function HomePage() {
 
       <section className="homeHero" aria-labelledby="home-title">
         <div className="homeHero__copy">
-          <p className="homeEyebrow">
-            <span aria-hidden="true" />
-            Agent Network Control Plane
-          </p>
+          <p className="homeEyebrow">Agent Network Control Plane</p>
           <h1 className="homeTitle" id="home-title">
             把分散的 Agent 变成可运营的工作网络。
           </h1>
@@ -42,33 +56,78 @@ export function HomePage() {
               <span key={tag}>{tag}</span>
             ))}
           </div>
+          <section className="homeHeroStats" aria-label="运营总览">
+            {overviewStats.map((stat) => (
+              <div className="homeHeroStat" key={stat.label}>
+                <strong>{stat.value}</strong>
+                <span>{stat.label}</span>
+                <small>{stat.detail}</small>
+              </div>
+            ))}
+          </section>
         </div>
 
-        <div className="homeConsole" aria-label="Lorume 控制台预览">
-          <div className="homeConsole__bar">
-            <span># Lorume / Work Board</span>
-            <span aria-hidden="true">•••</span>
+        <section className="homeNetwork" aria-label="Agent 网络结构预览">
+          <div className="homeNetwork__header">
+            <span>CONTROL SURFACE</span>
+            <strong>Operational graph</strong>
           </div>
-          <div className="homeConsole__body">
-            <nav className="homeConsole__menu" aria-label="预览导航">
-              <span>Skill</span>
-              <strong>Runtime</strong>
-              <span>Runs</span>
-            </nav>
-            <div className="homeConsole__content">
-              <div className="homeConsole__stats">
-                <MetricCard value="5" label="在线 Runtime" />
-                <MetricCard value="17" label="可用 Agent" />
-                <MetricCard value="883" label="工作项快照" />
+          <div className="homeNetwork__canvas">
+            {networkLayers.map((layer) => (
+              <div className="homeNetworkLayer" key={layer.title}>
+                <h2>{layer.title}</h2>
+                <div>
+                  {layer.items.map((item) => (
+                    <span key={item}>{item}</span>
+                  ))}
+                </div>
               </div>
-              <div className="homeConsole__lanes">
-                <LanePreview title="待处理" count="42" cards={["同步成本数据", "新增日报口径"]} />
-                <LanePreview title="处理中" count="6" cards={["修复记录异常", "反馈聚类"]} />
-                <LanePreview title="需关注" count="3" cards={["心跳延迟", "状态待确认"]} />
-              </div>
+            ))}
+          </div>
+          <div className="homeNetwork__footer">
+            <span>可观测</span>
+            <span>可治理</span>
+            <span>可复用</span>
+          </div>
+        </section>
+      </section>
+
+      <section className="homeConsole" aria-label="Lorume 控制台预览">
+        <div className="homeConsole__bar">
+          <span>Lorume Console</span>
+          <span>Live preview</span>
+        </div>
+        <div className="homeConsole__body">
+          <nav className="homeConsole__menu" aria-label="预览导航">
+            <span>Skill</span>
+            <strong>Runtime</strong>
+            <span>Runs</span>
+          </nav>
+          <div className="homeConsole__content">
+            <div className="homeConsole__stats">
+              <MetricCard value="5" label="在线 Runtime" />
+              <MetricCard value="17" label="可用 Agent" />
+              <MetricCard value="883" label="工作项快照" />
+            </div>
+            <div className="homeConsole__lanes">
+              <LanePreview title="待处理" count="42" cards={["同步成本数据", "新增日报口径"]} />
+              <LanePreview title="处理中" count="6" cards={["修复记录异常", "反馈聚类"]} />
+              <LanePreview title="需关注" count="3" cards={["心跳延迟", "状态待确认"]} />
             </div>
           </div>
         </div>
+      </section>
+
+      <section className="homeOpsGrid" aria-label="当前能力">
+        {consoleCards.map((card) => (
+          <article className="homeOpsCard" key={card.title}>
+            <span className="homeOpsCard__icon" aria-hidden="true">
+              <PixelIcon name={card.icon} size={20} />
+            </span>
+            <h2>{card.title}</h2>
+            <p>{card.detail}</p>
+          </article>
+        ))}
       </section>
     </main>
   );
