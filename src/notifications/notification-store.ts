@@ -51,6 +51,8 @@ export interface NotificationThreadRow {
   occurrenceCount: number;
   firstOccurredAt: Date;
   lastOccurredAt: Date;
+  isRead: boolean;
+  readAt?: Date | null;
   resolvedAt?: Date | null;
   cooldownUntil?: Date | null;
   createdAt: Date;
@@ -68,6 +70,7 @@ export interface NotificationDeliveryRow {
   status: NotificationDeliveryStatus;
   skipReason?: string | null;
   sentAt?: Date | null;
+  readAt?: Date | null;
   errorSummary?: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -103,6 +106,7 @@ export interface NotificationStore {
   createNotificationEvent: (input: CreateNotificationEventInput) => Promise<CreateNotificationEventResult>;
   listThreads: (input: { organizationId: string; recipientUserId?: string }) => Promise<NotificationThreadRow[]>;
   readThread: (input: { threadId: string }) => Promise<NotificationThreadRow | null>;
+  markThreadRead: (input: { recipientUserId: string; threadId: string }) => Promise<NotificationThreadRow | null>;
   listDeliveries: (input: { threadId: string }) => Promise<NotificationDeliveryRow[]>;
   close: () => Promise<void>;
 }
@@ -212,7 +216,7 @@ export function createPostgresNotificationStore(options: PostgresNotificationSto
         : "";
       if (input.recipientUserId) params.push(input.recipientUserId);
       const result = await pool.query<NotificationThreadRow>(`
-        SELECT ${threadColumns("nt")}
+        SELECT ${threadColumns("nt", input.recipientUserId ? 2 : undefined)}
         FROM notification_threads nt
         WHERE nt.organization_id = $1
           ${recipientFilter}
@@ -222,6 +226,16 @@ export function createPostgresNotificationStore(options: PostgresNotificationSto
     },
     readThread(input) {
       return readThreadById(pool, input.threadId);
+    },
+    async markThreadRead(input) {
+      await pool.query(`
+        UPDATE notification_deliveries
+        SET read_at = COALESCE(read_at, now()), updated_at = now()
+        WHERE thread_id = $1
+          AND recipient_user_id = $2
+          AND channel = 'in_app'
+      `, [input.threadId, input.recipientUserId]);
+      return readThreadByIdForRecipient(pool, input.threadId, input.recipientUserId);
     },
     async listDeliveries(input) {
       const result = await pool.query<NotificationDeliveryRow>(`
@@ -255,7 +269,13 @@ const eventColumns = `
   created_at AS "createdAt"
 `;
 
-function threadColumns(alias = "notification_threads"): string {
+function threadColumns(alias = "notification_threads", recipientParamIndex?: number): string {
+  const readAtExpression = recipientParamIndex
+    ? `(SELECT max(nd.read_at) FROM notification_deliveries nd WHERE nd.thread_id = ${alias}.id AND nd.recipient_user_id = $${recipientParamIndex} AND nd.channel = 'in_app')`
+    : "NULL::timestamptz";
+  const isReadExpression = recipientParamIndex
+    ? `COALESCE((SELECT bool_and(nd.read_at IS NOT NULL) FROM notification_deliveries nd WHERE nd.thread_id = ${alias}.id AND nd.recipient_user_id = $${recipientParamIndex} AND nd.channel = 'in_app'), false)`
+    : "false";
   return `
     ${alias}.id,
     ${alias}.organization_id AS "organizationId",
@@ -270,6 +290,8 @@ function threadColumns(alias = "notification_threads"): string {
     ${alias}.occurrence_count AS "occurrenceCount",
     ${alias}.first_occurred_at AS "firstOccurredAt",
     ${alias}.last_occurred_at AS "lastOccurredAt",
+    ${isReadExpression} AS "isRead",
+    ${readAtExpression} AS "readAt",
     ${alias}.resolved_at AS "resolvedAt",
     ${alias}.cooldown_until AS "cooldownUntil",
     ${alias}.created_at AS "createdAt",
@@ -287,6 +309,7 @@ const deliveryColumns = `
   status,
   skip_reason AS "skipReason",
   sent_at AS "sentAt",
+  read_at AS "readAt",
   error_summary AS "errorSummary",
   created_at AS "createdAt",
   updated_at AS "updatedAt"
@@ -315,6 +338,20 @@ async function readThreadById(client: PoolClient | pg.Pool, threadId: string): P
     WHERE id = $1
     LIMIT 1
   `, [threadId]);
+  return result.rows[0] ?? null;
+}
+
+async function readThreadByIdForRecipient(
+  client: PoolClient | pg.Pool,
+  threadId: string,
+  recipientUserId: string,
+): Promise<NotificationThreadRow | null> {
+  const result = await client.query<NotificationThreadRow>(`
+    SELECT ${threadColumns("notification_threads", 2)}
+    FROM notification_threads
+    WHERE id = $1
+    LIMIT 1
+  `, [threadId, recipientUserId]);
   return result.rows[0] ?? null;
 }
 

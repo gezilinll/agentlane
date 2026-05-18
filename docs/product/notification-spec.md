@@ -75,6 +75,7 @@ Notification Delivery 是一次实际投递记录。
 - `recipientUserId`：接收人。
 - `recipientAddress`：邮件地址或应用内用户 ID。
 - `status`：`pending`、`sent`、`failed`、`skipped`。
+- `readAt`：站内通知被接收人读取的时间；仅 `in_app` 投递需要。
 - `skipReason`：跳过原因，可为空。
 - `sentAt`：发送时间，可为空。
 - `errorSummary`：失败摘要，可为空。
@@ -255,7 +256,10 @@ In-app 是默认渠道。
 规则：
 
 - 所有重要事件都写入 Notification Event。
-- 通知中心展示 Thread 列表。
+- 通知中心是 Console 右上角工具抽屉，不进入主导航。
+- 通知中心展示 Thread 列表和详情；Thread 列表优先展示聚合结果，不展示原始 Event 流。
+- Thread 的未读/已读状态按当前用户的 `in_app` Delivery `readAt` 计算。
+- 用户选择一条未读 Thread 时，前端调用标记已读 API 并在抽屉内更新状态。
 - 资源详情页可以展示与该资源相关的 Thread。
 - 用户可以标记已读、关闭已恢复 Thread 或 mute 某个 Thread。
 
@@ -277,7 +281,8 @@ Notification API：
 
 - `GET /api/notifications`：读取当前用户可见 Notification Thread。
 - `GET /api/notifications/:threadId`：读取 Thread 和 Delivery 详情。
-- 当前站内通知 API 只提供读取能力；标记已读、静音和通知偏好要等对应 UI、权限和 harness 一起出现后再开放。
+- `POST /api/notifications/:threadId/read`：把当前用户在该 Thread 下的站内投递标记为已读。
+- 静音和通知偏好要等对应 UI、权限和 harness 一起出现后再开放。
 
 业务模块内部 API：
 
@@ -314,6 +319,7 @@ Operation 集成 API：
 - Device 离线持续发生时只按阈值升级通知。
 - Migration 成功、失败、需要手动处理会通知申请人。
 - Approval 待处理会通知审批人，通过或拒绝会通知申请人。
+- 通知工具抽屉能展示未读/已读状态；选择未读 Thread 后只标记当前用户的站内投递为已读。
 
 ## 验收标准
 

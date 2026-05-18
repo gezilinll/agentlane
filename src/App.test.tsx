@@ -140,9 +140,11 @@ describe("Console shell", () => {
     expect(within(nav).getByRole("button", { name: "Runtime Fleet" })).toBeInTheDocument();
     expect(within(nav).getByRole("button", { name: "Skill 管理" })).toBeInTheDocument();
     expect(within(nav).getByRole("button", { name: "Runs" })).toBeInTheDocument();
-    expect(within(nav).getByRole("button", { name: "任务中心" })).toBeInTheDocument();
-    expect(within(nav).getByRole("button", { name: "通知中心" })).toBeInTheDocument();
     expect(within(nav).getByRole("button", { name: "组织设置" })).toBeInTheDocument();
+    expect(within(nav).queryByRole("button", { name: "任务中心" })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole("button", { name: "通知中心" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "打开任务中心" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "打开通知中心" })).toBeInTheDocument();
 
     await user.click(within(nav).getByRole("button", { name: "Runs" }));
 
@@ -155,15 +157,19 @@ describe("Console shell", () => {
     expect(screen.getByRole("heading", { name: "Skill 管理" })).toBeInTheDocument();
     expect(screen.getByText("请选择组织后管理 Skill。")).toBeInTheDocument();
 
-    await user.click(within(nav).getByRole("button", { name: "任务中心" }));
+    await user.click(screen.getByRole("button", { name: "打开任务中心" }));
     expect(window.location.pathname).toBe("/operations");
-    expect(screen.getByRole("heading", { name: "任务中心" })).toBeInTheDocument();
-    expect(screen.getByText("请选择组织后查看任务。")).toBeInTheDocument();
+    const operationsDrawer = screen.getByRole("dialog", { name: "任务中心" });
+    expect(within(operationsDrawer).getByText("请选择组织后查看任务。")).toBeInTheDocument();
+    await user.click(within(operationsDrawer).getByRole("button", { name: "关闭任务中心" }));
+    expect(window.location.pathname).toBe("/skills");
 
-    await user.click(within(nav).getByRole("button", { name: "通知中心" }));
+    await user.click(screen.getByRole("button", { name: "打开通知中心" }));
     expect(window.location.pathname).toBe("/notifications");
-    expect(screen.getByRole("heading", { name: "通知中心" })).toBeInTheDocument();
-    expect(screen.getByText("请选择组织后查看通知。")).toBeInTheDocument();
+    const notificationsDrawer = screen.getByRole("dialog", { name: "通知中心" });
+    expect(within(notificationsDrawer).getByText("请选择组织后查看通知。")).toBeInTheDocument();
+    await user.click(within(notificationsDrawer).getByRole("button", { name: "关闭通知中心" }));
+    expect(window.location.pathname).toBe("/skills");
 
     await user.click(within(nav).getByRole("button", { name: "组织设置" }));
     expect(window.location.pathname).toBe("/settings");

@@ -41,6 +41,33 @@ export function createNotificationHttpApiHandler(options: NotificationHttpApiHan
       return;
     }
 
+    const readMatch = requestUrl.pathname.match(/^\/api\/notifications\/([^/]+)\/read$/);
+    if (request.method === "POST" && readMatch) {
+      const session = await requireSession(request, response, options);
+      if (!session) return;
+      const threadId = decodeURIComponent(readMatch[1] ?? "");
+      const thread = await options.notificationStore.readThread({ threadId });
+      if (!thread) {
+        sendJson(response, 404, { error: "notification_thread_not_found" });
+        return;
+      }
+      if (!ensureOrganizationMember(response, session, thread.organizationId)) return;
+      const visibleThreads = await options.notificationStore.listThreads({
+        organizationId: thread.organizationId,
+        recipientUserId: session.user.id,
+      });
+      if (!visibleThreads.some((visibleThread) => visibleThread.id === thread.id)) {
+        sendJson(response, 403, { error: "forbidden" });
+        return;
+      }
+      const updatedThread = await options.notificationStore.markThreadRead({
+        recipientUserId: session.user.id,
+        threadId,
+      });
+      sendJson(response, 200, { thread: updatedThread ?? thread });
+      return;
+    }
+
     const detailMatch = requestUrl.pathname.match(/^\/api\/notifications\/([^/]+)$/);
     if (request.method === "GET" && detailMatch) {
       const session = await requireSession(request, response, options);

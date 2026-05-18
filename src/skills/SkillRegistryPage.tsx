@@ -290,9 +290,7 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
     if (!targetType || !targetId) return;
     if (targetType !== "agent" && targetType !== "runtime" && targetType !== "device") return;
     const nextValue = targetOptionValue({ id: targetId, type: targetType });
-    if (targets.some((target) => targetOptionValue(target) === nextValue)) {
-      setSelectedTargetValue((current) => current || nextValue);
-    }
+    setSelectedTargetValue((current) => current || nextValue);
   }, [targets]);
 
   useEffect(() => {
@@ -905,6 +903,8 @@ function SkillDetailPanel({
   const latestVersionIsPublished = Boolean(latestVersion?.publishedAt);
   const skillNameById = new Map(skills.map((skill) => [skill.id, skill.name]));
   const canEditSource = files.length === 1 && files[0]?.path === "SKILL.md";
+  const selectedTargetOption = selectedTargetValue ? parseTargetOptionValue(selectedTargetValue) : null;
+  const hasSelectedTargetOption = targets.some((target) => targetOptionValue(target) === selectedTargetValue);
 
   return (
     <aside className="detailPanel skillDetailPanel" aria-label="Skill 详情">
@@ -991,6 +991,11 @@ function SkillDetailPanel({
           <span className="controlLabel">分配目标</span>
           <select value={selectedTargetValue} onChange={(event) => onTargetChange(event.target.value)}>
             <option value="">选择目标</option>
+            {selectedTargetOption && !hasSelectedTargetOption ? (
+              <option value={selectedTargetValue}>
+                {targetLabel(selectedTargetOption.type)} · {selectedTargetOption.id}
+              </option>
+            ) : null}
             {targets.map((target) => (
               <option key={`${target.type}:${target.id}`} value={targetOptionValue(target)}>
                 {target.label}

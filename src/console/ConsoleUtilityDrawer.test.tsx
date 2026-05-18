@@ -1,0 +1,118 @@
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ConsoleUtilityDrawer } from "./ConsoleUtilityDrawer";
+
+const originalFetch = globalThis.fetch;
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+  vi.restoreAllMocks();
+});
+
+describe("ConsoleUtilityDrawer", () => {
+  it("shows operations as a right-side drawer with selectable details", async () => {
+    globalThis.fetch = vi.fn(async (input) => {
+      const url = input.toString();
+      if (url.includes("/api/operations")) {
+        return jsonResponse({
+          operations: [{
+            createdAt: "2026-05-14T08:20:00.000Z",
+            id: "op_1",
+            resourceId: "skill_1",
+            resourceType: "skill",
+            status: "queued",
+            summary: "同步 Skill：Review",
+            targetId: "agent_main",
+            targetType: "agent",
+            type: "skill_sync",
+            updatedAt: "2026-05-14T08:21:00.000Z",
+          }],
+        });
+      }
+      return jsonResponse({ error: "unexpected request" }, 500);
+    }) as unknown as typeof fetch;
+
+    render(
+      <ConsoleUtilityDrawer
+        organizationId="org_1"
+        view="operations"
+        onClose={vi.fn()}
+        onViewChange={vi.fn()}
+      />,
+    );
+
+    const drawer = screen.getByRole("dialog", { name: "任务中心" });
+    expect(within(drawer).getByRole("heading", { name: "任务中心" })).toBeInTheDocument();
+    await userEvent.click(await within(drawer).findByRole("button", { name: /同步 Skill：Review/ }));
+
+    expect(within(drawer).getByRole("heading", { name: "同步 Skill：Review" })).toBeInTheDocument();
+    expect(within(drawer).getByText("目标: agent · agent_main")).toBeInTheDocument();
+  });
+
+  it("marks notification threads as read when selected from the drawer", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn(async (input, init) => {
+      const url = input.toString();
+      if (url.includes("/api/notifications/thread_1/read") && init?.method === "POST") {
+        return jsonResponse({
+          thread: notificationThread({ isRead: true, readAt: "2026-05-14T08:22:00.000Z" }),
+        });
+      }
+      if (url.includes("/api/notifications")) {
+        return jsonResponse({ threads: [notificationThread({ isRead: false })] });
+      }
+      return jsonResponse({ error: "unexpected request" }, 500);
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    render(
+      <ConsoleUtilityDrawer
+        organizationId="org_1"
+        view="notifications"
+        onClose={vi.fn()}
+        onViewChange={vi.fn()}
+      />,
+    );
+
+    const drawer = screen.getByRole("dialog", { name: "通知中心" });
+    const notification = await within(drawer).findByRole("button", { name: /Skill 发布已排队/ });
+    expect(within(notification).getByText("未读")).toBeInTheDocument();
+
+    await user.click(notification);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/api/notifications/thread_1/read",
+      expect.objectContaining({ method: "POST" }),
+    ));
+    expect(within(notification).getByText("已读")).toBeInTheDocument();
+    expect(within(drawer).getByRole("heading", { name: "Skill 发布已排队" })).toBeInTheDocument();
+  });
+});
+
+function notificationThread(overrides: Record<string, unknown> = {}) {
+  return {
+    createdAt: "2026-05-14T08:20:00.000Z",
+    dedupeKey: "operation:op_publish_1:queued",
+    eventType: "operation_status_changed",
+    firstOccurredAt: "2026-05-14T08:20:00.000Z",
+    id: "thread_1",
+    isRead: false,
+    lastOccurredAt: "2026-05-14T08:20:00.000Z",
+    latestSummary: "Cost Review 等待发布任务执行。",
+    occurrenceCount: 1,
+    organizationId: "org_1",
+    severity: "info",
+    status: "open",
+    title: "Skill 发布已排队",
+    updatedAt: "2026-05-14T08:20:00.000Z",
+    ...overrides,
+  };
+}
+
+function jsonResponse(payload: unknown, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    headers: { "content-type": "application/json" },
+    status,
+  });
+}

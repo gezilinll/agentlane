@@ -66,6 +66,7 @@ describeDb("database migrations", () => {
           "0005_operations_notifications",
           "0006_operation_manual_steps",
           "0007_runtime_skill_discoveries",
+          "0008_notification_read_state",
         ]);
       } finally {
         await client.end();

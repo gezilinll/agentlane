@@ -8,7 +8,7 @@ Surface Register 定义页面类型、视觉强度和体验边界。新增页面
 |---|---|---|---|
 | Brand Surface | `/` | 解释 Lorume 的价值和方向 | 最高 |
 | Identity Surface | `/login`, `/invite/:token` | 登录、组织加入、身份恢复 | 高 |
-| Console Surface | `/runtime`, `/skills`, `/runs`, `/operations`, `/notifications`, `/settings` | 日常管理、查看、筛选、排查 | 中 |
+| Console Surface | `/runtime`, `/skills`, `/runs`, `/settings`; `/operations` and `/notifications` as utility drawer routes | 日常管理、查看、筛选、排查 | 中 |
 
 ## Brand Surface
 

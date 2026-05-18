@@ -60,6 +60,59 @@ describeDb("Postgres notification store", () => {
     }
   });
 
+  it("tracks in-app read state per notification recipient", async () => {
+    const database = await createTemporaryPostgresDatabase();
+    try {
+      runMigrationsScript(database.url);
+      const authStore = createPostgresAuthStore({ connectionString: database.url });
+      const notificationStore = createPostgresNotificationStore({ connectionString: database.url });
+      try {
+        const user = await authStore.upsertUserForEmail("notify-read@example.com");
+        const organization = await authStore.createOrganization({
+          createdByUserId: user.id,
+          name: "Notify Read Team",
+          slug: "notify-read-team",
+        });
+        const result = await notificationStore.createNotificationEvent({
+          actorUserId: user.id,
+          dedupeKey: "skill:skill_read:queued",
+          eventType: "skill_sync_queued",
+          organizationId: organization.id,
+          recipientUserIds: [user.id],
+          resourceId: "skill_read",
+          resourceType: "skill",
+          severity: "info",
+          sourceModule: "skill",
+          summary: "Skill 等待同步。",
+          title: "Skill 同步排队中",
+        });
+
+        await expect(notificationStore.listThreads({
+          organizationId: organization.id,
+          recipientUserId: user.id,
+        })).resolves.toEqual([
+          expect.objectContaining({ id: result.thread.id, isRead: false }),
+        ]);
+
+        await notificationStore.markThreadRead({ recipientUserId: user.id, threadId: result.thread.id });
+
+        await expect(notificationStore.listThreads({
+          organizationId: organization.id,
+          recipientUserId: user.id,
+        })).resolves.toEqual([
+          expect.objectContaining({ id: result.thread.id, isRead: true, readAt: expect.any(Date) }),
+        ]);
+        await expect(notificationStore.listDeliveries({ threadId: result.thread.id })).resolves.toEqual([
+          expect.objectContaining({ channel: "in_app", readAt: expect.any(Date) }),
+        ]);
+      } finally {
+        await Promise.all([authStore.close(), notificationStore.close()]);
+      }
+    } finally {
+      await database.drop();
+    }
+  });
+
   it("aggregates duplicate events and always records in-app delivery", async () => {
     const database = await createTemporaryPostgresDatabase();
     try {

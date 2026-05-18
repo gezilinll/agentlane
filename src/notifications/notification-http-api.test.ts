@@ -29,6 +29,7 @@ describe("notification HTTP API", () => {
         listDeliveries: async ({ threadId }: Parameters<NotificationStore["listDeliveries"]>[0]) => (
           threadId === thread.id ? [delivery] : []
         ),
+        markThreadRead: async () => thread,
       } as unknown as NotificationStore,
       session: createSession(),
     });
@@ -53,6 +54,44 @@ describe("notification HTTP API", () => {
       expect.objectContaining({ organizationId: "org_1", recipientUserId: "user_1" }),
     ]);
   });
+
+  it("marks a current-user in-app notification thread as read", async () => {
+    const thread = createThread({ id: "nthr_1", isRead: false, organizationId: "org_1" });
+    const readThread = createThread({
+      ...thread,
+      isRead: true,
+      readAt: new Date("2026-05-14T10:10:00.000Z"),
+    });
+    const calls: unknown[] = [];
+    const api = await startApi({
+      notificationStore: {
+        listThreads: async (input: Parameters<NotificationStore["listThreads"]>[0]) => {
+          calls.push(input);
+          return [thread];
+        },
+        readThread: async ({ threadId }: Parameters<NotificationStore["readThread"]>[0]) => (
+          threadId === thread.id ? thread : null
+        ),
+        listDeliveries: async () => [],
+        markThreadRead: async (input: Parameters<NotificationStore["markThreadRead"]>[0]) => {
+          calls.push(input);
+          return readThread;
+        },
+      } as unknown as NotificationStore,
+      session: createSession(),
+    });
+
+    const response = await fetch(`${api.url}/api/notifications/nthr_1/read`, { method: "POST" });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      thread: expect.objectContaining({ id: "nthr_1", isRead: true }),
+    });
+    expect(calls).toEqual([
+      expect.objectContaining({ organizationId: "org_1", recipientUserId: "user_1" }),
+      expect.objectContaining({ recipientUserId: "user_1", threadId: "nthr_1" }),
+    ]);
+  });
 });
 
 function createThread(overrides: Partial<NotificationThreadRow> = {}): NotificationThreadRow {
@@ -64,10 +103,12 @@ function createThread(overrides: Partial<NotificationThreadRow> = {}): Notificat
     eventType: "skill_publish_succeeded",
     firstOccurredAt: now,
     id: "nthr_default",
+    isRead: false,
     lastOccurredAt: now,
     latestSummary: "Skill 已发布。",
     occurrenceCount: 1,
     organizationId: "org_1",
+    readAt: null,
     resolvedAt: null,
     resourceId: "skill_1",
     resourceType: "skill",
@@ -89,6 +130,7 @@ function createDelivery(overrides: Partial<NotificationDeliveryRow> = {}): Notif
     id: "ndlv_default",
     recipientAddress: "owner@example.com",
     recipientUserId: "user_1",
+    readAt: null,
     sentAt: now,
     skipReason: null,
     status: "sent",

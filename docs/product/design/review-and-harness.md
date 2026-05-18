@@ -43,8 +43,8 @@ UI 工作完成前必须同时做视觉 Review、CSS/token Review 和相关 harn
 当前视觉 harness 锚点：
 
 - `src/ui/ui-tokens.test.tsx` 锁定 Logo / favicon 同源、PixelButton 图标、Pixel / Sans / Mono 字体角色、登录布局和运营概览 icon。
-- `src/App.test.tsx` 锁定首页入口、已实现 Console 导航、不可用入口隐藏、Runtime Fleet / Skill 管理 / Runs / 任务中心 / 通知中心 / 组织设置的核心交互和文案边界。
-- `src/operations/OperationsPage.test.tsx`、`src/notifications/NotificationsPage.test.tsx`、`src/settings/OrganizationSettingsPage.test.tsx` 锁定任务、通知和组织邀请入口的 API 读取、权限显示和详情查看。
+- `src/App.test.tsx` 锁定首页入口、已实现 Console 导航、不可用入口隐藏、Runtime Fleet / Skill 管理 / Runs / 组织设置的核心交互，以及任务/通知工具抽屉的打开、关闭和路由边界。
+- `src/console/ConsoleUtilityDrawer.test.tsx`、`src/settings/OrganizationSettingsPage.test.tsx` 锁定任务/通知抽屉、已读状态、组织邀请入口的 API 读取、权限显示和详情查看。
 - `e2e/runtime-fleet.spec.ts` 锁定 Runtime Fleet 的动态筛选、详情面板、响应式和无 Channel 筛选。
 - `e2e/runtime-work-board.spec.ts` 锁定 Runs 的 Runtime / Channel / 阶段 / 时间筛选、长文本不横滚、卡片不显示调试内容、监听缺口不变成任务卡。
 - `e2e/skill-registry-auth.spec.ts` 锁定登录后 Skill 管理的导入和发布队列路径。

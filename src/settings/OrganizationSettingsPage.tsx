@@ -18,6 +18,7 @@ export function OrganizationSettingsPage({ session }: OrganizationSettingsPagePr
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<AuthMemberRole>("member");
   const [inviteLink, setInviteLink] = useState("");
+  const [copiedInviteLink, setCopiedInviteLink] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -28,6 +29,7 @@ export function OrganizationSettingsPage({ session }: OrganizationSettingsPagePr
     setIsSubmitting(true);
     setErrorMessage("");
     setInviteLink("");
+    setCopiedInviteLink(false);
     try {
       const response = await fetch(`/api/organizations/${encodeURIComponent(organization.organizationId)}/invitations`, {
         body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
@@ -44,6 +46,16 @@ export function OrganizationSettingsPage({ session }: OrganizationSettingsPagePr
       setErrorMessage(error instanceof Error ? error.message : "邀请创建失败");
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function copyInviteLink() {
+    if (!inviteLink) return;
+    try {
+      await navigator.clipboard?.writeText(inviteLink);
+      setCopiedInviteLink(true);
+    } catch {
+      setCopiedInviteLink(false);
     }
   }
 
@@ -126,7 +138,24 @@ export function OrganizationSettingsPage({ session }: OrganizationSettingsPagePr
               >
                 创建邀请链接
               </button>
-              {inviteLink ? <p className="skillStatusMessage">{inviteLink}</p> : null}
+              {inviteLink ? (
+                <div className="inviteLinkBlock">
+                  <label className="toolbarField inviteLinkControl">
+                    <span className="controlLabel">邀请链接</span>
+                    <input
+                      aria-label="邀请链接"
+                      className="inviteLinkInput"
+                      readOnly
+                      value={inviteLink}
+                      onFocus={(event) => event.currentTarget.select()}
+                    />
+                  </label>
+                  <button className="secondaryButton compactButton" type="button" onClick={() => void copyInviteLink()}>
+                    复制邀请链接
+                  </button>
+                  {copiedInviteLink ? <span className="skillStatusInline">已复制</span> : null}
+                </div>
+              ) : null}
               {errorMessage ? <p className="skillErrorMessage">{errorMessage}</p> : null}
             </div>
           ) : (

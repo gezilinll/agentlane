@@ -461,9 +461,11 @@ Operation / Notification API：
 - `GET /api/operations/:operationId`：读取单个异步操作和 job 明细。
 - `GET /api/notifications`：按组织读取页面内通知线程。
 - `GET /api/notifications/:threadId`：读取通知线程和投递明细。
+- `POST /api/notifications/:threadId/read`：把当前用户在该 Thread 下的站内投递标记为已读。
 
 当前 Skill 管理页面从 Runtime Fleet 查询结果中派生可分配目标，并在用户选择目标后调用 Skill target HTTP API 展示目标 Skill Set 与安装状态。页面不得在前端自行拼接生效规则，也不得调用不存在的 target support 原因 API。
 当前 Skill 管理页面可以对已批准、已同步、失败或不支持的 Assignment 触发“同步到目标”；该动作只创建 Operation，不直接写设备。
+Runtime Fleet 的 Agent 详情可以通过 `/skills?targetType=agent&targetId=...` 深链打开 Skill 管理，并预选目标 Skill Set。`targetId` 必须 URL 编码，页面需要在目标列表异步加载前保留该选择，不能因为 target ID 暂时不在 options 中而丢失。
 
 ## UI 规则
 

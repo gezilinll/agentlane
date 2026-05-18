@@ -133,6 +133,13 @@ Job 状态：
 - Operation API 必须要求用户属于目标组织；不能跨组织读取 Operation 或 Job。
 - Job Runner 在 Operation 进入 `succeeded`、`failed`、`unsupported`、`requires_manual_step` 时，按 `requestedByUserId` 创建站内通知；通知失败不能回滚 Operation 状态。
 
+## UI 边界
+
+- 任务中心是 Console 右上角工具抽屉，不进入主导航。
+- `/operations` 是任务中心抽屉深链，打开时覆盖在当前 Console 上下文之上。
+- 抽屉展示 Operation 概览、列表和选中 Operation 的 Job 详情；关闭后回到打开前的 Console 页面。
+- 抽屉不展示后端原始 payload、token、设备密钥或调试字段。
+
 ## Harness
 
 - Migration 创建 `operations` 和 `operation_jobs`。

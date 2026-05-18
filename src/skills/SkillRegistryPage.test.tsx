@@ -7,6 +7,7 @@ const originalFetch = globalThis.fetch;
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  window.history.pushState({}, "", "/");
   vi.restoreAllMocks();
 });
 
@@ -218,6 +219,8 @@ const notificationsResponse = {
       title: "Skill 发布已排队",
       latestSummary: "Cost Review 等待发布任务执行。",
       occurrenceCount: 1,
+      isRead: false,
+      readAt: null,
       firstOccurredAt: "2026-05-14T08:20:00.000Z",
       lastOccurredAt: "2026-05-14T08:20:00.000Z",
       createdAt: "2026-05-14T08:20:00.000Z",
@@ -573,6 +576,26 @@ describe("SkillRegistryPage", () => {
     await screen.findByRole("heading", { name: "Cost Review" });
     await user.selectOptions(screen.getByLabelText("分配目标"), screen.getByRole("option", { name: "Agent · main" }));
 
+    expect(await screen.findByText("目标 Skill Set")).toBeInTheDocument();
+    expect(screen.getByText("Cost Review · 待同步")).toBeInTheDocument();
+    expect(calls.some((call) => (
+      call.url.includes("/api/skill-targets/agent/gezilinll-claw%3Aopenclaw%3Agateway-local%3Aagent%3Amain/skill-set")
+      && call.url.includes("organizationId=org_1")
+    ))).toBe(true);
+  });
+
+  it("opens a target Skill Set from Runtime Fleet deep links", async () => {
+    const targetId = "gezilinll-claw:openclaw:gateway-local:agent:main";
+    const calls = installSkillRegistryFetchMock({ assignments: approvedAssignmentsResponse });
+    window.history.pushState(
+      {},
+      "",
+      `/skills?targetType=agent&targetId=${encodeURIComponent(targetId)}`,
+    );
+
+    render(<SkillRegistryPage organizationId="org_1" />);
+
+    await screen.findByRole("heading", { name: "Cost Review" });
     expect(await screen.findByText("目标 Skill Set")).toBeInTheDocument();
     expect(screen.getByText("Cost Review · 待同步")).toBeInTheDocument();
     expect(calls.some((call) => (

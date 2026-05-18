@@ -37,7 +37,11 @@ describe("OrganizationSettingsPage", () => {
     await user.type(screen.getByLabelText("邮箱"), "teammate@lorume.com");
     await user.click(screen.getByRole("button", { name: "创建邀请链接" }));
 
-    await waitFor(() => expect(screen.getByText(/\/invite\/invite_token_1$/)).toBeInTheDocument());
+    const inviteLink = await screen.findByLabelText("邀请链接");
+    await waitFor(() => {
+      expect((inviteLink as HTMLInputElement).value).toMatch(/\/invite\/invite_token_1$/);
+    });
+    expect(screen.getByRole("button", { name: "复制邀请链接" })).toBeInTheDocument();
   });
 
   it("hides invitation creation from regular members", () => {

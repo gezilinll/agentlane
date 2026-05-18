@@ -11,7 +11,7 @@
 - 组织可以由登录用户创建，也可以通过邀请链接加入。
 - 组织内成员有最小角色：owner、admin、member。
 - Device Collector 使用设备 token 向 backend 上报数据；token 只保存哈希，不明文入库。
-- Runtime Fleet、Skill 管理、Runs、任务中心、通知中心、组织设置等 Console 页面必须通过用户 session 访问。
+- Runtime Fleet、Skill 管理、Runs、组织设置等 Console 页面，以及任务中心、通知中心工具抽屉必须通过用户 session 访问。
 
 ## 非目标
 
@@ -149,7 +149,7 @@ Runtime / Runs 读取 API：
 ## UI 规则
 
 - 登录、验证码、创建组织、邀请加入页面使用更强的 Cream Arcade 视觉语言：像素 logo、奶油底、黑色硬边、像素阴影、高饱和按钮和克制游戏装饰。
-- Console 页面使用相同 token 系统，但优先保证 Runtime Fleet、Skill 管理、Runs、任务中心、通知中心、组织设置等页面的数据扫描效率。
+- Console 页面使用相同 token 系统，但优先保证 Runtime Fleet、Skill 管理、Runs、组织设置，以及任务中心、通知中心工具抽屉的数据扫描效率。
 - 品牌标题、按钮、状态短标签可使用 Fusion Pixel；身份页短说明和表单也可以使用 Fusion Pixel，Console 的长正文和表格内容仍以可读性为先。
 - 身份页和 Console 的图标都通过共享 `PixelIcon` 入口和像素装饰组件渲染；表单输入、按钮、运营概览、导航、刷新、搜索、时间选择和页脚装饰不得使用零散图标体系。
 - 像素风只作为视觉语言，不改变信息架构和权限边界。

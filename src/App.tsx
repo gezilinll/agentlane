@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { AuthProvider, useOptionalAuthSession } from "./auth/AuthProvider";
+import {
+  ConsoleUtilityBar,
+  ConsoleUtilityDrawer,
+  type ConsoleUtilityView,
+} from "./console/ConsoleUtilityDrawer";
 import { HomePage } from "./HomePage";
-import { NotificationsPage } from "./notifications/NotificationsPage";
-import { OperationsPage } from "./operations/OperationsPage";
 import { RuntimeFleetPage } from "./runtime/RuntimeFleetPage";
 import { RuntimeWorkBoardPage } from "./runtime/RuntimeWorkBoardPage";
 import { OrganizationSettingsPage } from "./settings/OrganizationSettingsPage";
@@ -11,14 +14,12 @@ import { PixelDecorations } from "./ui/PixelDecorations";
 import { PixelIcon, type PixelIconName } from "./ui/PixelIcon";
 import { PixelLogo } from "./ui/PixelLogo";
 
-type PageKey = "runtime" | "runs" | "skills" | "operations" | "notifications" | "settings";
+type PageKey = "runtime" | "runs" | "skills" | "settings";
 
 const navItems: Array<{ label: string; icon: PixelIconName; page: PageKey }> = [
   { label: "Runtime Fleet", icon: "server", page: "runtime" },
   { label: "Skill 管理", icon: "tool", page: "skills" },
   { label: "Runs", icon: "play", page: "runs" },
-  { label: "任务中心", icon: "activity", page: "operations" },
-  { label: "通知中心", icon: "mail", page: "notifications" },
   { label: "组织设置", icon: "settings", page: "settings" },
 ] as const;
 
@@ -26,9 +27,12 @@ const pagePathByKey: Record<PageKey, string> = {
   runtime: "/runtime",
   runs: "/runs",
   skills: "/skills",
-  operations: "/operations",
-  notifications: "/notifications",
   settings: "/settings",
+};
+
+const utilityPathByView: Record<ConsoleUtilityView, string> = {
+  notifications: "/notifications",
+  operations: "/operations",
 };
 
 export type AppAuthMode = "disabled" | "required";
@@ -45,11 +49,28 @@ export function App({ authMode = "disabled" }: { authMode?: AppAuthMode }) {
 function ConsoleApp() {
   const auth = useOptionalAuthSession();
   const [activePage, setActivePage] = useState<PageKey>(() => pageFromPath(getCurrentPath()) ?? "runtime");
+  const [utilityView, setUtilityView] = useState<ConsoleUtilityView | null>(() => utilityViewFromPath(getCurrentPath()));
+  const [utilityReturnPath, setUtilityReturnPath] = useState(() => pagePathByKey[pageFromPath(getCurrentPath()) ?? "runtime"]);
   const organizationId = auth?.session.organizations[0]?.organizationId;
 
   useEffect(() => {
     const syncPageFromUrl = () => {
-      setActivePage(pageFromPath(getCurrentPath()) ?? "runtime");
+      const path = getCurrentPath();
+      const nextPage = pageFromPath(path);
+      const nextUtilityView = utilityViewFromPath(path);
+      if (nextPage) {
+        setActivePage(nextPage);
+        setUtilityView(null);
+        setUtilityReturnPath(pagePathByKey[nextPage]);
+        return;
+      }
+      if (nextUtilityView) {
+        setUtilityView(nextUtilityView);
+        return;
+      }
+      setActivePage("runtime");
+      setUtilityView(null);
+      setUtilityReturnPath(pagePathByKey.runtime);
     };
     window.addEventListener("popstate", syncPageFromUrl);
     return () => window.removeEventListener("popstate", syncPageFromUrl);
@@ -61,6 +82,8 @@ function ConsoleApp() {
       window.history.pushState({}, "", nextPath);
     }
     setActivePage(page);
+    setUtilityView(null);
+    setUtilityReturnPath(nextPath);
   };
 
   const navigateToSkillTarget = (target: { type: "agent"; id: string }) => {
@@ -73,6 +96,27 @@ function ConsoleApp() {
       window.history.pushState({}, "", nextPath);
     }
     setActivePage("skills");
+    setUtilityView(null);
+    setUtilityReturnPath(nextPath);
+  };
+
+  const openUtility = (view: ConsoleUtilityView) => {
+    const nextPath = utilityPathByView[view];
+    const currentRoute = `${getCurrentPath()}${window.location.search}`;
+    const currentPage = pageFromPath(getCurrentPath());
+    setUtilityReturnPath(currentPage ? currentRoute : pagePathByKey[activePage]);
+    if (getCurrentPath() !== nextPath) {
+      window.history.pushState({}, "", nextPath);
+    }
+    setUtilityView(view);
+  };
+
+  const closeUtility = () => {
+    const nextPath = utilityReturnPath || pagePathByKey[activePage];
+    if (getCurrentPath() !== nextPath) {
+      window.history.pushState({}, "", nextPath);
+    }
+    setUtilityView(null);
   };
 
   return (
@@ -103,6 +147,7 @@ function ConsoleApp() {
         </nav>
         <AuthSessionActions />
       </aside>
+      <ConsoleUtilityBar activeView={utilityView} onOpen={openUtility} />
 
       {activePage === "runtime" ? (
         <RuntimeFleetPage onOpenSkillTarget={navigateToSkillTarget} />
@@ -110,13 +155,15 @@ function ConsoleApp() {
         <RuntimeWorkBoardPage />
       ) : activePage === "skills" ? (
         <SkillRegistryPage organizationId={organizationId} />
-      ) : activePage === "operations" ? (
-        <OperationsPage organizationId={organizationId} />
-      ) : activePage === "notifications" ? (
-        <NotificationsPage organizationId={organizationId} />
       ) : (
         <OrganizationSettingsPage session={auth?.session} />
       )}
+      <ConsoleUtilityDrawer
+        organizationId={organizationId}
+        view={utilityView}
+        onClose={closeUtility}
+        onViewChange={openUtility}
+      />
     </main>
   );
 }
@@ -129,9 +176,13 @@ function pageFromPath(path: string): PageKey | null {
   if (path === "/runtime") return "runtime";
   if (path === "/runs") return "runs";
   if (path === "/skills") return "skills";
+  if (path === "/settings") return "settings";
+  return null;
+}
+
+function utilityViewFromPath(path: string): ConsoleUtilityView | null {
   if (path === "/operations") return "operations";
   if (path === "/notifications") return "notifications";
-  if (path === "/settings") return "settings";
   return null;
 }
 

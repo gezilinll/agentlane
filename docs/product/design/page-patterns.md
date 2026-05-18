@@ -4,7 +4,7 @@
 
 ## Home
 
-Purpose: 说明 Lorume 是 Agent Network 控制平面，并展示已经可用的 Runtime Fleet、Skill 管理、Runs、任务中心、通知中心等能力。
+Purpose: 说明 Lorume 是 Agent Network 控制平面，并展示已经可用的 Runtime Fleet、Skill 管理、Runs、组织设置和任务/通知工具抽屉等能力。
 
 Rules:
 
@@ -87,25 +87,31 @@ Rules:
 - Raw id、cid、phone、opaque conversation id 不直接作为会话名。
 - 宽屏下详情面板应保持在可视区域内；用户滚动看板列表时，已选工作项详情不能消失到视野外。
 
-## Operations
+## Operations Utility Drawer
 
 Purpose: 查看异步 Operation / Job 的用户可见状态、资源、目标、错误和最近更新时间。
 
 Rules:
 
-- 页面按组织读取数据；无组织时不请求 API。
+- 抽屉从 Console 右上角打开，`/operations` 是深链，不进入主导航。
+- 右上角入口属于 Console chrome，必须预留布局空间或在窄屏重新定位，不能遮挡页面主按钮、筛选器或详情面板。
+- 抽屉按组织读取数据；无组织时不请求 API。
 - 列表展示状态、类型、目标和最近更新时间，详情展示 Job 级别的状态。
+- 关闭抽屉时回到打开前的 Console 页面。
 - 不展示后端原始 payload、token、设备密钥或调试字段。
 
-## Notifications
+## Notifications Utility Drawer
 
 Purpose: 查看同步、采集、审核和恢复类通知线程。
 
 Rules:
 
-- 页面按组织读取数据；无组织时不请求 API。
+- 抽屉从 Console 右上角打开，`/notifications` 是深链，不进入主导航。
+- 右上角入口属于 Console chrome，必须预留布局空间或在窄屏重新定位，不能遮挡页面主按钮、筛选器或详情面板。
+- 抽屉按组织读取数据；无组织时不请求 API。
 - 列表展示 severity、状态、标题和更新时间，详情展示摘要、资源、动作和投递状态。
-- 通知页是排查入口，不替代 Operation 详情或后端日志。
+- 通知列表区分未读和已读；选择未读 Thread 后应标记为已读。
+- 通知抽屉是排查入口，不替代 Operation 详情或后端日志。
 
 ## Organization Settings
 
