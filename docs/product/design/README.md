@@ -8,7 +8,7 @@
 
 1. [principles.md](principles.md): 总体设计原则和取舍顺序。
 2. [surface-register.md](surface-register.md): 页面类型和视觉强度边界。
-3. [visual-language.md](visual-language.md): Cream Arcade 视觉语言。
+3. [visual-language.md](visual-language.md): Glacier Premium Precision 视觉语言。
 4. [tokens.md](tokens.md): 设计 token 组织方式。
 5. 按需阅读字体、颜色、布局、组件、图标、交互、动效、文案、响应式和页面规范。
 6. [review-and-harness.md](review-and-harness.md): 自我 Review 和 harness 规则。
@@ -19,13 +19,13 @@
 |---|---|
 | [principles.md](principles.md) | 产品级设计原则、反模式、取舍顺序 |
 | [surface-register.md](surface-register.md) | Brand Surface、Identity Surface、Console Surface 的规则 |
-| [visual-language.md](visual-language.md) | Cream Arcade 的视觉目标、构图、氛围和禁区 |
+| [visual-language.md](visual-language.md) | Glacier Premium Precision 的视觉目标、构图、氛围和禁区 |
 | [tokens.md](tokens.md) | token 分层、命名、修改规则和代码映射 |
-| [typography.md](typography.md) | Pixel、Sans、Mono 字体分工和排版规则 |
+| [typography.md](typography.md) | Sans、Mono 字体分工和排版规则 |
 | [color.md](color.md) | 色彩系统、语义色、对比度和配色禁区 |
 | [layout.md](layout.md) | 间距、栅格、面板、卡片、密度和溢出控制 |
 | [components.md](components.md) | 当前组件族的视觉、状态和使用规则 |
-| [icons-and-assets.md](icons-and-assets.md) | Logo、icon、像素装饰、图片和资产来源 |
+| [icons-and-assets.md](icons-and-assets.md) | Logo、icon、低噪声装饰、图片和资产来源 |
 | [interaction.md](interaction.md) | 交互状态、表单、反馈、键盘和错误处理 |
 | [motion.md](motion.md) | 动效目的、时长、缓动和 reduced motion |
 | [content-and-terminology.md](content-and-terminology.md) | 文案、术语、标签、错误信息和中英文边界 |

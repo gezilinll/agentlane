@@ -14,7 +14,7 @@ Lorume 是面向生产环境的 Agent Network 控制平面，用来管理人、A
 
 ## 视觉语言
 
-Lorume 的长期 UI 方向是 **Cream Arcade**：像素风、极客工具感和克制游戏感。它服务于“团队操作台”的产品定位，不应该把 Console 做成营销页或玩具界面。
+Lorume 的当前 UI 方向是 **Glacier Premium Precision**：清爽、现代、低噪声的 AgentOps 控制台。它服务于“团队操作台”的产品定位，强调长时间阅读舒适度、可扫描信息密度、真实运行状态和清晰治理边界。
 
 视觉规范、设计 token、组件规则、页面模式和自验要求以 [design/README.md](design/README.md) 为准。本文档只保留产品对象、信息架构、用户动线和页面职责。
 

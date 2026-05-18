@@ -1,50 +1,55 @@
 # Visual Language
 
-Lorume 的视觉语言是 **Cream Arcade**：奶油底、黑色硬边、像素细节、极客工具感和克制游戏感。
+Lorume uses **Glacier Premium Precision**: a modern operations console language built from cool white backgrounds, quiet grid texture, hairline borders, compact navigation, cobalt action blue, teal operational signal, restrained amber warnings, and document-like detail surfaces.
+
+The UI must not rely on retro pixel styling, thick black borders, high-saturation yellow sidebars, decorative sprites, or large empty atmospheric panels.
 
 ## North Star
 
-Lorume 应像一台给 Agent Network 使用的复古控制台：
+Lorume should feel like a calm control plane for an Agent Network:
 
-- 有游戏化记忆点，但不是游戏。
-- 有命令行和机器感，但不是开发者玩具。
-- 有高饱和强调色，但主体保持清晰和温和。
-- 有像素字体和图标，但不牺牲中文阅读体验。
+- Operational and trustworthy, not playful for its own sake.
+- Distinctive enough to be remembered, without asking users to fight the interface.
+- Dense where users scan data, spacious where users make identity or onboarding decisions.
+- Modern and precise, while keeping a visible product point of view.
 
 ## Core Ingredients
 
-- 奶油色背景和轻微暖色层次。
-- 黑色或深墨色硬边框。
-- 黄色、粉色、蓝色、绿色作为有限强调色。
-- 右下错位像素阴影。
-- 窗口、面板、chip、badge、按钮使用清晰轮廓。
-- 背景装饰使用像素点、小十字、低密度图案和少量角色化图形。
+- Cool white and glacier-gray backgrounds.
+- Low-contrast grid texture that never competes with text.
+- Hairline borders and subtle elevation instead of hard black outlines.
+- Cobalt action blue for primary operations.
+- Teal signal accent for routing, online, sync, and current-context cues.
+- Amber and red used only for warning and danger.
+- Compact left navigation, top-right utility buttons, summary rails, lists, lanes, and right inspectors.
 
 ## Composition
 
-- Brand 和 Identity 页面可以使用居中主面板、模拟窗口、运营概览、像素装饰和底部提示条。
-- Console 页面使用稳定应用布局，减少大面积装饰，保留硬边、token 化色彩和像素 icon。
-- 首页 hero 需要第一屏就看到产品信号，不只看到抽象口号。
+- Brand and Identity pages must show real product signals in the first viewport, not empty decorative panels.
+- Console pages use a stable app shell with compact rail navigation, a topbar utility area, focused summary metrics, primary content, and detail inspector.
+- Task and notification surfaces are right-side utility drawers opened from the top-right Console chrome, not primary navigation pages.
+- Long-running views should favor readable density over spectacle.
 
-## Pixel Game Feeling
+## Memory Point
 
-游戏感来自：
+The memory point comes from precision and calm contrast:
 
-- 像素 logo 和 icon。
-- 少量角色化背景装饰。
-- 黑边、错位阴影、硬朗按钮。
-- 控制台式命令文本。
+- The compact dark Lorume mark.
+- Cobalt and teal signal pairing.
+- Document-like detail surfaces.
+- Hairline operational traces and summary rails.
+- Real runtime, Skill, Run, Operation, and Notification objects visible in the layout.
 
-游戏感不来自：
+It does not come from:
 
-- 大量低价值动画。
-- 过多贴纸和可爱元素。
-- 把业务数据伪装成游戏任务。
-- 牺牲信息密度。
+- Retro game styling.
+- Stickers, sprites, or playful decoration.
+- Oversized empty hero panels.
+- Decorative gradients that hide the actual product.
 
 ## Visual Consistency
 
-- 同一页面不要混合多种边框语言。
-- 同一功能区域的 icon 要来自同一风格。
-- 强调色不超过页面需要，避免每个模块都抢视觉优先级。
-- 装饰物必须给版面留白和氛围服务，不得干扰内容层级。
+- Same page, same border and radius language.
+- Same semantic state, same tone.
+- Same icon source, same visual weight.
+- Decoration must be quiet enough that a user can work in the UI for hours.

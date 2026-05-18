@@ -1,47 +1,56 @@
 # Color
 
-Lorume 使用温暖奶油底和有限高饱和强调色。颜色服务信息层级，不用来装饰每一个元素。
+Lorume uses a cool, low-noise palette. Color serves hierarchy, state, and product memory; it must not decorate every component.
 
-## Palette Roles
+## Active Palette
 
-- Background: 页面背景，偏奶油色。
-- Surface: 面板、表单、卡片、弹窗。
-- Text: 主文字、次级文字、弱文字。
-- Border: 黑色硬边和浅分割线。
-- Primary: 主操作和品牌强调。
-- Accent: 少量品牌装饰和高亮。
-- Success: 在线、健康、完成。
-- Warning: 需关注、待确认、过期风险。
-- Danger: 错误、失败、危险操作。
-- Info: 提示、说明、辅助状态。
+| Role | Token | Value |
+|---|---|---|
+| Page background | `--lorume-color-bg` | `#f7f9fb` |
+| Rail background | `--lorume-color-bg-rail` | `#eef3f7` |
+| Surface | `--lorume-color-surface` | `rgba(255, 255, 255, 0.88)` |
+| Soft surface | `--lorume-color-surface-soft` | `#f4f7fa` |
+| Blue surface | `--lorume-color-surface-blue` | `#f2f7ff` |
+| Ink | `--lorume-color-ink` | `#111827` |
+| Muted text | `--lorume-color-muted` | `#667587` |
+| Faint text | `--lorume-color-faint` | `#94a3b5` |
+| Hairline | `--lorume-color-line` | `#dce5ee` |
+| Strong line | `--lorume-color-line-strong` | `#b8c5d3` |
+| Primary action | `--lorume-color-action` | `#245bff` |
+| Primary action dark | `--lorume-color-action-dark` | `#163fc2` |
+| Operational signal | `--lorume-color-accent` | `#12a7a2` |
+| Success | `--lorume-color-success` | `#1f9d68` |
+| Warning | `--lorume-color-warning` | `#b7791f` |
+| Danger | `--lorume-color-danger` | `#d64b55` |
+| Info | `--lorume-color-info` | `#2d7ff0` |
 
 ## Usage Ratio
 
-页面视觉重量遵循：
+- 70% cool background and white surfaces.
+- 20% text, lines, and structural chrome.
+- 10% action, signal, and semantic state color.
 
-- 60% 背景和 surface。
-- 30% 文字、边框和结构。
-- 10% 高饱和强调色。
-
-如果一屏里多个颜色同时抢注意力，应减少强调色或降低装饰密度。
+If a screen feels busy, reduce accent usage before reducing useful data.
 
 ## Semantic Rules
 
-- 状态色只表达状态，不做任意装饰。
-- 同一语义在所有页面使用同一颜色方向。
-- Warning 和 Danger 必须清晰区分。
-- Disabled 不使用低对比度到无法阅读的灰。
+- Action blue means primary action or active navigation.
+- Teal means operational signal, sync, routing, or online context.
+- Green means healthy or completed.
+- Amber means attention, manual step, stale state, or pending user review.
+- Red means failed, blocked, critical, or destructive.
+- Source/runtime/channel badges should be neutral or info-toned unless they are expressing status.
 
 ## Contrast
 
-- 正文、表单、按钮文字必须满足可读对比。
-- 装饰像素可以低对比，但不得与正文重叠。
-- Badge 需要同时靠颜色和文字表达状态，不能只靠颜色。
+- Body text, form values, and buttons must remain readable on all surfaces.
+- Low-contrast grid texture and traces cannot overlap text in a way that reduces legibility.
+- Badge meaning must be expressed by text and color together.
 
 ## Forbidden
 
-- 大面积单色蓝白 SaaS 风。
-- 纯装饰渐变文字。
-- 每个卡片使用不同强调色。
-- 未经 token 的随机色值。
-- 把平台来源颜色直接映射为产品状态色。
+- High-saturation yellow sidebars.
+- Thick black borders as a primary visual language.
+- Single-hue blue SaaS pages.
+- Random untokenized hex values in product CSS.
+- Platform source colors mapped directly to product state colors.

@@ -4,7 +4,7 @@
 
 ## Motion Roles
 
-- Brand Surface: 可使用轻量进入、像素漂浮、按钮反馈等品牌动效。
+- Brand Surface: 可使用轻量进入、产品预览层级和按钮反馈等品牌动效。
 - Identity Surface: 可使用输入反馈、验证码发送反馈、邀请状态转换。
 - Console Surface: 只使用帮助理解状态变化的动效。
 

@@ -18,10 +18,11 @@ UI 工作完成前必须同时做视觉 Review、CSS/token Review 和相关 harn
 - 是否有未实现入口。
 - 是否出现横向滚动。
 - 标题、按钮、badge、详情面板是否溢出。
-- 字体分工是否符合 Pixel / Sans / Mono 规则。
+- 字体分工是否符合 Sans / Mono 规则。
 - Icon 是否统一。
-- 装饰是否遮挡内容或造成视觉疲劳。
+- 装饰是否遮挡内容、造成视觉疲劳，或让页面显得空洞。
 - Console 页面是否仍然能快速扫描。
+- 任务/通知是否从右上角入口打开窄抽屉，而不是变成主导航页面。
 
 ## CSS And Token Review
 
@@ -29,7 +30,7 @@ UI 工作完成前必须同时做视觉 Review、CSS/token Review 和相关 harn
 
 - 是否存在新增硬编码色值。
 - 是否绕过共享组件写了临时按钮、输入框、badge。
-- 是否新增了一次性 box-shadow、border、font-family。
+- 是否新增了一次性 box-shadow、border、font-family、radius。
 - 是否在业务页面复制 logo 或 icon SVG。
 - 是否破坏 Brand、Identity、Console 之间的 token 一致性。
 
@@ -42,7 +43,7 @@ UI 工作完成前必须同时做视觉 Review、CSS/token Review 和相关 harn
 
 当前视觉 harness 锚点：
 
-- `src/ui/ui-tokens.test.tsx` 锁定 Logo / favicon 同源、PixelButton 图标、Pixel / Sans / Mono 字体角色、登录布局和运营概览 icon。
+- `src/ui/ui-tokens.test.tsx` 锁定 Logo / favicon 同源、共享按钮图标、Sans / Mono 字体角色、登录布局和运营概览 icon。
 - `src/App.test.tsx` 锁定首页入口、已实现 Console 导航、不可用入口隐藏、Runtime Fleet / Skill 管理 / Runs / 组织设置的核心交互，以及任务/通知工具抽屉的打开、关闭和路由边界。
 - `src/console/ConsoleUtilityDrawer.test.tsx`、`src/settings/OrganizationSettingsPage.test.tsx` 锁定任务/通知抽屉、已读状态、组织邀请入口的 API 读取、权限显示和详情查看。
 - `e2e/runtime-fleet.spec.ts` 锁定 Runtime Fleet 的动态筛选、详情面板、响应式和无 Channel 筛选。
