@@ -432,6 +432,10 @@ compatibility: openclaw
         );
         const promoted = await promoteResponse.json();
         const skillsResponse = await fetch(`${baseUrl}/api/skills?organizationId=${encodeURIComponent(organization.id)}`);
+        const promotedFilesResponse = await fetch(
+          `${baseUrl}/api/skills/${encodeURIComponent(promoted.skill.id)}/versions/${encodeURIComponent(promoted.version.id)}/files`,
+        );
+        const promotedFiles = await promotedFilesResponse.json();
 
         expect(listResponse.status).toBe(200);
         expect(listPayload).toMatchObject({
@@ -465,6 +469,14 @@ compatibility: openclaw
         await expect(skillsResponse.json()).resolves.toMatchObject({
           skills: [expect.objectContaining({ id: promoted.skill.id, name: "Runtime Review" })],
         });
+        expect(promotedFiles).toMatchObject({
+          files: [
+            expect.objectContaining({ path: "SKILL.md" }),
+          ],
+        });
+        expect(promotedFiles.files).not.toEqual(
+          expect.arrayContaining([expect.objectContaining({ path: "icon.png" })]),
+        );
       } finally {
         await Promise.all([authStore.close(), runtimeStore.close(), skillStore.close()]);
       }
@@ -554,6 +566,12 @@ compatibility: openclaw
 # Runtime Review
 `,
             path: "SKILL.md",
+          },
+          {
+            contentHash: "hash-icon",
+            contentType: "binary",
+            path: "icon.png",
+            sizeBytes: 128,
           },
         ],
         id: "fixture-mac:openclaw:gateway-18789:agent:main:skill:runtime-review",

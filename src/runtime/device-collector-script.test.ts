@@ -50,6 +50,7 @@ description: Review runtime changes.
 
 # Runtime Review
 `);
+    writeFileSync(path.join(skillDir, "icon.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x01, 0x02]));
     const configPath = path.join(configDir, "config.json");
     writeFileSync(configPath, JSON.stringify({
       deviceId: "skill-device",
@@ -85,13 +86,22 @@ description: Review runtime changes.
       name: "Runtime Review",
       description: "Review runtime changes.",
       skillPath: skillDir,
-      files: [
-        {
-          path: "SKILL.md",
-          contentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
-        },
-      ],
     });
+    const skillFile = snapshot.skillDiscoveries[0].files.find((file: { path: string }) => file.path === "SKILL.md");
+    const iconFile = snapshot.skillDiscoveries[0].files.find((file: { path: string }) => file.path === "icon.png");
+    expect(skillFile).toMatchObject({
+      content: expect.stringContaining("# Runtime Review"),
+      contentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      contentType: "text",
+      path: "SKILL.md",
+    });
+    expect(iconFile).toMatchObject({
+      contentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      contentType: "binary",
+      path: "icon.png",
+      sizeBytes: 7,
+    });
+    expect(iconFile).not.toHaveProperty("content");
   });
 
   it("discovers OpenClaw workspace Skill directories by default", () => {

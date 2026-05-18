@@ -136,8 +136,11 @@ export function createSkillHttpApiHandler(options: SkillHttpApiHandlerOptions): 
         return;
       }
       try {
+        const textFiles = discovery.files
+          .filter((file) => file.contentType !== "binary" && typeof file.content === "string")
+          .map((file) => ({ content: file.content as string, path: file.path }));
         const skillPackage = createSkillPackageFromFiles({
-          files: discovery.files.map((file) => ({ content: file.content, path: file.path })),
+          files: textFiles,
           source: {
             filename: discovery.skillPath.split("/").pop() || undefined,
             resolvedRef: discovery.packageHash,

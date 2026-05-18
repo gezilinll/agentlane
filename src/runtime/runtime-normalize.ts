@@ -135,14 +135,16 @@ export interface RuntimeActivityStats {
 /** Lorume target level that owns a discovered Skill package on a device. */
 export type RuntimeSkillDiscoveryTargetType = "device" | "runtime" | "agent";
 
-/** One text file found inside a discovered Skill package. */
+/** One file found inside a discovered Skill package. */
 export interface RuntimeSkillDiscoveryFile {
   /** Package-relative file path. */
   path: string;
-  /** UTF-8 file content used when promoting this Skill into organization storage. */
-  content: string;
+  /** UTF-8 file content used when promoting this Skill into organization storage; omitted for binary assets. */
+  content?: string;
   /** Optional content hash reported by the collector. */
   contentHash?: string;
+  /** Optional collector-classified content type. */
+  contentType?: "text" | "binary";
   /** Optional file size in bytes reported by the collector. */
   sizeBytes?: number;
 }
@@ -165,7 +167,7 @@ export interface RuntimeSkillDiscoveryReport {
   packageHash: string;
   /** Local path on the device where the Skill was discovered. */
   path: string;
-  /** Text files captured from the package for promotion. */
+  /** Files captured from the package; binary assets are metadata-only until asset editing is supported. */
   files: RuntimeSkillDiscoveryFile[];
   /** ISO timestamp when this Skill was last observed. */
   lastSeenAt?: string;
@@ -197,7 +199,7 @@ export interface RuntimeSkillDiscovery {
   packageHash: string;
   /** Local path on the device where the Skill was discovered. */
   skillPath: string;
-  /** Text files captured from the package for promotion. */
+  /** Files captured from the package; binary assets are metadata-only until asset editing is supported. */
   files: RuntimeSkillDiscoveryFile[];
   /** ISO timestamp when this Skill was last observed. */
   lastSeenAt?: string;

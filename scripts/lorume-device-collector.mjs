@@ -12,6 +12,45 @@ const DEFAULT_PROBE_MAX_BUFFER_BYTES = 20 * 1024 * 1024;
 const POST_RETRY_DELAYS_MS = [0, 500, 1500];
 const DEFAULT_SKILL_DISCOVERY_MAX_FILES = 64;
 const DEFAULT_SKILL_DISCOVERY_MAX_FILE_BYTES = 256 * 1024;
+const BINARY_SKILL_FILE_EXTENSIONS = new Set([
+  ".avif",
+  ".bmp",
+  ".gif",
+  ".gz",
+  ".ico",
+  ".jpeg",
+  ".jpg",
+  ".pdf",
+  ".png",
+  ".tar",
+  ".webp",
+  ".zip",
+]);
+const TEXT_SKILL_FILE_EXTENSIONS = new Set([
+  "",
+  ".cjs",
+  ".css",
+  ".env",
+  ".example",
+  ".html",
+  ".js",
+  ".json",
+  ".jsx",
+  ".md",
+  ".mjs",
+  ".py",
+  ".sh",
+  ".svg",
+  ".toml",
+  ".ts",
+  ".tsx",
+  ".txt",
+  ".xml",
+  ".yaml",
+  ".yml",
+]);
+const TEXT_CONTROL_CHARACTER_PATTERN = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/;
+const TEXT_CONTROL_CHARACTER_GLOBAL_PATTERN = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g;
 
 function parseArgs(argv) {
   const args = {
@@ -692,8 +731,8 @@ function listSkillDirectories(root) {
 
 function readSkillDiscoveryDirectory(target, skillDir, observedAt) {
   const files = readSkillFiles(skillDir);
-  if (!files.some((file) => file.path === "SKILL.md")) return null;
-  const skillFile = files.find((file) => file.path === "SKILL.md");
+  const skillFile = files.find((file) => file.path === "SKILL.md" && typeof file.content === "string");
+  if (!skillFile) return null;
   const metadata = parseSkillMetadata(skillFile?.content || "", path.basename(skillDir));
   const packageHash = hashSkillFiles(files);
   return {
@@ -741,13 +780,20 @@ function readSkillFiles(skillDir) {
         continue;
       }
       if (stats.size > DEFAULT_SKILL_DISCOVERY_MAX_FILE_BYTES) continue;
-      const content = readFileSync(absolutePath, "utf8");
-      files.push({
+      const buffer = readFileSync(absolutePath);
+      const contentHash = createHash("sha256").update(buffer).digest("hex");
+      const file = {
         path: relativePath,
-        content,
-        contentHash: createHash("sha256").update(content).digest("hex"),
-        sizeBytes: Buffer.byteLength(content),
-      });
+        contentHash,
+        sizeBytes: buffer.length,
+      };
+      if (isTextSkillFile(relativePath, buffer)) {
+        file.content = sanitizeTextSkillContent(buffer.toString("utf8"));
+        file.contentType = "text";
+      } else {
+        file.contentType = "binary";
+      }
+      files.push(file);
     }
   };
   visit(skillDir);
@@ -759,10 +805,25 @@ function hashSkillFiles(files) {
   for (const file of files) {
     hash.update(file.path);
     hash.update("\0");
-    hash.update(file.content);
+    hash.update(file.contentHash || "");
+    hash.update("\0");
+    hash.update(String(file.sizeBytes || 0));
     hash.update("\0");
   }
   return hash.digest("hex");
+}
+
+function isTextSkillFile(relativePath, buffer) {
+  const extension = path.extname(relativePath).toLowerCase();
+  if (BINARY_SKILL_FILE_EXTENSIONS.has(extension)) return false;
+  if (buffer.includes(0)) return false;
+  if (TEXT_SKILL_FILE_EXTENSIONS.has(extension)) return true;
+  const sample = buffer.subarray(0, Math.min(buffer.length, 4096)).toString("utf8");
+  return !TEXT_CONTROL_CHARACTER_PATTERN.test(sample);
+}
+
+function sanitizeTextSkillContent(content) {
+  return content.replace(TEXT_CONTROL_CHARACTER_GLOBAL_PATTERN, "");
 }
 
 function parseSkillMetadata(content, fallbackName) {

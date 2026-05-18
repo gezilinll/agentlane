@@ -108,6 +108,12 @@ compatibility: openclaw
 `,
                   path: "SKILL.md",
                 },
+                {
+                  contentHash: "hash-icon",
+                  contentType: "binary",
+                  path: "icon.png",
+                  sizeBytes: 128,
+                },
               ],
               id: "fixture-mac:openclaw:gateway-18789:agent:main:skill:review",
               name: "Review Skill",
