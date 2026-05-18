@@ -597,6 +597,7 @@ button {
 }
 
 .workspace {
+  align-content: start;
   display: grid;
   grid-column: 2;
   grid-row: 2;
@@ -1205,35 +1206,39 @@ h1 {
 .resourceCenterGrid {
   align-items: start;
   display: grid;
-  gap: 14px;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
   min-width: 0;
 }
 
 .resourceList {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   padding: 14px;
 }
 
 .resourceListItem {
-  background: var(--lorume-color-surface);
-  border: var(--lorume-border-thin);
+  background: color-mix(in srgb, var(--lorume-color-paper) 86%, var(--lorume-color-bg));
+  border: var(--lorume-border-hairline);
+  border-radius: var(--lorume-radius-md);
   color: var(--lorume-color-ink);
   display: grid;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
   padding: 12px;
   text-align: left;
+  transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 
 .resourceListItem:hover {
-  background: var(--lorume-color-surface-hover);
+  background: var(--lorume-color-paper);
+  border-color: color-mix(in srgb, var(--lorume-color-action) 24%, var(--lorume-color-line));
+  box-shadow: var(--lorume-shadow-subtle);
 }
 
 .resourceListItemActive {
-  border-color: var(--lorume-color-blue);
-  box-shadow: inset 0 0 0 2px var(--lorume-color-blue);
+  border-color: color-mix(in srgb, var(--lorume-color-action) 32%, var(--lorume-color-line));
+  box-shadow: var(--lorume-shadow-subtle);
 }
 
 .resourceListItem strong,
