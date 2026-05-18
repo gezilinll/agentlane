@@ -60,7 +60,7 @@ export const catalogSeedObjects: CatalogObject[] = [
     tags: ["skill", "aetheris", "link"],
     dependencies: [{ id: "tool-aetheris-cli", type: "tool", name: "Aetheris CLI" }],
     usedBy: [{ id: "workflow-ai-conversion", type: "workflow", name: "AI+ 转化分析流程" }],
-    description: "Skill 作为一等对象进入 Catalog，版本、审核、分配和目标同步由 Skill 管理承载。",
+    description: "Skill 作为长期 Catalog 对象保留，用于描述可复用能力包和依赖关系。",
   },
   {
     id: "worker-openclaw-m1",

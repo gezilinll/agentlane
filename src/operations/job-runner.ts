@@ -149,8 +149,6 @@ function titleSuffixForStatus(status: OperationStatus): string {
 }
 
 function sourceModuleForOperation(operation: OperationRow): NotificationSourceModule {
-  if (operation.type.startsWith("skill_")) return "skill";
-  if (operation.type === "agent_migration") return "migration";
   if (operation.type === "device_refresh") return "runtime";
   return "system";
 }

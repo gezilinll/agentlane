@@ -8,8 +8,6 @@ import {
 import type {
   LorumeRuntime,
   ManagedRuntimeAgent,
-  RuntimeSkillDiscovery,
-  RuntimeSkillDiscoveryTargetType,
   RuntimeDevice,
   RuntimeInventorySnapshot,
 } from "../runtime/runtime-normalize";
@@ -46,7 +44,6 @@ export interface PostgresEntityCounts {
   workConversations: number;
   workExecutions: number;
   collectorIngestions: number;
-  skillDiscoveries: number;
 }
 
 /** Query row for one collector ingestion. */
@@ -86,11 +83,6 @@ interface PostgresWorkItemQueryRow extends PostgresWorkItemRow {
 
 const workItemOrderExpression = "coalesce(w.last_seen_at, w.updated_source_at, w.created_source_at, w.updated_at, w.created_at)";
 
-interface RuntimeSkillDiscoveryQueryRow extends Omit<RuntimeSkillDiscovery, "files" | "lastSeenAt"> {
-  files: RuntimeSkillDiscovery["files"] | string;
-  lastSeenAt: Date | string | null;
-}
-
 /** Backend query result for Runtime Fleet. */
 export interface PostgresRuntimeFleetResult {
   observedAt: string | null;
@@ -123,23 +115,6 @@ export interface PostgresRuntimeWorkItemResult {
   nextCursor?: string;
 }
 
-/** Persisted target Skill package discovered by a device collector. */
-export interface PostgresSkillDiscoveryRow extends RuntimeSkillDiscovery {}
-
-/** Backend query filters for device-discovered Skill packages. */
-export interface PostgresSkillDiscoveryFilters {
-  /** Device id that reported the Skill package. */
-  deviceId?: string;
-  /** Runtime id associated with the discovered package. */
-  runtimeId?: string;
-  /** Agent id associated with the discovered package. */
-  agentId?: string;
-  /** Lorume target type that owns the discovered package on the device. */
-  targetType?: RuntimeSkillDiscoveryTargetType;
-  /** Lorume target id that owns the discovered package on the device. */
-  targetId?: string;
-}
-
 /** Postgres-backed repository for normalized runtime inventory and work-state snapshots. */
 export interface PostgresStore {
   /** Upsert a normalized inventory snapshot and record collector ingestion metadata. */
@@ -158,10 +133,6 @@ export interface PostgresStore {
   readRuntimeFleet: () => Promise<PostgresRuntimeFleetResult>;
   /** Query normalized work items from Postgres. */
   listRuntimeWorkItems: (filters?: PostgresRuntimeWorkItemFilters) => Promise<PostgresRuntimeWorkItemResult>;
-  /** List Skill packages discovered by registered device/runtime/agent targets. */
-  listSkillDiscoveries: (filters?: PostgresSkillDiscoveryFilters) => Promise<PostgresSkillDiscoveryRow[]>;
-  /** Read one discovered target Skill package. */
-  readSkillDiscovery: (id: string) => Promise<PostgresSkillDiscoveryRow | null>;
   /** Read one stored work item row. */
   readWorkItem: (id: string) => Promise<PostgresWorkItemRow | null>;
   /** List collector ingestion metadata for a device. */
@@ -222,12 +193,6 @@ export function createPostgresStore(options: PostgresStoreOptions = {}): Postgre
             await upsertChannelBinding(client, agent.id, binding, index);
           }
         }
-        await deleteStaleSkillDiscoveries(client, snapshot);
-        const runtimeIds = new Set(snapshot.runtimes.map((runtime) => runtime.id));
-        const agentIds = new Set(snapshot.agents.map((agent) => agent.id));
-        for (const discovery of snapshot.skillDiscoveries) {
-          await upsertSkillDiscovery(client, discovery, runtimeIds, agentIds);
-        }
         await deleteStaleInventoryObjects(client, snapshot);
 
         const counts = {
@@ -235,7 +200,6 @@ export function createPostgresStore(options: PostgresStoreOptions = {}): Postgre
           channelBindings: snapshot.agents.reduce((total, agent) => total + agent.channelBindings.length, 0),
           devices: 1,
           runtimes: snapshot.runtimes.length,
-          skillDiscoveries: snapshot.skillDiscoveries.length,
         };
         await insertCollectorIngestion(client, {
           counts,
@@ -324,7 +288,6 @@ export function createPostgresStore(options: PostgresStoreOptions = {}): Postgre
           collectorIngestions: await countTable(client, "collector_ingestions"),
           devices: await countTable(client, "devices"),
           runtimes: await countTable(client, "runtimes"),
-          skillDiscoveries: await countTable(client, "runtime_skill_discoveries"),
           workConversations: await countTable(client, "work_conversations"),
           workExecutions: await countTable(client, "work_executions"),
           workItems: await countTable(client, "work_items"),
@@ -416,65 +379,6 @@ export function createPostgresStore(options: PostgresStoreOptions = {}): Postgre
         nextCursor,
         total: Number(countResult.rows[0]?.count ?? 0),
       };
-    },
-    async listSkillDiscoveries(filters = {}) {
-      const values: unknown[] = [];
-      const clauses: string[] = [];
-      for (const [column, value] of [
-        ["device_id", filters.deviceId],
-        ["runtime_id", filters.runtimeId],
-        ["agent_id", filters.agentId],
-        ["target_type", filters.targetType],
-        ["target_id", filters.targetId],
-      ] as const) {
-        if (!value) continue;
-        values.push(value);
-        clauses.push(`${column} = $${values.length}`);
-      }
-      const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
-      const result = await pool.query<RuntimeSkillDiscoveryQueryRow>(`
-        SELECT
-          id,
-          device_id AS "deviceId",
-          source,
-          target_type AS "targetType",
-          target_id AS "targetId",
-          target_name AS "targetName",
-          runtime_id AS "runtimeId",
-          agent_id AS "agentId",
-          name,
-          description,
-          package_hash AS "packageHash",
-          skill_path AS "skillPath",
-          files,
-          last_seen_at AS "lastSeenAt"
-        FROM runtime_skill_discoveries
-        ${where}
-        ORDER BY target_type, name
-      `, values);
-      return result.rows.map(mapSkillDiscoveryRow);
-    },
-    async readSkillDiscovery(id) {
-      const result = await pool.query<RuntimeSkillDiscoveryQueryRow>(`
-        SELECT
-          id,
-          device_id AS "deviceId",
-          source,
-          target_type AS "targetType",
-          target_id AS "targetId",
-          target_name AS "targetName",
-          runtime_id AS "runtimeId",
-          agent_id AS "agentId",
-          name,
-          description,
-          package_hash AS "packageHash",
-          skill_path AS "skillPath",
-          files,
-          last_seen_at AS "lastSeenAt"
-        FROM runtime_skill_discoveries
-        WHERE id = $1
-      `, [id]);
-      return result.rows[0] ? mapSkillDiscoveryRow(result.rows[0]) : null;
     },
     async readWorkItem(id) {
       const result = await pool.query<PostgresWorkItemRow>(`
@@ -603,65 +507,6 @@ async function upsertAgent(client: pg.PoolClient, agent: RuntimeInventorySnapsho
     toDate(agent.lastSeenAt),
     toJson(agent.sourceRefs),
     toJson(agent),
-  ]);
-}
-
-async function deleteStaleSkillDiscoveries(client: pg.PoolClient, snapshot: RuntimeInventorySnapshot): Promise<void> {
-  const discoveryIds = snapshot.skillDiscoveries.map((discovery) => discovery.id);
-  await client.query(`
-    DELETE FROM runtime_skill_discoveries
-    WHERE device_id = $1
-      AND NOT (id = ANY($2::text[]))
-  `, [snapshot.device.id, discoveryIds]);
-}
-
-async function upsertSkillDiscovery(
-  client: pg.PoolClient,
-  discovery: RuntimeSkillDiscovery,
-  runtimeIds: Set<string>,
-  agentIds: Set<string>,
-): Promise<void> {
-  await client.query(`
-    INSERT INTO runtime_skill_discoveries (
-      id, device_id, source, target_type, target_id, target_name, runtime_id, agent_id,
-      name, description, package_hash, skill_path, files, last_seen_at, raw, updated_at
-    )
-    VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8,
-      $9, $10, $11, $12, $13::jsonb, $14, $15::jsonb, now()
-    )
-    ON CONFLICT (id) DO UPDATE SET
-      device_id = excluded.device_id,
-      source = excluded.source,
-      target_type = excluded.target_type,
-      target_id = excluded.target_id,
-      target_name = excluded.target_name,
-      runtime_id = excluded.runtime_id,
-      agent_id = excluded.agent_id,
-      name = excluded.name,
-      description = excluded.description,
-      package_hash = excluded.package_hash,
-      skill_path = excluded.skill_path,
-      files = excluded.files,
-      last_seen_at = excluded.last_seen_at,
-      raw = excluded.raw,
-      updated_at = now()
-  `, [
-    discovery.id,
-    discovery.deviceId,
-    discovery.source,
-    discovery.targetType,
-    discovery.targetId,
-    discovery.targetName ?? null,
-    knownOptionalRef(discovery.runtimeId, runtimeIds),
-    knownOptionalRef(discovery.agentId, agentIds),
-    discovery.name,
-    discovery.description,
-    discovery.packageHash,
-    discovery.skillPath,
-    toJson(discovery.files),
-    toDate(discovery.lastSeenAt),
-    toJson(discovery),
   ]);
 }
 
@@ -1057,30 +902,6 @@ function decodeWorkItemCursor(value: string | null | undefined): { id: string; o
 function stripWorkItemOrderTimestamp(row: PostgresWorkItemQueryRow): PostgresWorkItemRow {
   const { orderTimestamp: _orderTimestamp, ...workItem } = row;
   return workItem;
-}
-
-function mapSkillDiscoveryRow(row: RuntimeSkillDiscoveryQueryRow): PostgresSkillDiscoveryRow {
-  return {
-    ...row,
-    agentId: row.agentId ?? undefined,
-    files: parseJsonArray<RuntimeSkillDiscovery["files"][number]>(row.files),
-    lastSeenAt: row.lastSeenAt instanceof Date ? row.lastSeenAt.toISOString() : row.lastSeenAt ?? undefined,
-    runtimeId: row.runtimeId ?? undefined,
-    targetName: row.targetName ?? undefined,
-  };
-}
-
-function parseJsonArray<T>(value: unknown): T[] {
-  if (Array.isArray(value)) return value as T[];
-  if (typeof value === "string") {
-    try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? parsed as T[] : [];
-    } catch {
-      return [];
-    }
-  }
-  return [];
 }
 
 function addTextFilter(

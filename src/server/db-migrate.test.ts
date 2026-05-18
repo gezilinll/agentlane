@@ -28,7 +28,6 @@ describeDb("database migrations", () => {
 
         expect(tableNames).toEqual([
           "agents",
-          "approval_requests",
           "channel_bindings",
           "collector_ingestions",
           "device_tokens",
@@ -43,16 +42,9 @@ describeDb("database migrations", () => {
           "organization_invitations",
           "organization_members",
           "organizations",
-          "resource_permissions",
-          "runtime_skill_discoveries",
           "runtimes",
           "schema_migrations",
           "sessions",
-          "skill_assignments",
-          "skill_files",
-          "skill_sync_jobs",
-          "skill_versions",
-          "skills",
           "users",
           "work_conversations",
           "work_executions",
@@ -61,11 +53,7 @@ describeDb("database migrations", () => {
         expect(await listMigrationVersions(client)).toEqual([
           "0001_backend_core",
           "0002_auth_access",
-          "0003_skill_management",
-          "0004_skill_governance",
           "0005_operations_notifications",
-          "0006_operation_manual_steps",
-          "0007_runtime_skill_discoveries",
           "0008_notification_read_state",
         ]);
       } finally {

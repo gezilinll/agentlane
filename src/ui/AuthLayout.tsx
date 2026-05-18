@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { PixelDecorations } from "./PixelDecorations";
 import { PixelIcon } from "./PixelIcon";
 import { PixelLogo } from "./PixelLogo";
 import { PixelPanel } from "./PixelPanel";
@@ -15,7 +14,6 @@ interface AuthLayoutProps {
 export function AuthLayout({ children, notice, preview, subtitle, title }: AuthLayoutProps) {
   return (
     <div className="auth-layout">
-      <PixelDecorations testId="auth-pixel-decorations" />
       <header className="auth-layout__header">
         <PixelLogo />
         <div className="auth-layout__language">

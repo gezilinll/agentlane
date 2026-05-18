@@ -25,7 +25,6 @@ describeDb("Postgres runtime store", () => {
           collectorIngestions: 2,
           devices: 1,
           runtimes: 2,
-          skillDiscoveries: 0,
           workConversations: 1,
           workExecutions: 1,
           workItems: 1,
@@ -49,7 +48,7 @@ describeDb("Postgres runtime store", () => {
             warnings: ["fixture warning"],
           }),
           expect.objectContaining({
-            counts: { agents: 2, channelBindings: 2, devices: 1, runtimes: 2, skillDiscoveries: 0 },
+            counts: { agents: 2, channelBindings: 2, devices: 1, runtimes: 2 },
             deviceId: "fixture-mac",
             observedAt: expect.any(Date),
             receivedAt: expect.any(Date),
@@ -75,94 +74,6 @@ describeDb("Postgres runtime store", () => {
             }),
           ],
         });
-      } finally {
-        await store.close();
-      }
-    } finally {
-      await database.drop();
-    }
-  });
-
-  it("persists discovered target Skills from the latest inventory snapshot", async () => {
-    const database = await createTemporaryPostgresDatabase();
-    try {
-      runMigrationsScript(database.url);
-      const store = createPostgresStore({ connectionString: database.url });
-      try {
-        const inventorySnapshot = {
-          ...(fixtureSnapshot as RuntimeInventorySnapshot),
-          skillDiscoveries: [
-            {
-              description: "Review local changes.",
-              deviceId: "fixture-mac",
-              files: [
-                {
-                  content: `---
-name: Review Skill
-description: Review local changes.
-license: MIT
-compatibility: openclaw
----
-
-# Review Skill
-`,
-                  path: "SKILL.md",
-                },
-                {
-                  contentHash: "hash-icon",
-                  contentType: "binary",
-                  path: "icon.png",
-                  sizeBytes: 128,
-                },
-              ],
-              id: "fixture-mac:openclaw:gateway-18789:agent:main:skill:review",
-              name: "Review Skill",
-              packageHash: "hash-review",
-              runtimeId: "fixture-mac:openclaw:gateway-18789",
-              skillPath: "/Users/dev/.openclaw/skills/review",
-              source: "openclaw",
-              targetId: "fixture-mac:openclaw:gateway-18789:agent:main",
-              targetName: "main",
-              targetType: "agent",
-              lastSeenAt: "2026-05-08T08:00:03.000Z",
-            },
-          ],
-        } satisfies RuntimeInventorySnapshot;
-
-        await store.upsertInventorySnapshot(inventorySnapshot);
-
-        await expect(store.listSkillDiscoveries()).resolves.toEqual([
-          expect.objectContaining({
-            id: "fixture-mac:openclaw:gateway-18789:agent:main:skill:review",
-            name: "Review Skill",
-            packageHash: "hash-review",
-            source: "openclaw",
-            targetType: "agent",
-          }),
-        ]);
-        await expect(store.listSkillDiscoveries({
-          targetId: "fixture-mac:openclaw:gateway-18789:agent:main",
-          targetType: "agent",
-        })).resolves.toEqual([
-          expect.objectContaining({
-            id: "fixture-mac:openclaw:gateway-18789:agent:main:skill:review",
-            name: "Review Skill",
-          }),
-        ]);
-        await expect(store.listSkillDiscoveries({
-          targetId: "fixture-mac:openclaw:gateway-18789:agent:missing",
-          targetType: "agent",
-        })).resolves.toEqual([]);
-        await expect(store.readEntityCounts()).resolves.toMatchObject({
-          skillDiscoveries: 1,
-        });
-
-        await store.upsertInventorySnapshot({
-          ...(fixtureSnapshot as RuntimeInventorySnapshot),
-          skillDiscoveries: [],
-        });
-
-        await expect(store.listSkillDiscoveries()).resolves.toEqual([]);
       } finally {
         await store.close();
       }

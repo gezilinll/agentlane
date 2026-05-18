@@ -31,30 +31,30 @@ describeDb("Postgres operation store", () => {
         const operation = await operationStore.createOperation({
           organizationId: organization.id,
           requestedByUserId: user.id,
-          resourceId: "skill_list",
-          resourceType: "skill",
-          summary: "Publish listed Skill",
-          type: "skill_publish",
+          resourceId: "device_list",
+          resourceType: "device",
+          summary: "Refresh listed device",
+          type: "device_refresh",
         });
         await operationStore.enqueueJob({
           operationId: operation.id,
           organizationId: organization.id,
-          payload: { skillId: "skill_list", skillVersionId: "version_list" },
-          type: "skill_publish",
+          payload: { deviceId: "device_list" },
+          type: "notification_in_app",
         });
         await operationStore.createOperation({
           organizationId: otherOrganization.id,
           requestedByUserId: user.id,
-          resourceId: "skill_other",
-          resourceType: "skill",
+          resourceId: "device_other",
+          resourceType: "device",
           summary: "Other org operation",
-          type: "skill_publish",
+          type: "device_refresh",
         });
 
         const operations = await operationStore.listOperations({
           organizationId: organization.id,
-          resourceId: "skill_list",
-          resourceType: "skill",
+          resourceId: "device_list",
+          resourceType: "device",
           status: "queued",
         });
         const jobs = await operationStore.listJobs({ operationId: operation.id });
@@ -63,13 +63,13 @@ describeDb("Postgres operation store", () => {
           expect.objectContaining({
             id: operation.id,
             organizationId: organization.id,
-            resourceId: "skill_list",
+            resourceId: "device_list",
           }),
         ]);
         expect(jobs).toEqual([
           expect.objectContaining({
             operationId: operation.id,
-            type: "skill_publish",
+            type: "notification_in_app",
           }),
         ]);
       } finally {
@@ -96,17 +96,17 @@ describeDb("Postgres operation store", () => {
         const operation = await operationStore.createOperation({
           organizationId: organization.id,
           requestedByUserId: user.id,
-          resourceId: "skill_1",
-          resourceType: "skill",
-          summary: "Publish Skill version",
-          type: "skill_publish",
+          resourceId: "device_1",
+          resourceType: "device",
+          summary: "Refresh device inventory",
+          type: "device_refresh",
         });
         const job = await operationStore.enqueueJob({
           operationId: operation.id,
           organizationId: organization.id,
-          payload: { skillId: "skill_1", skillVersionId: "version_1" },
+          payload: { deviceId: "device_1" },
           runAfter: new Date("2026-05-14T09:59:00.000Z"),
-          type: "skill_publish",
+          type: "notification_in_app",
         });
 
         const claimed = await operationStore.claimNextJob({
@@ -162,16 +162,16 @@ describeDb("Postgres operation store", () => {
         const operation = await operationStore.createOperation({
           organizationId: organization.id,
           requestedByUserId: user.id,
-          summary: "迁移 Agent 到目标设备",
-          targetId: "agent-main",
-          targetType: "agent",
-          type: "agent_migration",
+          summary: "发送设备离线通知",
+          targetId: "gezilinll-claw",
+          targetType: "device",
+          type: "notification_delivery",
         });
         const job = await operationStore.enqueueJob({
           operationId: operation.id,
           organizationId: organization.id,
-          payload: { sourceAgentId: "agent-main", targetRuntimeId: "runtime-codex" },
-          type: "agent_migration",
+          payload: { threadId: "thread_device_offline" },
+          type: "notification_email",
         });
 
         await operationStore.claimNextJob({
@@ -181,7 +181,7 @@ describeDb("Postgres operation store", () => {
         });
         await operationStore.completeJob({
           jobId: job.id,
-          manualInstruction: "目标 Runtime 缺少已知安装 recipe，请先在设备上安装 runtime 后重试。",
+          manualInstruction: "邮件服务未配置，请先补齐 SMTP 配置后重试。",
           now: new Date("2026-05-14T10:30:12.000Z"),
           status: "requires_manual_step",
         });
@@ -194,7 +194,7 @@ describeDb("Postgres operation store", () => {
         });
         expect(completed).toMatchObject({
           id: operation.id,
-          manualInstruction: "目标 Runtime 缺少已知安装 recipe，请先在设备上安装 runtime 后重试。",
+          manualInstruction: "邮件服务未配置，请先补齐 SMTP 配置后重试。",
           status: "requires_manual_step",
         });
       } finally {
@@ -221,18 +221,18 @@ describeDb("Postgres operation store", () => {
         const operation = await operationStore.createOperation({
           organizationId: organization.id,
           requestedByUserId: user.id,
-          summary: "Sync Skill to agent",
-          targetId: "agent-main",
-          targetType: "agent",
-          type: "skill_sync",
+          summary: "Deliver notification email",
+          targetId: "thread_1",
+          targetType: "notification_thread",
+          type: "notification_delivery",
         });
         await operationStore.enqueueJob({
           maxAttempts: 2,
           operationId: operation.id,
           organizationId: organization.id,
-          payload: { assignmentId: "assignment_1" },
+          payload: { threadId: "thread_1" },
           runAfter: new Date("2026-05-14T10:59:00.000Z"),
-          type: "skill_sync",
+          type: "notification_email",
         });
 
         const firstClaim = await operationStore.claimNextJob({
@@ -241,7 +241,7 @@ describeDb("Postgres operation store", () => {
           runnerId: "runner-a",
         });
         await operationStore.failJob({
-          errorSummary: "target runtime unavailable",
+          errorSummary: "email provider unavailable",
           jobId: firstClaim?.id ?? "",
           now: new Date("2026-05-14T11:00:01.000Z"),
           retryAfterMs: 5_000,
@@ -258,7 +258,7 @@ describeDb("Postgres operation store", () => {
           runnerId: "runner-b",
         });
         await operationStore.failJob({
-          errorSummary: "target runtime unavailable",
+          errorSummary: "email provider unavailable",
           jobId: secondClaim?.id ?? "",
           now: new Date("2026-05-14T11:00:08.000Z"),
         });
@@ -268,7 +268,7 @@ describeDb("Postgres operation store", () => {
         expect(earlyClaim).toBeNull();
         expect(secondClaim).toMatchObject({ attemptCount: 2, status: "running" });
         expect(failed).toMatchObject({
-          errorSummary: "target runtime unavailable",
+          errorSummary: "email provider unavailable",
           status: "failed",
         });
       } finally {

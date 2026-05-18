@@ -20,40 +20,6 @@ export interface RuntimeControlChannelOptions {
   createCommandId?: () => string;
 }
 
-/** File payload sent to a device for deterministic Skill writeback. */
-export interface RuntimeSkillSyncFilePayload {
-  /** Repository-relative Skill file path. */
-  path: string;
-  /** UTF-8 file content. */
-  content: string;
-  /** Expected SHA-256 content hash, with or without `sha256:` prefix. */
-  contentHash: string;
-  /** Expected UTF-8 byte size. */
-  sizeBytes: number;
-}
-
-/** Device command payload for Skill target sync. */
-export interface RuntimeSkillSyncCommandPayload {
-  /** Assignment id being synchronized. */
-  assignmentId: string;
-  /** Owning organization id. */
-  organizationId: string;
-  /** Skill id. */
-  skillId: string;
-  /** Skill version id. */
-  skillVersionId: string;
-  /** Organization-local Skill slug. */
-  skillSlug: string;
-  /** Target type. */
-  targetType: "device" | "runtime" | "agent";
-  /** Target id. */
-  targetId: string;
-  /** Immutable Skill package hash. */
-  packageHash: string;
-  /** Skill files to write. */
-  files: RuntimeSkillSyncFilePayload[];
-}
-
 /** Runtime control channel API used by the dev backend. */
 export interface RuntimeControlChannel {
   /** Attach a socket before it sends hello. */
@@ -64,8 +30,6 @@ export interface RuntimeControlChannel {
   receive: (socket: RuntimeControlSocket, rawMessage: string) => void;
   /** Dispatch an inventory refresh command to an online device. */
   requestInventoryRefresh: (deviceId: string) => RuntimeCommand;
-  /** Dispatch a Skill sync command to an online device. */
-  requestSkillSync: (deviceId: string, payload: RuntimeSkillSyncCommandPayload) => RuntimeCommand;
   /** Wait for a command to reach a terminal state. */
   waitForCommandResult: (
     commandId: string,
@@ -181,18 +145,6 @@ export function createRuntimeControlChannel(options: RuntimeControlChannelOption
         type: "inventory.refresh",
       });
     },
-    requestSkillSync(deviceId, payload) {
-      return dispatchCommand({
-        createCommandId,
-        deviceId,
-        now,
-        payload,
-        send,
-        socketsByDeviceId,
-        store: options.store,
-        type: "skill.sync",
-      });
-    },
     async waitForCommandResult(commandId, waitOptions = {}) {
       const timeoutMs = waitOptions.timeoutMs ?? 30_000;
       const intervalMs = waitOptions.intervalMs ?? 100;
@@ -219,7 +171,7 @@ function dispatchCommand(input: {
   createCommandId: () => string;
   deviceId: string;
   now: () => Date;
-  payload: RuntimeSkillSyncCommandPayload | undefined;
+  payload: Record<string, unknown> | undefined;
   send: (socket: RuntimeControlSocket, message: Record<string, unknown>) => void;
   socketsByDeviceId: Map<string, RuntimeControlSocket>;
   store: RuntimeInventoryStore;

@@ -9,9 +9,6 @@ import { createPostgresAuthStore, type AuthStore } from "../auth/auth-store";
 import { createPostgresNotificationStore } from "../notifications/notification-store";
 import { createPostgresOperationStore } from "../operations/operation-store";
 import type { RuntimeInventorySnapshot, RuntimeWorkStateSnapshot } from "../runtime";
-import { createPostgresSkillGovernanceStore } from "../skills/skill-governance-store";
-import { createSkillPackageFromMarkdown } from "../skills/skill-package";
-import { createPostgresSkillStore } from "../skills/skill-store";
 import { createTemporaryPostgresDatabase, runMigrationsScript, shouldRunPostgresTests } from "../test/postgres";
 import { createLorumeBackendServer, type LorumeBackendServer } from "./backend-server";
 
@@ -180,85 +177,6 @@ describeDb("standalone Lorume backend server with Postgres", () => {
     }
   });
 
-  it("runs due Skill operation jobs from the formal backend", async () => {
-    const database = await createTemporaryPostgresDatabase();
-    let backend: LorumeBackendServer | null = null;
-    let organizationId = "";
-    try {
-      runMigrationsScript(database.url);
-      const authStore = createPostgresAuthStore({ connectionString: database.url });
-      const skillStore = createPostgresSkillStore({ connectionString: database.url });
-      const governanceStore = createPostgresSkillGovernanceStore({ connectionString: database.url });
-      const operationStore = createPostgresOperationStore({ connectionString: database.url });
-      try {
-        const owner = await authStore.upsertUserForEmail("backend-runner@example.com");
-        const organization = await authStore.createOrganization({
-          createdByUserId: owner.id,
-          name: "Backend Runner Team",
-          slug: "backend-runner-team",
-        });
-        organizationId = organization.id;
-        const imported = await skillStore.importSkillVersion({
-          createdByUserId: owner.id,
-          organizationId: organization.id,
-          package: createSkillPackageFromMarkdown({
-            content: `---
-name: Backend Runner Skill
-description: Verify backend job runner.
-license: MIT
-compatibility: openclaw
----
-
-# Backend Runner Skill
-`,
-            source: { type: "upload_md" },
-          }),
-        });
-        await governanceStore.publishSkillVersion({
-          publishedByUserId: owner.id,
-          skillId: imported.skill.id,
-          skillVersionId: imported.version.id,
-        });
-        const operation = await operationStore.createOperation({
-          organizationId: organization.id,
-          requestedByUserId: owner.id,
-          resourceId: imported.skill.id,
-          resourceType: "skill",
-          summary: "Assign Skill from backend runner",
-          targetId: "agent-main",
-          targetType: "agent",
-          type: "skill_assign",
-        });
-        await operationStore.enqueueJob({
-          operationId: operation.id,
-          organizationId: organization.id,
-          payload: {
-            approvedByUserId: owner.id,
-            createdByUserId: owner.id,
-            organizationId: organization.id,
-            skillId: imported.skill.id,
-            skillVersionId: imported.version.id,
-            targetId: "agent-main",
-            targetType: "agent",
-          },
-          type: "skill_assign",
-        });
-      } finally {
-        await Promise.all([authStore.close(), skillStore.close(), governanceStore.close(), operationStore.close()]);
-      }
-
-      backend = await startBackend({ databaseUrl: database.url });
-
-      await expect(waitForSkillAssignment(database.url, organizationId, "agent-main")).resolves.toMatchObject({
-        status: "approved",
-        targetId: "agent-main",
-      });
-    } finally {
-      if (backend) await closeRegisteredBackend(backend);
-      await database.drop();
-    }
-  });
-
   it("serves authenticated Operation and Notification query APIs", async () => {
     const database = await createTemporaryPostgresDatabase();
     let backend: LorumeBackendServer | null = null;
@@ -285,30 +203,30 @@ compatibility: openclaw
         const operation = await operationStore.createOperation({
           organizationId: organization.id,
           requestedByUserId: user.id,
-          resourceId: "skill_query",
-          resourceType: "skill",
-          summary: "Publish query Skill",
-          type: "skill_publish",
+          resourceId: "gezilinll-claw",
+          resourceType: "device",
+          summary: "Refresh query device",
+          type: "device_refresh",
         });
         operationId = operation.id;
         await operationStore.enqueueJob({
           operationId: operation.id,
           organizationId: organization.id,
-          payload: { skillId: "skill_query" },
-          type: "skill_publish",
+          payload: { deviceId: "gezilinll-claw" },
+          type: "notification_in_app",
         });
         await notificationStore.createNotificationEvent({
           actorUserId: user.id,
-          dedupeKey: "skill:skill_query:publish_queued",
-          eventType: "skill_publish_queued",
+          dedupeKey: "runtime:gezilinll-claw:refresh_queued",
+          eventType: "device_refresh_queued",
           organizationId: organization.id,
           recipientUserIds: [user.id],
-          resourceId: "skill_query",
-          resourceType: "skill",
+          resourceId: "gezilinll-claw",
+          resourceType: "device",
           severity: "info",
-          sourceModule: "skill",
-          summary: "Skill 发布已进入队列。",
-          title: "Skill 发布排队中",
+          sourceModule: "runtime",
+          summary: "设备刷新已进入队列。",
+          title: "设备刷新排队中",
         });
       } finally {
         await Promise.all([authStore.close(), operationStore.close(), notificationStore.close()]);
@@ -333,14 +251,14 @@ compatibility: openclaw
       expect(operationDetailResponse.status).toBe(200);
       expect(notificationsResponse.status).toBe(200);
       await expect(operationsResponse.json()).resolves.toMatchObject({
-        operations: [expect.objectContaining({ id: operationId, summary: "Publish query Skill" })],
+        operations: [expect.objectContaining({ id: operationId, summary: "Refresh query device" })],
       });
       await expect(operationDetailResponse.json()).resolves.toMatchObject({
         jobs: [expect.objectContaining({ operationId })],
         operation: expect.objectContaining({ id: operationId }),
       });
       await expect(notificationsResponse.json()).resolves.toMatchObject({
-        threads: [expect.objectContaining({ title: "Skill 发布排队中" })],
+        threads: expect.arrayContaining([expect.objectContaining({ title: "设备刷新排队中" })]),
       });
     } finally {
       if (backend) await closeRegisteredBackend(backend);
@@ -399,22 +317,6 @@ function postJson(url: string, payload: unknown): Promise<Response> {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
   });
-}
-
-async function waitForSkillAssignment(databaseUrl: string, organizationId: string, targetId: string) {
-  const governanceStore = createPostgresSkillGovernanceStore({ connectionString: databaseUrl });
-  try {
-    const deadline = Date.now() + 1_500;
-    while (Date.now() < deadline) {
-      const assignments = await governanceStore.listSkillAssignments({ organizationId });
-      const match = assignments.find((assignment) => assignment.targetId === targetId);
-      if (match) return match;
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
-    throw new Error("timed out waiting for Skill assignment");
-  } finally {
-    await governanceStore.close();
-  }
 }
 
 function createWorkStateSnapshot(snapshot: RuntimeInventorySnapshot): RuntimeWorkStateSnapshot {

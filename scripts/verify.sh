@@ -20,6 +20,5 @@ run_package_script check:quick
 run_package_script check:build
 run_package_script check:deploy
 run_package_script check:e2e
-run_package_script check:e2e:auth
 
 echo "verify: ok"

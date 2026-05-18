@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { AuthLayout } from "../ui/AuthLayout";
 import { PixelButton } from "../ui/PixelButton";
 import { PixelField } from "../ui/PixelField";
+import { AuthOperationsPreview } from "./auth-preview";
 
 interface CreateOrganizationPageProps {
   error?: string | null;
@@ -19,6 +20,7 @@ export function CreateOrganizationPage({ error, onSubmit }: CreateOrganizationPa
     <AuthLayout
       title="创建组织"
       subtitle="先创建一个组织空间，再注册设备、分配成员并管理 Agent 运行资产。"
+      preview={<AuthOperationsPreview />}
       notice="组织是 Lorume 权限、邀请、设备 token 与运行资产的管理边界。"
     >
       <form

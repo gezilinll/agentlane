@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ConsoleUtilityDrawer } from "./ConsoleUtilityDrawer";
+import { ConsoleUtilityBar, ConsoleUtilityDrawer } from "./ConsoleUtilityDrawer";
 
 const originalFetch = globalThis.fetch;
 
@@ -11,6 +11,30 @@ afterEach(() => {
 });
 
 describe("ConsoleUtilityDrawer", () => {
+  it("shows top-right utility buttons with API-backed counts", async () => {
+    globalThis.fetch = vi.fn(async (input) => {
+      const url = input.toString();
+      if (url.includes("/api/operations")) {
+        return jsonResponse({
+          operations: [
+            operationItem({ id: "op_1", status: "running" }),
+            operationItem({ id: "op_2", status: "requires_manual_step" }),
+            operationItem({ id: "op_3", status: "succeeded" }),
+          ],
+        });
+      }
+      if (url.includes("/api/notifications")) {
+        return jsonResponse({ threads: [notificationThread({ isRead: false }), notificationThread({ id: "thread_2", isRead: true })] });
+      }
+      return jsonResponse({ error: "unexpected request" }, 500);
+    }) as unknown as typeof fetch;
+
+    render(<ConsoleUtilityBar activeView={null} organizationId="org_1" onOpen={vi.fn()} />);
+
+    expect(await screen.findByRole("button", { name: "任务 2" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "通知 1" })).toBeInTheDocument();
+  });
+
   it("shows operations as a right-side drawer with selectable details", async () => {
     globalThis.fetch = vi.fn(async (input) => {
       const url = input.toString();
@@ -19,13 +43,13 @@ describe("ConsoleUtilityDrawer", () => {
           operations: [{
             createdAt: "2026-05-14T08:20:00.000Z",
             id: "op_1",
-            resourceId: "skill_1",
-            resourceType: "skill",
+            resourceId: "gezilinll-claw",
+            resourceType: "device",
             status: "queued",
-            summary: "同步 Skill：Review",
-            targetId: "agent_main",
-            targetType: "agent",
-            type: "skill_sync",
+            summary: "刷新设备快照",
+            targetId: "gezilinll-claw",
+            targetType: "device",
+            type: "device_refresh",
             updatedAt: "2026-05-14T08:21:00.000Z",
           }],
         });
@@ -42,12 +66,14 @@ describe("ConsoleUtilityDrawer", () => {
       />,
     );
 
-    const drawer = screen.getByRole("dialog", { name: "任务中心" });
-    expect(within(drawer).getByRole("heading", { name: "任务中心" })).toBeInTheDocument();
-    await userEvent.click(await within(drawer).findByRole("button", { name: /同步 Skill：Review/ }));
+    const drawer = screen.getByRole("dialog", { name: "任务" });
+    expect(screen.queryByRole("tablist", { name: "工具切换" })).not.toBeInTheDocument();
+    expect(drawer).toHaveClass("utilityDrawer");
+    expect(within(drawer).getByRole("heading", { name: "任务" })).toBeInTheDocument();
+    await userEvent.click(await within(drawer).findByRole("button", { name: /刷新设备快照/ }));
 
-    expect(within(drawer).getByRole("heading", { name: "同步 Skill：Review" })).toBeInTheDocument();
-    expect(within(drawer).getByText("目标: agent · agent_main")).toBeInTheDocument();
+    expect(within(drawer).getByRole("heading", { name: "刷新设备快照" })).toBeInTheDocument();
+    expect(within(drawer).getByText("目标: device · gezilinll-claw")).toBeInTheDocument();
   });
 
   it("marks notification threads as read when selected from the drawer", async () => {
@@ -75,8 +101,8 @@ describe("ConsoleUtilityDrawer", () => {
       />,
     );
 
-    const drawer = screen.getByRole("dialog", { name: "通知中心" });
-    const notification = await within(drawer).findByRole("button", { name: /Skill 发布已排队/ });
+    const drawer = screen.getByRole("dialog", { name: "通知" });
+    const notification = await within(drawer).findByRole("button", { name: /设备刷新已排队/ });
     expect(within(notification).getByText("未读")).toBeInTheDocument();
 
     await user.click(notification);
@@ -86,25 +112,41 @@ describe("ConsoleUtilityDrawer", () => {
       expect.objectContaining({ method: "POST" }),
     ));
     expect(within(notification).getByText("已读")).toBeInTheDocument();
-    expect(within(drawer).getByRole("heading", { name: "Skill 发布已排队" })).toBeInTheDocument();
+    expect(within(drawer).getByRole("heading", { name: "设备刷新已排队" })).toBeInTheDocument();
   });
 });
+
+function operationItem(overrides: Record<string, unknown> = {}) {
+  return {
+    createdAt: "2026-05-14T08:20:00.000Z",
+    id: "op_1",
+    resourceId: "gezilinll-claw",
+    resourceType: "device",
+    status: "queued",
+    summary: "刷新设备快照",
+    targetId: "gezilinll-claw",
+    targetType: "device",
+    type: "device_refresh",
+    updatedAt: "2026-05-14T08:21:00.000Z",
+    ...overrides,
+  };
+}
 
 function notificationThread(overrides: Record<string, unknown> = {}) {
   return {
     createdAt: "2026-05-14T08:20:00.000Z",
-    dedupeKey: "operation:op_publish_1:queued",
+    dedupeKey: "operation:op_device_refresh:queued",
     eventType: "operation_status_changed",
     firstOccurredAt: "2026-05-14T08:20:00.000Z",
     id: "thread_1",
     isRead: false,
     lastOccurredAt: "2026-05-14T08:20:00.000Z",
-    latestSummary: "Cost Review 等待发布任务执行。",
+    latestSummary: "gezilinll-claw 等待设备刷新任务执行。",
     occurrenceCount: 1,
     organizationId: "org_1",
     severity: "info",
     status: "open",
-    title: "Skill 发布已排队",
+    title: "设备刷新已排队",
     updatedAt: "2026-05-14T08:20:00.000Z",
     ...overrides,
   };

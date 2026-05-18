@@ -2,12 +2,7 @@ CREATE TABLE IF NOT EXISTS operations (
   id text PRIMARY KEY,
   organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   type text NOT NULL CHECK (type IN (
-    'skill_import',
-    'skill_publish',
-    'skill_assign',
-    'skill_sync',
     'device_refresh',
-    'agent_migration',
     'notification_delivery'
   )),
   status text NOT NULL DEFAULT 'queued' CHECK (status IN (
@@ -43,10 +38,6 @@ CREATE TABLE IF NOT EXISTS operation_jobs (
   operation_id text NOT NULL REFERENCES operations(id) ON DELETE CASCADE,
   organization_id text NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   type text NOT NULL CHECK (type IN (
-    'skill_import',
-    'skill_publish',
-    'skill_assign',
-    'skill_sync',
     'notification_in_app',
     'notification_email'
   )),
@@ -56,6 +47,7 @@ CREATE TABLE IF NOT EXISTS operation_jobs (
     'succeeded',
     'failed',
     'unsupported',
+    'requires_manual_step',
     'cancelled'
   )),
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
@@ -82,7 +74,7 @@ CREATE TABLE IF NOT EXISTS notification_events (
   operation_id text REFERENCES operations(id) ON DELETE SET NULL,
   event_type text NOT NULL,
   severity text NOT NULL CHECK (severity IN ('info', 'warning', 'critical')),
-  source_module text NOT NULL CHECK (source_module IN ('skill', 'migration', 'runtime', 'approval', 'auth', 'system')),
+  source_module text NOT NULL CHECK (source_module IN ('runtime', 'auth', 'system')),
   resource_type text,
   resource_id text,
   actor_user_id text REFERENCES users(id) ON DELETE SET NULL,
@@ -152,7 +144,3 @@ CREATE TABLE IF NOT EXISTS notification_preferences (
   updated_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (organization_id, user_id, event_type, channel)
 );
-
-ALTER TABLE skill_sync_jobs
-  ADD COLUMN IF NOT EXISTS operation_id text REFERENCES operations(id) ON DELETE SET NULL,
-  ADD COLUMN IF NOT EXISTS job_id text REFERENCES operation_jobs(id) ON DELETE SET NULL;

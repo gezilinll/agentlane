@@ -25,16 +25,16 @@ describeDb("Postgres notification store", () => {
         });
         const result = await notificationStore.createNotificationEvent({
           actorUserId: user.id,
-          dedupeKey: "skill:skill_detail:publish_succeeded",
-          eventType: "skill_publish_succeeded",
+          dedupeKey: "runtime:device_detail:refresh_succeeded",
+          eventType: "device_refresh_succeeded",
           organizationId: organization.id,
           recipientUserIds: [user.id],
-          resourceId: "skill_detail",
-          resourceType: "skill",
+          resourceId: "gezilinll-claw",
+          resourceType: "device",
           severity: "info",
-          sourceModule: "skill",
-          summary: "Skill 已发布。",
-          title: "Skill 发布完成",
+          sourceModule: "runtime",
+          summary: "设备快照已刷新。",
+          title: "设备刷新完成",
         });
 
         const thread = await notificationStore.readThread({ threadId: result.thread.id });
@@ -42,8 +42,8 @@ describeDb("Postgres notification store", () => {
 
         expect(thread).toMatchObject({
           id: result.thread.id,
-          latestSummary: "Skill 已发布。",
-          title: "Skill 发布完成",
+          latestSummary: "设备快照已刷新。",
+          title: "设备刷新完成",
         });
         expect(deliveries).toEqual([
           expect.objectContaining({
@@ -75,16 +75,16 @@ describeDb("Postgres notification store", () => {
         });
         const result = await notificationStore.createNotificationEvent({
           actorUserId: user.id,
-          dedupeKey: "skill:skill_read:queued",
-          eventType: "skill_sync_queued",
+          dedupeKey: "runtime:device_read:queued",
+          eventType: "device_refresh_queued",
           organizationId: organization.id,
           recipientUserIds: [user.id],
-          resourceId: "skill_read",
-          resourceType: "skill",
+          resourceId: "gezilinll-claw",
+          resourceType: "device",
           severity: "info",
-          sourceModule: "skill",
-          summary: "Skill 等待同步。",
-          title: "Skill 同步排队中",
+          sourceModule: "runtime",
+          summary: "设备刷新等待执行。",
+          title: "设备刷新排队中",
         });
 
         await expect(notificationStore.listThreads({
@@ -129,29 +129,29 @@ describeDb("Postgres notification store", () => {
 
         await notificationStore.createNotificationEvent({
           actorUserId: user.id,
-          dedupeKey: "skill:skill_1:sync_failed",
-          eventType: "skill_sync_failed",
+          dedupeKey: "runtime:device_1:refresh_failed",
+          eventType: "device_refresh_failed",
           organizationId: organization.id,
           recipientUserIds: [user.id],
-          resourceId: "skill_1",
-          resourceType: "skill",
+          resourceId: "device_1",
+          resourceType: "device",
           severity: "warning",
-          sourceModule: "skill",
-          summary: "Agent target rejected Skill sync.",
-          title: "Skill 下发失败",
+          sourceModule: "runtime",
+          summary: "Collector rejected device refresh.",
+          title: "设备刷新失败",
         });
         const second = await notificationStore.createNotificationEvent({
           actorUserId: user.id,
-          dedupeKey: "skill:skill_1:sync_failed",
-          eventType: "skill_sync_failed",
+          dedupeKey: "runtime:device_1:refresh_failed",
+          eventType: "device_refresh_failed",
           organizationId: organization.id,
           recipientUserIds: [user.id],
-          resourceId: "skill_1",
-          resourceType: "skill",
+          resourceId: "device_1",
+          resourceType: "device",
           severity: "warning",
-          sourceModule: "skill",
-          summary: "Agent target still rejects Skill sync.",
-          title: "Skill 下发失败",
+          sourceModule: "runtime",
+          summary: "Collector still rejects device refresh.",
+          title: "设备刷新失败",
         });
 
         const threads = await notificationStore.listThreads({
@@ -164,8 +164,8 @@ describeDb("Postgres notification store", () => {
 
         expect(threads).toEqual([
           expect.objectContaining({
-            dedupeKey: "skill:skill_1:sync_failed",
-            latestSummary: "Agent target still rejects Skill sync.",
+            dedupeKey: "runtime:device_1:refresh_failed",
+            latestSummary: "Collector still rejects device refresh.",
             occurrenceCount: 2,
           }),
         ]);

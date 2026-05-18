@@ -9,7 +9,7 @@ import { PixelLogo } from "./PixelLogo";
 import { PixelPanel } from "./PixelPanel";
 import { AuthOperationsPreview } from "../auth/auth-preview";
 
-describe("Cream Arcade UI primitives", () => {
+describe("Glacier Premium Precision UI primitives", () => {
   it("renders the pixel logo with an accessible brand label", () => {
     render(<PixelLogo />);
 
@@ -30,19 +30,21 @@ describe("Cream Arcade UI primitives", () => {
     expect(indexHtml).toContain("<title>Lorume</title>");
   });
 
-  it("defines the current Pixel, Sans, and Mono font roles in shared tokens", () => {
+  it("defines the current sans, mono, color, radius, border, and shadow roles", () => {
     const tokens = readFileSync("src/ui/tokens.css", "utf8");
     const appStyles = readFileSync("src/styles.css", "utf8");
     const styles = `${tokens}\n${appStyles}`;
 
-    expect(tokens).toContain("--font-pixel:");
     expect(tokens).toContain("--font-sans:");
     expect(tokens).toContain("--font-mono:");
+    expect(tokens).toContain("--lorume-color-bg: #f7f9fb");
+    expect(tokens).toContain("--lorume-color-action: #245bff");
+    expect(tokens).toContain("--lorume-color-accent: #12a7a2");
+    expect(tokens).toContain("--lorume-border-hairline: 1px solid var(--lorume-color-line)");
+    expect(tokens).toContain("--lorume-radius-lg: 18px");
     expect(tokens).toContain("JetBrains Mono");
     expect(styles).toMatch(/\.pixel-button\s*{[^}]*font-family:\s*var\(--font-sans\)/s);
-    expect(styles).toMatch(/\.pixel-logo__wordmark\s*{[^}]*font-family:\s*var\(--font-pixel\)/s);
     expect(styles).toMatch(/\.auth-layout\s*{[^}]*font-family:\s*var\(--font-sans\)/s);
-    expect(styles).toMatch(/\.auth-layout__title\s*{[^}]*font-family:\s*var\(--font-pixel\)/s);
     expect(styles).toMatch(/\.auth-copy\s*{[^}]*font-family:\s*var\(--font-sans\)/s);
     expect(styles).toMatch(/\.auth-preview__metric\s*{[^}]*font-family:\s*var\(--font-mono\)/s);
     expect(styles).toMatch(/\.navItem\s*{[^}]*font-family:\s*var\(--font-mono\)/s);
@@ -51,6 +53,7 @@ describe("Cream Arcade UI primitives", () => {
     expect(styles).toMatch(/\.metricCard strong\s*{[^}]*font-family:\s*var\(--font-mono\)/s);
     expect(styles).toMatch(/\.workCard strong\s*{[^}]*font-family:\s*var\(--font-sans\)/s);
     expect(styles).toMatch(/\.detailBlock p,\n\.detailBlock li\s*{[^}]*font-family:\s*var\(--font-sans\)/s);
+    expect(styles).not.toContain("box-shadow: 7px 7px 0");
   });
 
   it("renders buttons, badges, panels, and fields with token classes", () => {
@@ -65,7 +68,7 @@ describe("Cream Arcade UI primitives", () => {
     );
 
     expect(screen.getByRole("group", { name: "登录" })).toHaveClass("pixel-panel");
-    expect(screen.getByRole("group", { name: "登录" })).toHaveAttribute("data-panel-style", "cut-corner");
+    expect(screen.getByRole("group", { name: "登录" })).toHaveAttribute("data-panel-style", "precision-surface");
     expect(screen.getByLabelText("邮箱")).toHaveAttribute("name", "email");
     expect(screen.getByLabelText("邮箱").parentElement?.querySelector('[data-pixel-icon="mail"]')).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "发送验证码" })).toHaveClass("pixel-button");
@@ -94,10 +97,7 @@ describe("Cream Arcade UI primitives", () => {
     );
 
     expect(screen.getByRole("banner")).toContainElement(screen.getByLabelText("Lorume"));
-    expect(screen.getByTestId("auth-pixel-decorations")).toBeInTheDocument();
-    expect(screen.getByTestId("auth-pixel-decorations").querySelector('[data-pixel-sprite="pink"]')).toBeInTheDocument();
-    expect(screen.getByTestId("auth-pixel-decorations").querySelector('[data-pixel-sprite="blue"]')).toBeInTheDocument();
-    expect(screen.getByTestId("auth-pixel-decorations").querySelector('[data-pixel-icon="heart"]')).toBeInTheDocument();
+    expect(screen.queryByTestId("auth-pixel-decorations")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "登录 Lorume" })).toBeInTheDocument();
     expect(screen.getByText("Runtime Fleet")).toBeInTheDocument();
     expect(screen.getByText(/Device、Runtime、Agent/)).toBeInTheDocument();

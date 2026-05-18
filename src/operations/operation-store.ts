@@ -25,21 +25,11 @@ export type OperationJobStatus =
 
 /** Operation type currently supported by Lorume. */
 export type OperationType =
-  | "skill_import"
-  | "skill_publish"
-  | "skill_assign"
-  | "skill_sync"
   | "device_refresh"
-  | "agent_migration"
   | "notification_delivery";
 
 /** Operation job type currently supported by Lorume. */
 export type OperationJobType =
-  | "skill_import"
-  | "skill_publish"
-  | "skill_assign"
-  | "skill_sync"
-  | "agent_migration"
   | "notification_in_app"
   | "notification_email";
 

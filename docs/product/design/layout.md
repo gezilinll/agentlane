@@ -1,42 +1,52 @@
 # Layout
 
-Lorume 布局同时服务品牌表达和工具效率。Brand/Identity 页面可以更有构图感，Console 页面必须稳定、紧凑、可扫描。
+Lorume layout balances product clarity and operational density. Brand and Identity surfaces can use more breathing room; Console surfaces must stay stable, compact, and scannable.
 
 ## Spacing
 
-- 使用 4px 基础间距尺度。
-- 组件内部间距、组件之间间距、页面区块间距应有层级差异，不要所有地方等距。
-- 使用 `gap` 组织列表和布局，不靠零散 margin 堆叠。
+- Use a 4px base spacing scale.
+- Use `gap` for component and list rhythm.
+- Avoid all sections having identical spacing; hierarchy should be visible.
+- Do not create empty hero or preview panels that occupy space without product signal.
 
-## Panels And Cards
+## Surfaces And Cards
 
-- Panel 用于承载页面主区域、表单、详情或模拟窗口。
-- Card 用于重复项，例如工作项、对象行、状态项。
-- 不使用卡片套卡片。
-- 不把整页每个 section 都做成浮动卡片。
+- Surface: a bounded area for forms, lists, details, inspectors, drawers, and previews.
+- Card: a repeated item such as a work item, runtime row, skill row, notification thread, or operation row.
+- Do not put UI cards inside other UI cards.
+- Page sections should read as layout regions, not as a pile of floating cards.
+
+## Console Shell
+
+- Desktop Console uses compact left rail navigation.
+- Topbar contains breadcrumbs/search and utility buttons for tasks and notifications.
+- Main pages use summary rail + primary workspace + detail inspector when the data model supports it.
+- Utility drawers open from the right and preserve the current Console context.
+- Operations and Notifications drawers target `min(440px, calc(100vw - 16px))` on desktop unless a specific workflow proves more width is required.
 
 ## Width And Alignment
 
-- 表单、筛选、看板、详情面板应有稳定宽度规则。
-- 搜索框不要无条件占满整行；筛选项按内容宽度设定。
-- 时间范围、Runtime、Channel、阶段等筛选字段不能挤压到文本被无意义截断。
-- 详情面板标题、badge、内容区不能制造横向滚动。
+- Forms, filters, lanes, lists, and inspectors must have stable width rules.
+- Search can grow, but filters keep meaningful minimum widths.
+- Time range, Runtime, Channel, and stage filters cannot collapse to unreadable text.
+- Detail titles, badges, and metadata wrap or truncate without creating horizontal page scroll.
 
 ## Overflow
 
-- 默认禁止横向页面滚动。
-- 长 URL、长中文标题、raw JSON、长 id 必须截断、换行或摘要化。
-- 工作项卡片标题可以多行 clamp，详情标题也需要最大宽度。
-- 对用户无意义的 raw id 不应进入视觉层。
+- Body-level horizontal scrolling is a regression.
+- Long URLs, long Chinese titles, raw JSON, and long IDs must wrap, clamp, or be summarized.
+- Work card titles can clamp to multiple lines; detail titles can wrap.
+- Opaque raw external IDs should not enter the user-facing visual layer.
 
 ## Density
 
-- Brand 页面用留白和视觉物建立节奏。
-- Identity 页面聚焦一个表单任务。
-- Console 页面减少装饰，保留紧凑筛选、列表、看板和详情。
+- Brand surfaces use meaningful product preview density.
+- Identity surfaces focus one form task and a compact operations preview.
+- Console surfaces reduce decoration and emphasize lists, metrics, filters, lanes, and inspectors.
 
 ## Responsive
 
-- 断点由内容决定。
-- 小屏优先保持核心任务，不强行保留桌面多列。
-- 看板在窄屏可改为纵向或横向可控区域，但不能让整页失控横滚。
+- Breakpoints are content-driven.
+- Small screens stack rail, topbar, content, and drawer in a readable order.
+- Boards may stack lanes vertically on narrow screens.
+- Drawers can become full-width on narrow screens, but they still read as utility states rather than primary pages.

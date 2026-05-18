@@ -34,7 +34,6 @@ required_paths=(
   "e2e/db.ts"
   "e2e/runtime-fleet.spec.ts"
   "e2e/runtime-work-board.spec.ts"
-  "e2e/skill-registry-auth.spec.ts"
   "src/catalog/catalog-object.ts"
   "src/catalog/index.ts"
   "src/console/ConsoleUtilityDrawer.tsx"

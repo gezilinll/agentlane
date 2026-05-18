@@ -7,7 +7,6 @@ import {
   type AuthEmailProvider,
 } from "../auth/auth-http-api";
 import { createPostgresAuthStore, type AuthStore } from "../auth/auth-store";
-import { createAgentMigrationHttpApiHandler } from "../migration/agent-migration-http-api";
 import { createNotificationHttpApiHandler } from "../notifications/notification-http-api";
 import { createPostgresNotificationStore, type NotificationStore } from "../notifications/notification-store";
 import { createOperationHttpApiHandler } from "../operations/operation-http-api";
@@ -18,14 +17,6 @@ import { createRuntimeHttpApiHandler } from "../server/runtime-http-api";
 import { createRuntimeInventoryStore } from "../server/runtime-inventory-store";
 import { createPostgresStore, type PostgresStore } from "../server/postgres-store";
 import { createRuntimeWorkStateStore } from "../server/runtime-work-state-store";
-import { createSkillGovernanceHttpApiHandler } from "../skills/skill-governance-http-api";
-import {
-  createPostgresSkillGovernanceStore,
-  type SkillGovernanceStore,
-} from "../skills/skill-governance-store";
-import { createSkillHttpApiHandler } from "../skills/skill-http-api";
-import { createSkillOperationJobHandlers } from "../skills/skill-operation-handlers";
-import { createPostgresSkillStore, type SkillStore } from "../skills/skill-store";
 import { createBackendEmailProvider } from "./email-provider";
 
 /** Construction options for the standalone Lorume backend. */
@@ -48,10 +39,6 @@ export interface LorumeBackendServerOptions {
   postgresStore?: PostgresStore;
   /** Optional auth repository injection for tests. */
   authStore?: AuthStore;
-  /** Optional Skill repository injection for tests. */
-  skillStore?: SkillStore;
-  /** Optional Skill governance repository injection for tests. */
-  skillGovernanceStore?: SkillGovernanceStore;
   /** Optional Operation repository injection for tests. */
   operationStore?: OperationStore;
   /** Optional Notification repository injection for tests. */
@@ -108,14 +95,6 @@ export function createLorumeBackendServer(
     : createPostgresAuthStore({ connectionString: options.databaseUrl });
   const authStore = options.authStore ?? ownedAuthStore;
   const authGuards = authStore ? createAuthRuntimeGuards(authStore, { pepper: options.authPepper }) : undefined;
-  const ownedSkillStore = options.skillStore
-    ? null
-    : createPostgresSkillStore({ connectionString: options.databaseUrl });
-  const skillStore = options.skillStore ?? ownedSkillStore;
-  const ownedSkillGovernanceStore = options.skillGovernanceStore
-    ? null
-    : createPostgresSkillGovernanceStore({ connectionString: options.databaseUrl });
-  const skillGovernanceStore = options.skillGovernanceStore ?? ownedSkillGovernanceStore;
   const ownedOperationStore = options.operationStore
     ? null
     : createPostgresOperationStore({ connectionString: options.databaseUrl });
@@ -128,13 +107,9 @@ export function createLorumeBackendServer(
     ?? Boolean(options.databaseUrl ?? process.env.DATABASE_URL);
   const operationRunnerIntervalMs = options.operationRunnerIntervalMs
     ?? Number(process.env.LORUME_OPERATION_RUNNER_INTERVAL_MS ?? 1_000);
-  const operationRunner = operationRunnerEnabled && operationStore && skillGovernanceStore
+  const operationRunner = operationRunnerEnabled && operationStore
     ? createOperationJobRunner({
-      handlers: createSkillOperationJobHandlers({
-        controlChannel,
-        governanceStore: skillGovernanceStore,
-        skillStore: skillStore ?? undefined,
-      }),
+      handlers: {},
       notificationStore: notificationStore ?? undefined,
       operationStore,
       runnerId: process.env.LORUME_OPERATION_RUNNER_ID ?? "lorume-backend",
@@ -165,23 +140,6 @@ export function createLorumeBackendServer(
       }
       : undefined,
   });
-  const skillHandler = authGuards && skillStore
-    ? createSkillHttpApiHandler({
-      governanceStore: skillGovernanceStore ?? undefined,
-      requireUserSession: authGuards.requireUserSession,
-      runtimeStore: postgresStore ?? undefined,
-      skillStore,
-    })
-    : undefined;
-  const skillGovernanceHandler = authGuards && skillStore && skillGovernanceStore
-    ? createSkillGovernanceHttpApiHandler({
-      governanceStore: skillGovernanceStore,
-      operationStore: operationStore ?? undefined,
-      readRuntimeFleet: postgresStore ? () => postgresStore.readRuntimeFleet() : undefined,
-      requireUserSession: authGuards.requireUserSession,
-      skillStore,
-    })
-    : undefined;
   const operationHandler = authGuards && operationStore
     ? createOperationHttpApiHandler({
       operationStore,
@@ -194,12 +152,6 @@ export function createLorumeBackendServer(
       requireUserSession: authGuards.requireUserSession,
     })
     : undefined;
-  const agentMigrationHandler = authGuards
-    ? createAgentMigrationHttpApiHandler({
-      requireUserSession: authGuards.requireUserSession,
-      runtimeStore: postgresStore ?? undefined,
-    })
-    : undefined;
   const webSocketServer = new WebSocketServer({ noServer: true });
   const server = createServer((request, response) => {
     const notFound = () => {
@@ -210,25 +162,11 @@ export function createLorumeBackendServer(
     const runRuntimeHandler = () => {
       void httpHandler(request, response, notFound);
     };
-    const runSkillHandler = () => {
-      if (skillHandler) {
-        void skillHandler(request, response, runRuntimeHandler);
-      } else {
-        runRuntimeHandler();
-      }
-    };
-    const runSkillGovernanceHandler = () => {
-      if (skillGovernanceHandler) {
-        void skillGovernanceHandler(request, response, runSkillHandler);
-      } else {
-        runSkillHandler();
-      }
-    };
     const runOperationHandler = () => {
       if (operationHandler) {
-        void operationHandler(request, response, runSkillGovernanceHandler);
+        void operationHandler(request, response, runRuntimeHandler);
       } else {
-        runSkillGovernanceHandler();
+        runRuntimeHandler();
       }
     };
     const runNotificationHandler = () => {
@@ -238,25 +176,16 @@ export function createLorumeBackendServer(
         runOperationHandler();
       }
     };
-    const runAgentMigrationHandler = () => {
-      if (agentMigrationHandler) {
-        void agentMigrationHandler(request, response, runNotificationHandler);
-      } else {
-        runNotificationHandler();
-      }
-    };
     if (authHandler) {
-      void authHandler(request, response, runAgentMigrationHandler);
+      void authHandler(request, response, runNotificationHandler);
     } else {
-      runAgentMigrationHandler();
+      runNotificationHandler();
     }
   });
   let baseUrl = "";
   let listening = false;
   let postgresClosed = false;
   let authClosed = false;
-  let skillClosed = false;
-  let skillGovernanceClosed = false;
   let operationClosed = false;
   let notificationClosed = false;
   let operationRunnerTimer: ReturnType<typeof setInterval> | null = null;
@@ -347,14 +276,6 @@ export function createLorumeBackendServer(
       if (ownedAuthStore && !authClosed) {
         authClosed = true;
         await ownedAuthStore.close();
-      }
-      if (ownedSkillStore && !skillClosed) {
-        skillClosed = true;
-        await ownedSkillStore.close();
-      }
-      if (ownedSkillGovernanceStore && !skillGovernanceClosed) {
-        skillGovernanceClosed = true;
-        await ownedSkillGovernanceStore.close();
       }
       if (ownedOperationStore && !operationClosed) {
         operationClosed = true;

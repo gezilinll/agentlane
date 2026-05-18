@@ -102,8 +102,6 @@ Agent：
 - 列表展示 Agent 名称、归属 Runtime、关联渠道、状态、最近同步。
 - 归属 Runtime 使用 Runtime 列表中的同一展示名，不用 UUID 作为主识别。
 - 详情展示 `身份信息`、`归属关系`、`关联渠道`、`运行统计`。这里的 `运行统计` 仅指 Agent 工作负载统计，不应用于 Runtime 详情。
-- 详情可以提供 `查看 Skill` 和 `刷新 Skill 清单` 两个操作。`查看 Skill` 进入 Skill 管理并携带 `/skills?targetType=agent&targetId=...` 深链，让 Skill 管理页面直接展示该 Agent 的目标 Skill Set 与设备发现到的目标本地 Skill；`刷新 Skill 清单` 请求后端通过设备控制通道重新采集该 Agent 已发现的 Skill。Runtime Fleet 不提供 `分配组织 Skill` 之类跨域治理入口，Skill 发布、审批、目标下发和同步必须在 Skill 管理内完成。
-- `刷新 Skill 清单` 依赖设备 WebSocket 控制通道。设备控制通道未连接时，页面必须展示“设备控制通道未连接，已保留最近一次采集数据”这类用户可理解的状态，不直接暴露 `device_not_connected`、HTTP 状态码或 backend 调试字段；已有 Runtime、Agent 和 Skill discovery 快照仍应可继续查看。
 - sourceRefs 只用于生成平台标识或外部链接，不直接以 `source: id` 的原始形式展示。
 
 ## 验收标准
@@ -115,8 +113,6 @@ Agent：
 - 用户可以搜索 `tester` 并只看到相关 Agent。
 - Runtime Fleet 工具栏不展示 Channel 筛选；用户需要收敛某个 Agent 时使用搜索、Runtime 或可用性筛选。
 - 用户可以点击 Agent 行并在详情面板看到归属 Runtime、归属设备、关联渠道和运行统计。
-- 用户可以从 Agent 详情点击 `查看 Skill` 进入 Skill 管理，页面必须保留目标 Agent 选择，并同时展示该目标的 Target Skill Set 和目标本地发现 Skill，即使 target 列表稍后才从后端加载完成。
-- 用户可以从 Agent 详情点击 `刷新 Skill 清单` 触发设备侧 Skill 发现刷新；设备控制通道未连接时展示友好失败状态并保留最近一次采集数据；页面不得把未实现的组织 Skill 分配入口放在 Runtime Fleet 中。
 - 用户在桌面宽度滚动到 Agent 表格后点击行，详情面板仍停留在可视区域内。
 - 当旧 snapshot 缺少 Agent 级最近同步时间时，Agent 列表和详情使用归属 Runtime 或 snapshot 时间回退，不展示未知。
 - 用户可以点击 Runtime 行并在详情面板看到所属设备、Agent 数量、可用性和运行状态，不出现运行入口或任务/会话统计区块。

@@ -6,7 +6,7 @@
 
 ## 目标
 
-- 为 Skill 导入、发布、分配、下发、设备采集刷新、Agent 迁移和通知投递提供统一异步状态。
+- 为设备采集刷新、通知投递和后续已规格化的长耗时动作提供统一异步状态。
 - 用户能在页面内看到异步动作的当前状态、失败原因和需要人工处理的提示。
 - 后端能安全 claim、执行、重试和完成 Job，避免重复执行和长时间卡死。
 - 业务模块只暴露 Lorume 自己的 Operation 语义，不把某个平台的任务状态直接泄漏给 UI。
@@ -30,7 +30,7 @@ Operation 是用户可见的一次异步动作。
 
 - `id`：内部 ID。
 - `organizationId`：所属组织。
-- `type`：动作类型，例如 `skill_import`、`skill_publish`、`skill_assign`、`skill_sync`、`device_refresh`、`agent_migration`、`notification_delivery`。
+- `type`：动作类型，例如 `device_refresh`、`notification_delivery`。
 - `status`：`queued`、`running`、`succeeded`、`failed`、`unsupported`、`requires_manual_step`、`cancelled`。
 - `resourceType` / `resourceId`：主要资源，可为空。
 - `targetType` / `targetId`：目标资源，可为空。
@@ -50,7 +50,7 @@ Operation Job 是后端可执行的最小任务单元。
 - `id`：内部 ID。
 - `operationId`：所属 Operation。
 - `organizationId`：所属组织。
-- `type`：执行类型，例如 `skill_publish`、`skill_assign`、`skill_sync`、`agent_migration`、`notification_in_app`、`notification_email`。
+- `type`：执行类型，例如 `notification_in_app`、`notification_email`。
 - `status`：`queued`、`running`、`succeeded`、`failed`、`unsupported`、`requires_manual_step`、`cancelled`。
 - `payload`：执行所需的非敏感参数。
 - `attemptCount` / `maxAttempts`：已尝试次数和最大尝试次数。
@@ -86,7 +86,7 @@ Job 状态：
 - Runner claim Job 时必须使用数据库行锁和 lease，避免并发 runner 重复执行同一个 Job。
 - `lockedUntil` 过期的 `running` Job 可以被重新 claim。
 - 每次执行失败增加 `attemptCount`，未到 `maxAttempts` 时回到 `queued` 并设置 `runAfter`。
-- Job handler 必须具备幂等性：重复执行同一个 Job 不应造成重复发布、重复分配或重复通知。
+- Job handler 必须具备幂等性：重复执行同一个 Job 不应造成重复通知或重复外部状态变更。
 - Operation 的最终状态由必要 Job 的结果汇总产生。
 - 任一必要 Job 进入 `requires_manual_step` 时，Operation 进入 `requires_manual_step` 并保留 `manualInstruction`。
 - Operation 状态变化必须可以创建 Notification Event。
@@ -108,16 +108,6 @@ Job 状态：
 - 需要跨服务事件消费。
 
 在这些条件出现之前，Postgres-backed runner 是正式实现，不是临时方案。
-
-## Skill 集成
-
-- Skill 发布：有权限时创建 `skill_publish` Operation / Job，Job 成功后把 Skill Version 标记为 published。
-- Skill 分配：有权限时创建 `skill_assign` Operation / Job，Job 成功后创建或更新 approved Assignment。
-- Skill 下发：approved Assignment 触发 `skill_sync` Operation / Job，由 Job Runner 读取 Assignment、Skill Version 和文件内容，创建 Skill Sync Job，再通过 device control channel 下发 `skill.sync` 命令。
-- `skill_sync` Job 不直接在 HTTP 请求内写设备；它等待 collector 回报 command 终态，成功后把 Assignment 标记为 `synced`，失败、超时或不支持时标记为 `failed` 或 `unsupported`。
-- `skill_sync` Job 的 payload 只保存 `assignmentId`；目标、版本、文件和 package hash 必须从数据库读取，避免前端提交过期或伪造的文件内容。
-- 缺权限时仍创建 Approval Request，不创建半激活 Assignment。
-- 审核通过后再创建对应 Operation / Job。
 
 ## 通知集成
 
@@ -151,9 +141,6 @@ Job 状态：
 - 不支持 Job 会让 Operation 进入 `unsupported`。
 - 需要人工处理的 Job 会让 Operation 进入 `requires_manual_step`，并保留用户可理解的手动处理说明。
 - Operation 状态变化能创建通知事件。
-- `skill_sync` Job 会创建 Skill Sync Job、记录 device command id，并把 command 终态镜像回 Skill Assignment。
-- `skill_sync` command 超时会进入失败路径，不在页面中表现为已完成。
-
 ## 验收标准
 
 - 异步动作不再靠长请求或前端 loading 假装完成。

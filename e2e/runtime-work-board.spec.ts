@@ -92,7 +92,6 @@ const backendInventory: RuntimeInventorySnapshot = {
       lastSeenAt: "2026-05-09T08:00:00.000Z",
     },
   ],
-  skillDiscoveries: [],
   reports: [],
 };
 

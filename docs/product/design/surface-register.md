@@ -1,49 +1,50 @@
 # Surface Register
 
-Surface Register 定义页面类型、视觉强度和体验边界。新增页面必须先归类，再落视觉和交互。
+Surface Register defines page types, visual intensity, and experience boundaries. New pages must be classified here before visual and interaction work lands.
 
 ## Surface Types
 
 | Surface | Pages | Role | Visual Intensity |
 |---|---|---|---|
-| Brand Surface | `/` | 解释 Lorume 的价值和方向 | 最高 |
-| Identity Surface | `/login`, `/invite/:token` | 登录、组织加入、身份恢复 | 高 |
-| Console Surface | `/runtime`, `/skills`, `/runs`, `/settings`; `/operations` and `/notifications` as utility drawer routes | 日常管理、查看、筛选、排查 | 中 |
+| Brand Surface | `/` | Explain Lorume value and direction | High |
+| Identity Surface | `/login`, `/invite/:token` | Login, organization join, identity recovery | Medium-high |
+| Console Surface | `/runtime`, `/runs`, `/settings`; `/operations` and `/notifications` as utility drawer routes | Daily management, inspection, filtering, triage | Medium |
 
 ## Brand Surface
 
-Brand Surface 可以使用更强的像素字体、装饰物、非对称构图、模拟窗口和游戏化符号。它必须快速说明：
+Brand Surface can use stronger composition, larger type, and a richer product preview. It must quickly explain:
 
-- Lorume 管理什么。
-- 当前已经能做什么。
-- 用户下一步应该进入登录还是看 Console。
+- What Lorume manages.
+- What is currently implemented.
+- Whether the user should log in or inspect an implemented Console route.
 
-Brand Surface 不展示不可用模块作为 CTA，不用大段概念解释替代产品画面。
+Brand Surface cannot use unavailable modules as CTA and cannot replace product signal with empty atmosphere.
 
 ## Identity Surface
 
-Identity Surface 使用 Brand Surface 的同一套 Cream Arcade 语言，但更聚焦单一任务：
+Identity Surface shares the same Glacier Premium Precision system but focuses a single task:
 
-- 输入邮箱。
-- 发送验证码。
-- 输入验证码。
-- 创建组织或加入邀请组织。
+- Enter email.
+- Send verification code.
+- Enter verification code.
+- Create organization or join invited organization.
 
-Identity Surface 可以保留背景装饰和运营概览，但错误、成功、loading、过期邀请等状态必须清晰。
+Identity Surface may show a compact operations preview, but errors, success, loading, expired invitation, and permission states must stay clear.
 
 ## Console Surface
 
-Console Surface 以操作效率为核心：
+Console Surface prioritizes operating efficiency:
 
-- 导航稳定，不把未实现页面放入主导航。
-- 筛选区紧凑，字段宽度服务内容。
-- 列表、看板、详情面板优先保证可读性。
-- 像素风通过边框、阴影、badge、短标签、icon 和局部标题体现。
+- Navigation is stable and exposes only implemented pages.
+- Filters are compact and content-width aware.
+- Lists, boards, and detail inspectors prioritize readability.
+- Summary rails and badges provide scan anchors without color noise.
+- Task and notification drawers belong to top-right Console chrome.
 
-Console Surface 的长正文、任务标题、表格内容、详情说明不使用大面积像素字体。
+Console Surface long body text, task titles, tables, cards, and details use readable Sans with selective Mono for technical values.
 
 ## Cross-Surface Rules
 
-- 所有 surface 共用 token、logo、icon 语法和状态色。
-- 页面之间可以调整装饰密度，但不能产生两套品牌。
-- 如果同一组件在不同 surface 的视觉强度不同，差异应通过 variant 或 token 表达，不在业务页面硬编码。
+- All surfaces share tokens, logo, icon entry points, and semantic state colors.
+- Surfaces can vary density and preview richness, not brand identity.
+- If one component needs different strength across surfaces, express it through variants or tokens, not page-local hardcoding.

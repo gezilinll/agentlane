@@ -1,55 +1,70 @@
 # Components
 
-组件规则覆盖当前已经出现的 UI primitive 和页面组件。新增组件应先确认能否复用现有 primitive。
+Component rules cover current UI primitives and page-level components. New components should first confirm whether an existing primitive can be reused.
 
 ## Shared Primitives
 
-- `PixelButton`: 主按钮、次按钮、危险按钮、图标按钮。
-- `PixelField`: 输入框、邮箱、验证码、带 icon 的输入。
-- `PixelPanel`: 表单面板、信息面板、模拟窗口。
-- `PixelBadge`: 状态、来源、渠道、阶段。
-- `PixelIcon`: 产品 icon 入口。
-- `PixelLogo`: 品牌标记。
-- `PixelDecorations`: 背景像素装饰。
+The following primitives keep their current filenames during this redesign:
+
+- `PixelButton`: primary, secondary, danger, and compact action buttons.
+- `PixelField`: labeled input controls.
+- `PixelPanel`: modern precision surface.
+- `PixelBadge`: status, source, channel, stage, and count badges.
+- `PixelIcon`: shared product icon entry.
+- `PixelLogo`: brand mark.
+- `PixelDecorations`: optional low-noise grid/trace decoration, not pixel sprites.
 
 ## Buttons
 
-- 中文按钮使用 Sans 字体。
-- 主按钮使用明确动作，例如 `发送验证码`、`开始使用`、`查看看板`。
-- 不使用 `提交`、`确认` 这类缺少对象的标签，除非上下文已经唯一。
-- Disabled、loading、focus-visible、hover、active 状态必须存在。
-- 未实现的创建、编辑、配置、连接和管理动作不展示为可点击按钮。只有页面、数据链路、权限和 harness 都存在时才进入导航或页面操作区。
+- Button text uses Sans.
+- Primary actions use action blue and clear object-specific labels.
+- Secondary actions use white/soft surfaces and hairline borders.
+- Danger actions use danger tone and explicit object labels.
+- Disabled, loading, focus-visible, hover, and active states must exist.
+- Do not expose actions whose page, data path, permission, and harness do not exist.
 
 ## Fields
 
-- 表单字段必须有可见 label。
-- Placeholder 只提供示例，不替代 label。
-- 错误信息写明问题和下一步。
-- 验证码输入需要支持粘贴。
+- Fields must have visible labels.
+- Placeholder text gives examples; it never replaces a label.
+- Error messages state what failed and what the user can do next.
+- Verification code inputs support paste and clear focus states.
 
 ## Badges
 
-- Badge 文案必须短。
-- 状态 badge 用语义色，来源/runtime/channel badge 用中性或信息色。
-- 同一卡片内 badge 不超过必要数量。
+- Badge copy is short and semantic.
+- Status badges use semantic color.
+- Runtime/source/channel badges use neutral or info color unless expressing state.
+- A row should not accumulate badges that repeat the same fact.
 
-## Work Cards
+## Metrics
 
-- 卡片必须能回答：是什么任务、谁发起、哪个 Agent 承接、来自哪个 Runtime/Channel、当前处于什么阶段。
-- 卡片不显示甬道标题，因为甬道和详情概览已经表达阶段。
-- 标题和摘要必须截断或 clamp，不能撑出横向滚动。
-- 没有用户意义的调试数据不进入卡片。
-- 工作项标题和摘要使用 Sans，来源、状态、数字和短标签使用 Mono 或 Badge。不要用像素字体承载长中文任务内容。
+- Metrics appear in summary rails or compact metric grids.
+- The label explains the object; the number uses Mono.
+- A metric may have a top accent line, but it should not dominate the page.
+
+## Rows And Cards
+
+- Rows/cards must answer what the object is, what state it is in, and why the user should care.
+- Work items include task, creator/user-facing source, Agent, Runtime/Channel, and stage when available.
+- Long titles and summaries wrap or clamp.
+- Debug payloads, adapter evidence, opaque external IDs, tokens, and raw JSON do not enter rows/cards.
 
 ## Detail Panels
 
-- 详情面板标题需要最大宽度和换行策略。
-- 概览、任务上下文、最近状态、消息摘要应按用户理解顺序排列。
-- 不重复展示已经在同一区域明确表达的信息。
-- 详情正文使用 Sans，ID、Runtime、Channel、时间戳等技术值可以使用 Mono；不要把调试证据、adapter 限制或 raw JSON 当作用户内容展示。
+- Detail panels are document-like, with a clear title, summary, status badges, and ordered metadata.
+- Detail text uses Sans; technical values and timestamps can use Mono.
+- Do not repeat data already obvious in the surrounding list unless it helps orientation.
+
+## Utility Drawers
+
+- Operations and Notifications drawers open from top-right buttons.
+- Drawers are narrow by default and use vertical list + selected detail.
+- Drawers have no internal task/notification tabs; each route represents one active drawer state.
+- Closing returns users to the page they opened the drawer from.
 
 ## Empty And Error States
 
-- 空状态说明当前筛选下没有结果，不暗示系统故障。
-- 错误状态说明失败原因和可执行下一步。
-- Loading 使用骨架或轻量状态，不用整页 spinner 阻断阅读。
+- Empty states explain the current filter/context.
+- Error states include a user-meaningful cause and next step.
+- Loading states should not block reading the rest of the page unless the page has no data yet.

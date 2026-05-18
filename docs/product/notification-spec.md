@@ -2,15 +2,15 @@
 
 状态：当前规则
 
-本规格定义 Lorume 的公共通知机制。通知用于把需要关注、需要处理、已完成或已失败的异步事件传达给相关人，覆盖 Skill、Agent 迁移、设备采集、审核、组织邀请和系统健康等模块。
+本规格定义 Lorume 的公共通知机制。通知用于把需要关注、需要处理、已完成或已失败的异步事件传达给相关人，覆盖设备采集、组织邀请和系统健康等当前模块。
 
 ## 目标
 
 - 为 [Operation And Job Runner Spec](./operation-job-runner-spec.md) 驱动的异步操作提供统一通知模型，避免每个业务模块各自实现通知。
 - 支持页面内通知和邮件通知。
-- 通知相关 owner、申请人、审批人、设备负责人、Agent 负责人和组织管理员。
+- 通知相关 owner、申请人、设备负责人、Agent 负责人和组织管理员。
 - 对重复异常做聚合、限流、升级和恢复通知，避免线上异常时疯狂重复发送。
-- 通知内容只包含摘要和跳转入口，不泄露密钥、完整日志、Skill 文件内容或外部平台私有返回体。
+- 通知内容只包含摘要和跳转入口，不泄露密钥、完整日志或外部平台私有返回体。
 
 ## 非目标
 
@@ -32,7 +32,7 @@ Notification Event 是业务模块发出的原始通知事件。
 - `organizationId`：所属组织。
 - `eventType`：事件类型。
 - `severity`：`info`、`warning`、`critical`。
-- `sourceModule`：`skill`、`migration`、`runtime`、`approval`、`auth`、`system`。
+- `sourceModule`：`runtime`、`auth`、`system`。
 - `resourceType` / `resourceId`：关联资源。
 - `operationId`：关联 Operation，可为空。
 - `actorUserId`：触发人，可为空。
@@ -133,46 +133,6 @@ runtime:collector:${deviceId}:${snapshotType}:failed
 - 恢复成功：发恢复通知，关闭 Thread。
 
 ## 事件范围
-
-### Skill
-
-事件：
-
-- Skill 导入完成。
-- Skill 导入失败。
-- Skill 校验被阻断。
-- Skill 发布需要审核。
-- Skill 发布通过或拒绝。
-- Skill 下发完成。
-- Skill 下发失败。
-- Skill 归档完成。
-
-接收人：
-
-- 申请人。
-- Skill owner。
-- 目标 owner。
-- 审批人。
-- 组织 admin，限高风险或缺 owner 场景。
-
-### Agent Migration / Bootstrap
-
-事件：
-
-- Operation 开始。
-- Operation 需要审核。
-- Operation 进入手动处理。
-- Operation 成功。
-- Operation 失败。
-- Runtime setup 前置条件不满足。
-
-接收人：
-
-- 申请人。
-- 来源 Agent owner。
-- 目标 Device / Runtime / Agent owner。
-- 审批人。
-- 组织 admin，限失败、缺 owner 或高风险场景。
 
 ### Runtime / Device
 

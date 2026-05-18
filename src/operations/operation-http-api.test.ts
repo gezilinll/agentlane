@@ -33,7 +33,7 @@ describe("operation HTTP API", () => {
       session: createSession(),
     });
 
-    const listResponse = await fetch(`${api.url}/api/operations?organizationId=org_1&status=queued&resourceType=skill&resourceId=skill_1`);
+    const listResponse = await fetch(`${api.url}/api/operations?organizationId=org_1&status=queued&resourceType=device&resourceId=gezilinll-claw`);
     const detailResponse = await fetch(`${api.url}/api/operations/op_1`);
     const forbiddenResponse = await fetch(`${api.url}/api/operations?organizationId=org_2`);
 
@@ -51,8 +51,8 @@ describe("operation HTTP API", () => {
     expect(calls).toEqual([
       expect.objectContaining({
         organizationId: "org_1",
-        resourceId: "skill_1",
-        resourceType: "skill",
+        resourceId: "gezilinll-claw",
+        resourceType: "device",
         status: "queued",
       }),
     ]);
@@ -92,14 +92,14 @@ function createOperation(overrides: Partial<OperationRow> = {}): OperationRow {
     metadata: {},
     organizationId: "org_1",
     requestedByUserId: "user_1",
-    resourceId: "skill_1",
-    resourceType: "skill",
+    resourceId: "gezilinll-claw",
+    resourceType: "device",
     startedAt: null,
     status: "queued",
-    summary: "Publish Skill",
+    summary: "Refresh device",
     targetId: null,
     targetType: null,
-    type: "skill_publish",
+    type: "device_refresh",
     updatedAt: now,
     ...overrides,
   };
@@ -122,7 +122,7 @@ function createJob(overrides: Partial<OperationJobRow> = {}): OperationJobRow {
     runAfter: now,
     startedAt: null,
     status: "queued",
-    type: "skill_publish",
+    type: "notification_in_app",
     updatedAt: now,
     ...overrides,
   };

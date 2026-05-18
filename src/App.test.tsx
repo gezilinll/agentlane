@@ -108,7 +108,9 @@ describe("Console shell", () => {
 
     expect(screen.getByRole("heading", { name: /把分散的 Agent 变成可运营的工作网络/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "登录" })).toHaveAttribute("href", "/login");
-    expect(screen.getByTestId("home-pixel-decorations")).toHaveClass("pixel-decorations--home");
+    expect(screen.queryByTestId("home-pixel-decorations")).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "运营总览" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Agent 网络结构预览" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Agent Studio" })).not.toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
@@ -120,8 +122,10 @@ describe("Console shell", () => {
 
     const previewNav = screen.getByRole("navigation", { name: "预览导航" });
     expect(within(previewNav).getByText("Runtime")).toBeInTheDocument();
-    expect(within(previewNav).getByText("Skill")).toBeInTheDocument();
     expect(within(previewNav).getByText("Runs")).toBeInTheDocument();
+    expect(within(previewNav).getByText("Settings")).toBeInTheDocument();
+    expect(screen.getByText("运行资产层")).toBeInTheDocument();
+    expect(screen.getByText("工作状态层")).toBeInTheDocument();
     expect(within(previewNav).queryByText("对象目录")).not.toBeInTheDocument();
     expect(within(previewNav).queryByText("总览")).not.toBeInTheDocument();
   });
@@ -138,38 +142,31 @@ describe("Console shell", () => {
       expect(within(nav).queryByRole("button", { name: label })).not.toBeInTheDocument();
     }
     expect(within(nav).getByRole("button", { name: "Runtime Fleet" })).toBeInTheDocument();
-    expect(within(nav).getByRole("button", { name: "Skill 管理" })).toBeInTheDocument();
     expect(within(nav).getByRole("button", { name: "Runs" })).toBeInTheDocument();
     expect(within(nav).getByRole("button", { name: "组织设置" })).toBeInTheDocument();
     expect(within(nav).queryByRole("button", { name: "任务中心" })).not.toBeInTheDocument();
     expect(within(nav).queryByRole("button", { name: "通知中心" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "打开任务中心" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "打开通知中心" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "任务 0" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "通知 0" })).toBeInTheDocument();
 
     await user.click(within(nav).getByRole("button", { name: "Runs" }));
 
     expect(window.location.pathname).toBe("/runs");
     expect(screen.getByRole("heading", { name: "工作看板" })).toBeInTheDocument();
 
-    await user.click(within(nav).getByRole("button", { name: "Skill 管理" }));
-
-    expect(window.location.pathname).toBe("/skills");
-    expect(screen.getByRole("heading", { name: "Skill 管理" })).toBeInTheDocument();
-    expect(screen.getByText("请选择组织后管理 Skill。")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "打开任务中心" }));
+    await user.click(screen.getByRole("button", { name: "任务 0" }));
     expect(window.location.pathname).toBe("/operations");
-    const operationsDrawer = screen.getByRole("dialog", { name: "任务中心" });
+    const operationsDrawer = screen.getByRole("dialog", { name: "任务" });
     expect(within(operationsDrawer).getByText("请选择组织后查看任务。")).toBeInTheDocument();
-    await user.click(within(operationsDrawer).getByRole("button", { name: "关闭任务中心" }));
-    expect(window.location.pathname).toBe("/skills");
+    await user.click(within(operationsDrawer).getByRole("button", { name: "关闭任务" }));
+    expect(window.location.pathname).toBe("/runs");
 
-    await user.click(screen.getByRole("button", { name: "打开通知中心" }));
+    await user.click(screen.getByRole("button", { name: "通知 0" }));
     expect(window.location.pathname).toBe("/notifications");
-    const notificationsDrawer = screen.getByRole("dialog", { name: "通知中心" });
+    const notificationsDrawer = screen.getByRole("dialog", { name: "通知" });
     expect(within(notificationsDrawer).getByText("请选择组织后查看通知。")).toBeInTheDocument();
-    await user.click(within(notificationsDrawer).getByRole("button", { name: "关闭通知中心" }));
-    expect(window.location.pathname).toBe("/skills");
+    await user.click(within(notificationsDrawer).getByRole("button", { name: "关闭通知" }));
+    expect(window.location.pathname).toBe("/runs");
 
     await user.click(within(nav).getByRole("button", { name: "组织设置" }));
     expect(window.location.pathname).toBe("/settings");
@@ -190,50 +187,6 @@ describe("Console shell", () => {
     render(<App />);
 
     expect(screen.getByRole("heading", { name: "运行资产" })).toBeInTheDocument();
-  });
-
-  it("opens an Agent target in Skill management from Runtime Fleet detail without assignment shortcuts", async () => {
-    const user = userEvent.setup();
-    const backendSnapshot = fixtureSnapshot as RuntimeInventorySnapshot;
-    globalThis.fetch = vi.fn(async (input) => {
-      const url = input.toString();
-      if (url.includes("/api/runtime-fleet")) {
-        return new Response(JSON.stringify(runtimeFleetQueryResponse(backendSnapshot, "Backend DB Mac")), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      if (url.includes("/api/runtime-work-items")) {
-        return new Response(JSON.stringify(emptyWorkStateQueryResponse()), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      if (url.includes("/api/devices/fixture-mac/collection-health")) {
-        return new Response(JSON.stringify(collectionHealthResponse(backendSnapshot)), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      return new Response(JSON.stringify({ error: "unexpected request" }), { status: 500 });
-    }) as unknown as typeof fetch;
-    window.history.pushState({}, "", "/runtime");
-
-    render(<App />);
-
-    const agentRow = await screen.findByRole("row", { name: /tester/ });
-    await user.click(agentRow);
-
-    const detail = screen.getByRole("complementary", { name: "运行资产详情" });
-    expect(within(detail).getByRole("button", { name: "查看 Skill" })).toBeInTheDocument();
-    expect(within(detail).getByRole("button", { name: "刷新 Skill 清单" })).toBeInTheDocument();
-    expect(within(detail).queryByRole("button", { name: "分配组织 Skill" })).not.toBeInTheDocument();
-
-    await user.click(within(detail).getByRole("button", { name: "查看 Skill" }));
-
-    expect(window.location.pathname).toBe("/skills");
-    expect(window.location.search).toContain("targetType=agent");
-    expect(window.location.search).toContain("targetId=");
   });
 
   it("opens Runs work board with task context and no adapter debug text", async () => {

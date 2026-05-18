@@ -45,6 +45,7 @@ interface NotificationThread {
 
 interface ConsoleUtilityBarProps {
   activeView: ConsoleUtilityView | null;
+  organizationId?: string;
   onOpen: (view: ConsoleUtilityView) => void;
 }
 
@@ -81,35 +82,82 @@ const notificationStatusLabels: Record<NotificationStatus, string> = {
 const activeOperationStatuses = new Set<OperationStatus>(["queued", "running", "requires_manual_step"]);
 
 /** Compact utility entry for async tasks and in-app notifications. */
-export function ConsoleUtilityBar({ activeView, onOpen }: ConsoleUtilityBarProps) {
+export function ConsoleUtilityBar({ activeView, organizationId, onOpen }: ConsoleUtilityBarProps) {
+  const [operationCount, setOperationCount] = useState(0);
+  const [notificationCount, setNotificationCount] = useState(0);
+
+  useEffect(() => {
+    if (!organizationId) {
+      setOperationCount(0);
+      setNotificationCount(0);
+      return;
+    }
+
+    const scopedOrganizationId = organizationId;
+    let cancelled = false;
+
+    async function loadUtilityCounts() {
+      try {
+        const [operationsResponse, notificationsResponse] = await Promise.all([
+          fetch(`/api/operations?organizationId=${encodeURIComponent(scopedOrganizationId)}&limit=100`),
+          fetch(`/api/notifications?organizationId=${encodeURIComponent(scopedOrganizationId)}`),
+        ]);
+        if (!operationsResponse.ok || !notificationsResponse.ok) return;
+
+        const operationsPayload = (await operationsResponse.json()) as { operations?: OperationListItem[] };
+        const notificationsPayload = (await notificationsResponse.json()) as { threads?: NotificationThread[] };
+        if (cancelled) return;
+
+        setOperationCount((operationsPayload.operations ?? []).filter((operation) => activeOperationStatuses.has(operation.status)).length);
+        setNotificationCount((notificationsPayload.threads ?? []).filter((thread) => !thread.isRead).length);
+      } catch {
+        if (!cancelled) {
+          setOperationCount(0);
+          setNotificationCount(0);
+        }
+      }
+    }
+
+    void loadUtilityCounts();
+    const timer = window.setInterval(() => void loadUtilityCounts(), 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [organizationId]);
+
   return (
     <div className="consoleUtilityBar" aria-label="控制台工具">
       <button
+        aria-label={`任务 ${operationCount}`}
         aria-pressed={activeView === "operations"}
         className={activeView === "operations" ? "consoleUtilityButton consoleUtilityButtonActive" : "consoleUtilityButton"}
         type="button"
         onClick={() => onOpen("operations")}
       >
         <PixelIcon name="activity" size={14} />
-        打开任务中心
+        <span>任务</span>
+        <strong className="consoleUtilityCount">{operationCount}</strong>
       </button>
       <button
+        aria-label={`通知 ${notificationCount}`}
         aria-pressed={activeView === "notifications"}
         className={activeView === "notifications" ? "consoleUtilityButton consoleUtilityButtonActive" : "consoleUtilityButton"}
         type="button"
         onClick={() => onOpen("notifications")}
       >
         <PixelIcon name="mail" size={14} />
-        打开通知中心
+        <span>通知</span>
+        <strong className="consoleUtilityCount">{notificationCount}</strong>
       </button>
     </div>
   );
 }
 
 /** Right-side utility drawer for operation and notification status without expanding primary navigation. */
-export function ConsoleUtilityDrawer({ organizationId, view, onClose, onViewChange }: ConsoleUtilityDrawerProps) {
+export function ConsoleUtilityDrawer({ organizationId, view, onClose }: ConsoleUtilityDrawerProps) {
   if (!view) return null;
-  const title = view === "operations" ? "任务中心" : "通知中心";
+  const title = view === "operations" ? "任务" : "通知";
 
   return (
     <div className="utilityDrawerOverlay" role="presentation">
@@ -123,22 +171,6 @@ export function ConsoleUtilityDrawer({ organizationId, view, onClose, onViewChan
             ×
           </button>
         </header>
-        <div className="utilityDrawerTabs" role="tablist" aria-label="工具切换">
-          <button
-            className={view === "operations" ? "utilityDrawerTab utilityDrawerTabActive" : "utilityDrawerTab"}
-            type="button"
-            onClick={() => onViewChange("operations")}
-          >
-            任务
-          </button>
-          <button
-            className={view === "notifications" ? "utilityDrawerTab utilityDrawerTabActive" : "utilityDrawerTab"}
-            type="button"
-            onClick={() => onViewChange("notifications")}
-          >
-            通知
-          </button>
-        </div>
         {view === "operations" ? (
           <OperationsDrawer organizationId={organizationId} />
         ) : (

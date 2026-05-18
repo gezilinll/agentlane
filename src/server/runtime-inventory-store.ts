@@ -30,7 +30,7 @@ export interface RuntimeDeviceConnection {
 }
 
 /** Runtime control command supported by Lorume. */
-export type RuntimeCommandType = "inventory.refresh" | "skill.sync";
+export type RuntimeCommandType = "inventory.refresh";
 
 /** Runtime command lifecycle status. */
 export type RuntimeCommandStatus =
@@ -185,7 +185,6 @@ export function validateRuntimeInventorySnapshot(value: unknown): value is Runti
   if (
     !Array.isArray(value.runtimes) ||
     !Array.isArray(value.agents) ||
-    !Array.isArray(value.skillDiscoveries) ||
     !Array.isArray(value.reports)
   ) {
     return false;

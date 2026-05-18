@@ -9,16 +9,13 @@ import { HomePage } from "./HomePage";
 import { RuntimeFleetPage } from "./runtime/RuntimeFleetPage";
 import { RuntimeWorkBoardPage } from "./runtime/RuntimeWorkBoardPage";
 import { OrganizationSettingsPage } from "./settings/OrganizationSettingsPage";
-import { SkillRegistryPage } from "./skills/SkillRegistryPage";
-import { PixelDecorations } from "./ui/PixelDecorations";
 import { PixelIcon, type PixelIconName } from "./ui/PixelIcon";
 import { PixelLogo } from "./ui/PixelLogo";
 
-type PageKey = "runtime" | "runs" | "skills" | "settings";
+type PageKey = "runtime" | "runs" | "settings";
 
 const navItems: Array<{ label: string; icon: PixelIconName; page: PageKey }> = [
   { label: "Runtime Fleet", icon: "server", page: "runtime" },
-  { label: "Skill 管理", icon: "tool", page: "skills" },
   { label: "Runs", icon: "play", page: "runs" },
   { label: "组织设置", icon: "settings", page: "settings" },
 ] as const;
@@ -26,7 +23,6 @@ const navItems: Array<{ label: string; icon: PixelIconName; page: PageKey }> = [
 const pagePathByKey: Record<PageKey, string> = {
   runtime: "/runtime",
   runs: "/runs",
-  skills: "/skills",
   settings: "/settings",
 };
 
@@ -86,20 +82,6 @@ function ConsoleApp() {
     setUtilityReturnPath(nextPath);
   };
 
-  const navigateToSkillTarget = (target: { type: "agent"; id: string }) => {
-    const searchParams = new URLSearchParams({
-      targetId: target.id,
-      targetType: target.type,
-    });
-    const nextPath = `${pagePathByKey.skills}?${searchParams.toString()}`;
-    if (`${getCurrentPath()}${window.location.search}` !== nextPath) {
-      window.history.pushState({}, "", nextPath);
-    }
-    setActivePage("skills");
-    setUtilityView(null);
-    setUtilityReturnPath(nextPath);
-  };
-
   const openUtility = (view: ConsoleUtilityView) => {
     const nextPath = utilityPathByView[view];
     const currentRoute = `${getCurrentPath()}${window.location.search}`;
@@ -121,7 +103,6 @@ function ConsoleApp() {
 
   return (
     <main className="appShell">
-      <PixelDecorations variant="console" />
       <aside className="sideNav" aria-label="主导航">
         <div className="brandMark">
           <PixelLogo />
@@ -147,14 +128,12 @@ function ConsoleApp() {
         </nav>
         <AuthSessionActions />
       </aside>
-      <ConsoleUtilityBar activeView={utilityView} onOpen={openUtility} />
+      <ConsoleUtilityBar activeView={utilityView} organizationId={organizationId} onOpen={openUtility} />
 
       {activePage === "runtime" ? (
-        <RuntimeFleetPage onOpenSkillTarget={navigateToSkillTarget} />
+        <RuntimeFleetPage />
       ) : activePage === "runs" ? (
         <RuntimeWorkBoardPage />
-      ) : activePage === "skills" ? (
-        <SkillRegistryPage organizationId={organizationId} />
       ) : (
         <OrganizationSettingsPage session={auth?.session} />
       )}
@@ -175,7 +154,6 @@ function getCurrentPath(): string {
 function pageFromPath(path: string): PageKey | null {
   if (path === "/runtime") return "runtime";
   if (path === "/runs") return "runs";
-  if (path === "/skills") return "skills";
   if (path === "/settings") return "settings";
   return null;
 }

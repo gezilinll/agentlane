@@ -7,7 +7,7 @@ const { Pool } = pg;
 export type NotificationSeverity = "info" | "warning" | "critical";
 
 /** Notification source module. */
-export type NotificationSourceModule = "skill" | "migration" | "runtime" | "approval" | "auth" | "system";
+export type NotificationSourceModule = "runtime" | "auth" | "system";
 
 /** Notification thread lifecycle status. */
 export type NotificationThreadStatus = "open" | "resolved" | "muted";

@@ -5,12 +5,12 @@ import type { OperationJobRow, OperationRow, OperationStore } from "./operation-
 
 describe("operation job runner", () => {
   it("claims one due job and completes it through the matching handler", async () => {
-    const job = createJob({ type: "skill_sync", payload: { assignmentId: "assignment_1" } });
+    const job = createJob({ type: "notification_in_app", payload: { threadId: "thread_1" } });
     const store = createFakeOperationStore(job);
     const runner = createOperationJobRunner({
       handlers: {
-        skill_sync: async (claimedJob) => {
-          expect(claimedJob.payload).toEqual({ assignmentId: "assignment_1" });
+        notification_in_app: async (claimedJob) => {
+          expect(claimedJob.payload).toEqual({ threadId: "thread_1" });
           return { status: "succeeded" };
         },
       },
@@ -22,7 +22,7 @@ describe("operation job runner", () => {
 
     await expect(runner.runDueJobOnce()).resolves.toEqual({
       jobId: "job_1",
-      jobType: "skill_sync",
+      jobType: "notification_in_app",
       outcome: "succeeded",
       status: "handled",
     });
@@ -53,20 +53,20 @@ describe("operation job runner", () => {
   it("passes manual-step handler results through the operation store and notification path", async () => {
     const notifications: CreateNotificationEventInput[] = [];
     const store = createFakeOperationStore(
-      createJob({ type: "agent_migration" }),
+      createJob({ type: "notification_email" }),
       createOperation({
         requestedByUserId: "user_1",
         status: "queued",
-        summary: "迁移 Agent",
-        targetId: "agent-main",
-        targetType: "agent",
-        type: "agent_migration",
+        summary: "发送通知邮件",
+        targetId: "thread_1",
+        targetType: "notification_thread",
+        type: "notification_delivery",
       }),
     );
     const runner = createOperationJobRunner({
       handlers: {
-        agent_migration: () => ({
-          manualInstruction: "目标设备缺少已知 runtime 安装入口，请先补齐 runtime。",
+        notification_email: () => ({
+          manualInstruction: "邮件服务未配置，请先补齐 SMTP 配置。",
           status: "requires_manual_step",
         }),
       },
@@ -83,13 +83,13 @@ describe("operation job runner", () => {
 
     await expect(runner.runDueJobOnce()).resolves.toEqual({
       jobId: "job_1",
-      jobType: "agent_migration",
+      jobType: "notification_email",
       outcome: "requires_manual_step",
       status: "handled",
     });
     expect(store.completed).toEqual([{
       jobId: "job_1",
-      manualInstruction: "目标设备缺少已知 runtime 安装入口，请先补齐 runtime。",
+      manualInstruction: "邮件服务未配置，请先补齐 SMTP 配置。",
       status: "requires_manual_step",
     }]);
     expect(notifications).toEqual([
@@ -97,18 +97,18 @@ describe("operation job runner", () => {
         dedupeKey: "operation:operation_1:requires_manual_step",
         eventType: "operation_requires_manual_step",
         severity: "warning",
-        sourceModule: "migration",
-        title: "迁移 Agent 需要人工处理",
+        sourceModule: "system",
+        title: "发送通知邮件 需要人工处理",
       }),
     ]);
   });
 
   it("records failed handler attempts through the operation store", async () => {
-    const store = createFakeOperationStore(createJob({ type: "skill_publish" }));
+    const store = createFakeOperationStore(createJob({ type: "notification_in_app" }));
     const runner = createOperationJobRunner({
       handlers: {
-        skill_publish: async () => {
-          throw new Error("device write failed");
+        notification_in_app: async () => {
+          throw new Error("notification write failed");
         },
       },
       leaseMs: 30_000,
@@ -119,15 +119,15 @@ describe("operation job runner", () => {
     });
 
     await expect(runner.runDueJobOnce()).resolves.toEqual({
-      errorSummary: "device write failed",
+      errorSummary: "notification write failed",
       jobId: "job_1",
-      jobType: "skill_publish",
+      jobType: "notification_in_app",
       status: "failed",
     });
     expect(store.completed).toEqual([]);
     expect(store.failed).toEqual([
       {
-        errorSummary: "device write failed",
+        errorSummary: "notification write failed",
         jobId: "job_1",
         retryAfterMs: 10_000,
       },
@@ -149,19 +149,19 @@ describe("operation job runner", () => {
   it("creates a notification when a user-requested operation reaches a terminal status", async () => {
     const notifications: CreateNotificationEventInput[] = [];
     const store = createFakeOperationStore(
-      createJob({ type: "skill_publish" }),
+      createJob({ type: "notification_in_app" }),
       createOperation({
         requestedByUserId: "user_1",
-        resourceId: "skill_1",
-        resourceType: "skill",
+        resourceId: "gezilinll-claw",
+        resourceType: "device",
         status: "queued",
-        summary: "发布 Skill",
-        type: "skill_publish",
+        summary: "刷新设备快照",
+        type: "device_refresh",
       }),
     );
     const runner = createOperationJobRunner({
       handlers: {
-        skill_publish: () => ({ status: "succeeded" }),
+        notification_in_app: () => ({ status: "succeeded" }),
       },
       notificationStore: {
         createNotificationEvent: async (input) => {
@@ -183,12 +183,12 @@ describe("operation job runner", () => {
         dedupeKey: "operation:operation_1:succeeded",
         eventType: "operation_succeeded",
         recipientUserIds: ["user_1"],
-        resourceId: "skill_1",
-        resourceType: "skill",
+        resourceId: "gezilinll-claw",
+        resourceType: "device",
         severity: "info",
-        sourceModule: "skill",
-        summary: "发布 Skill",
-        title: "发布 Skill 已完成",
+        sourceModule: "runtime",
+        summary: "刷新设备快照",
+        title: "刷新设备快照 已完成",
       }),
     ]);
   });
@@ -211,7 +211,7 @@ function createJob(input: Partial<OperationJobRow>): OperationJobRow {
     runAfter: now,
     startedAt: now,
     status: "running",
-    type: "skill_sync",
+    type: "notification_in_app",
     updatedAt: now,
     ...input,
   };
@@ -235,7 +235,7 @@ function createOperation(input: Partial<OperationRow>): OperationRow {
     summary: "Operation",
     targetId: null,
     targetType: null,
-    type: "skill_sync",
+    type: "notification_delivery",
     updatedAt: now,
     ...input,
   };
