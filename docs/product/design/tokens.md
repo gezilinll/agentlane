@@ -34,7 +34,7 @@ Business pages should use semantic or component tokens.
 - Color: background, rail, surface, text, muted, line, action, accent, success, warning, danger, info.
 - Border: hairline, focus ring, disabled border.
 - Radius: small, medium, large, and full-pill.
-- Shadow: soft surface shadow, floating drawer shadow, focus shadow.
+- Shadow: subtle surface shadow, soft elevated shadow, floating drawer shadow, focus shadow.
 - Spacing: 4px base scale.
 - Motion: duration, easing, reduced-motion fallback.
 - Z-index: header, utility bar, drawer, popover, modal, toast.
