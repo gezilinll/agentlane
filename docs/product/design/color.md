@@ -17,6 +17,7 @@ Lorume uses a cool, low-noise palette. Color serves hierarchy, state, and produc
 | Hairline | `--lorume-color-line` | `#dce5ee` |
 | Strong line | `--lorume-color-line-strong` | `#b8c5d3` |
 | Primary action | `--lorume-color-action` | `#245bff` |
+| Primary action bright | `--lorume-color-action-bright` | `#3d73ff` |
 | Primary action dark | `--lorume-color-action-dark` | `#163fc2` |
 | Operational signal | `--lorume-color-accent` | `#12a7a2` |
 | Success | `--lorume-color-success` | `#1f9d68` |
