@@ -2139,8 +2139,8 @@ button.tableRow:hover,
 .skillRegistryGrid {
   align-items: start;
   display: grid;
-  gap: 16px;
-  grid-template-columns: minmax(260px, 0.8fr) minmax(280px, 0.9fr) minmax(360px, 1.15fr);
+  gap: 18px;
+  grid-template-columns: minmax(260px, 0.78fr) minmax(300px, 0.88fr) minmax(380px, 1.15fr);
   min-width: 0;
 }
 
@@ -2179,28 +2179,35 @@ button.tableRow:hover,
 
 .skillForm {
   display: grid;
-  gap: 12px;
-  padding: 14px;
+  gap: 14px;
+  padding: 16px;
+}
+
+.skillForm .primaryButton {
+  width: 100%;
 }
 
 .skillStatusMessage,
 .skillErrorMessage {
-  border: var(--lorume-border-thin);
+  border: var(--lorume-border-hairline);
+  border-radius: var(--lorume-radius-md);
   font-family: var(--font-sans);
   font-size: 13px;
   line-height: 1.45;
   margin: 0;
-  padding: 10px;
+  padding: 10px 12px;
 }
 
 .skillStatusMessage {
-  background: var(--lorume-color-paper);
-  color: var(--lorume-color-green);
+  background: color-mix(in srgb, var(--lorume-color-success) 8%, var(--lorume-color-paper));
+  border-color: color-mix(in srgb, var(--lorume-color-success) 20%, var(--lorume-color-line));
+  color: var(--lorume-color-success);
 }
 
 .skillErrorMessage {
-  background: var(--lorume-color-paper);
-  color: var(--lorume-color-red);
+  background: color-mix(in srgb, var(--lorume-color-danger) 8%, var(--lorume-color-paper));
+  border-color: color-mix(in srgb, var(--lorume-color-danger) 20%, var(--lorume-color-line));
+  color: var(--lorume-color-danger);
 }
 
 .inviteLinkBlock {
@@ -2232,25 +2239,32 @@ button.tableRow:hover,
 .skillList,
 .skillActivityList {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   padding: 14px;
 }
 
 .skillListItem {
-  background: var(--lorume-color-paper);
-  border: var(--lorume-border-thin);
+  background: color-mix(in srgb, var(--lorume-color-paper) 86%, var(--lorume-color-bg));
+  border: var(--lorume-border-hairline);
+  border-radius: var(--lorume-radius-md);
   color: var(--lorume-color-ink);
   display: grid;
   gap: 8px;
   padding: 12px;
   text-align: left;
+  transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
   width: 100%;
 }
 
 .skillListItem:hover,
 .skillListItemActive {
-  background: var(--lorume-color-surface-hover);
-  box-shadow: var(--lorume-shadow-small);
+  background: var(--lorume-color-paper);
+  border-color: color-mix(in srgb, var(--lorume-color-action) 28%, var(--lorume-color-line));
+  box-shadow: var(--lorume-shadow-subtle);
+}
+
+.skillListItem:hover {
+  transform: translateY(-1px);
 }
 
 .skillListItem strong,
@@ -2262,7 +2276,9 @@ button.tableRow:hover,
 
 .skillListItem strong {
   font-family: var(--font-sans);
-  font-size: 16px;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.35;
 }
 
 .skillListItem > span:not(.channelList) {
@@ -2272,7 +2288,9 @@ button.tableRow:hover,
 }
 
 .skillActivityItem {
-  border: var(--lorume-border-thin);
+  background: color-mix(in srgb, var(--lorume-color-paper) 86%, var(--lorume-color-bg));
+  border: var(--lorume-border-hairline);
+  border-radius: var(--lorume-radius-md);
   display: grid;
   gap: 6px;
   padding: 12px;
@@ -2294,7 +2312,7 @@ button.tableRow:hover,
   display: inline-flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-left: 8px;
+  margin: 6px 0 0;
 }
 
 .skillEditor {
@@ -2317,8 +2335,9 @@ button.tableRow:hover,
 }
 
 .skillEditorPreview {
-  background: var(--lorume-color-field);
-  border: var(--lorume-border-thin);
+  background: color-mix(in srgb, var(--lorume-color-surface) 82%, var(--lorume-color-bg));
+  border: var(--lorume-border-hairline);
+  border-radius: var(--lorume-radius-md);
   display: grid;
   gap: 8px;
   max-height: 360px;
@@ -2359,11 +2378,13 @@ button.tableRow:hover,
 }
 
 .skillTargetSet {
-  border: var(--lorume-border-thin);
+  background: color-mix(in srgb, var(--lorume-color-surface) 82%, var(--lorume-color-bg));
+  border: var(--lorume-border-hairline);
+  border-radius: var(--lorume-radius-md);
   display: grid;
-  gap: 6px;
+  gap: 8px;
   margin-top: 12px;
-  padding: 10px;
+  padding: 12px;
 }
 
 .skillTargetSet h4 {
