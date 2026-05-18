@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ConsoleUtilityDrawer } from "./ConsoleUtilityDrawer";
+import { ConsoleUtilityBar, ConsoleUtilityDrawer } from "./ConsoleUtilityDrawer";
 
 const originalFetch = globalThis.fetch;
 
@@ -11,6 +11,30 @@ afterEach(() => {
 });
 
 describe("ConsoleUtilityDrawer", () => {
+  it("shows top-right utility buttons with API-backed counts", async () => {
+    globalThis.fetch = vi.fn(async (input) => {
+      const url = input.toString();
+      if (url.includes("/api/operations")) {
+        return jsonResponse({
+          operations: [
+            operationItem({ id: "op_1", status: "running" }),
+            operationItem({ id: "op_2", status: "requires_manual_step" }),
+            operationItem({ id: "op_3", status: "succeeded" }),
+          ],
+        });
+      }
+      if (url.includes("/api/notifications")) {
+        return jsonResponse({ threads: [notificationThread({ isRead: false }), notificationThread({ id: "thread_2", isRead: true })] });
+      }
+      return jsonResponse({ error: "unexpected request" }, 500);
+    }) as unknown as typeof fetch;
+
+    render(<ConsoleUtilityBar activeView={null} organizationId="org_1" onOpen={vi.fn()} />);
+
+    expect(await screen.findByRole("button", { name: "任务 2" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "通知 1" })).toBeInTheDocument();
+  });
+
   it("shows operations as a right-side drawer with selectable details", async () => {
     globalThis.fetch = vi.fn(async (input) => {
       const url = input.toString();
@@ -42,8 +66,10 @@ describe("ConsoleUtilityDrawer", () => {
       />,
     );
 
-    const drawer = screen.getByRole("dialog", { name: "任务中心" });
-    expect(within(drawer).getByRole("heading", { name: "任务中心" })).toBeInTheDocument();
+    const drawer = screen.getByRole("dialog", { name: "任务" });
+    expect(screen.queryByRole("tablist", { name: "工具切换" })).not.toBeInTheDocument();
+    expect(drawer).toHaveClass("utilityDrawer");
+    expect(within(drawer).getByRole("heading", { name: "任务" })).toBeInTheDocument();
     await userEvent.click(await within(drawer).findByRole("button", { name: /同步 Skill：Review/ }));
 
     expect(within(drawer).getByRole("heading", { name: "同步 Skill：Review" })).toBeInTheDocument();
@@ -75,7 +101,7 @@ describe("ConsoleUtilityDrawer", () => {
       />,
     );
 
-    const drawer = screen.getByRole("dialog", { name: "通知中心" });
+    const drawer = screen.getByRole("dialog", { name: "通知" });
     const notification = await within(drawer).findByRole("button", { name: /Skill 发布已排队/ });
     expect(within(notification).getByText("未读")).toBeInTheDocument();
 
@@ -89,6 +115,22 @@ describe("ConsoleUtilityDrawer", () => {
     expect(within(drawer).getByRole("heading", { name: "Skill 发布已排队" })).toBeInTheDocument();
   });
 });
+
+function operationItem(overrides: Record<string, unknown> = {}) {
+  return {
+    createdAt: "2026-05-14T08:20:00.000Z",
+    id: "op_1",
+    resourceId: "skill_1",
+    resourceType: "skill",
+    status: "queued",
+    summary: "同步 Skill：Review",
+    targetId: "agent_main",
+    targetType: "agent",
+    type: "skill_sync",
+    updatedAt: "2026-05-14T08:21:00.000Z",
+    ...overrides,
+  };
+}
 
 function notificationThread(overrides: Record<string, unknown> = {}) {
   return {

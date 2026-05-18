@@ -143,8 +143,8 @@ describe("Console shell", () => {
     expect(within(nav).getByRole("button", { name: "组织设置" })).toBeInTheDocument();
     expect(within(nav).queryByRole("button", { name: "任务中心" })).not.toBeInTheDocument();
     expect(within(nav).queryByRole("button", { name: "通知中心" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "打开任务中心" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "打开通知中心" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "任务 0" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "通知 0" })).toBeInTheDocument();
 
     await user.click(within(nav).getByRole("button", { name: "Runs" }));
 
@@ -157,18 +157,18 @@ describe("Console shell", () => {
     expect(screen.getByRole("heading", { name: "Skill 管理" })).toBeInTheDocument();
     expect(screen.getByText("请选择组织后管理 Skill。")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "打开任务中心" }));
+    await user.click(screen.getByRole("button", { name: "任务 0" }));
     expect(window.location.pathname).toBe("/operations");
-    const operationsDrawer = screen.getByRole("dialog", { name: "任务中心" });
+    const operationsDrawer = screen.getByRole("dialog", { name: "任务" });
     expect(within(operationsDrawer).getByText("请选择组织后查看任务。")).toBeInTheDocument();
-    await user.click(within(operationsDrawer).getByRole("button", { name: "关闭任务中心" }));
+    await user.click(within(operationsDrawer).getByRole("button", { name: "关闭任务" }));
     expect(window.location.pathname).toBe("/skills");
 
-    await user.click(screen.getByRole("button", { name: "打开通知中心" }));
+    await user.click(screen.getByRole("button", { name: "通知 0" }));
     expect(window.location.pathname).toBe("/notifications");
-    const notificationsDrawer = screen.getByRole("dialog", { name: "通知中心" });
+    const notificationsDrawer = screen.getByRole("dialog", { name: "通知" });
     expect(within(notificationsDrawer).getByText("请选择组织后查看通知。")).toBeInTheDocument();
-    await user.click(within(notificationsDrawer).getByRole("button", { name: "关闭通知中心" }));
+    await user.click(within(notificationsDrawer).getByRole("button", { name: "关闭通知" }));
     expect(window.location.pathname).toBe("/skills");
 
     await user.click(within(nav).getByRole("button", { name: "组织设置" }));

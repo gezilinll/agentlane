@@ -10,7 +10,6 @@ import { RuntimeFleetPage } from "./runtime/RuntimeFleetPage";
 import { RuntimeWorkBoardPage } from "./runtime/RuntimeWorkBoardPage";
 import { OrganizationSettingsPage } from "./settings/OrganizationSettingsPage";
 import { SkillRegistryPage } from "./skills/SkillRegistryPage";
-import { PixelDecorations } from "./ui/PixelDecorations";
 import { PixelIcon, type PixelIconName } from "./ui/PixelIcon";
 import { PixelLogo } from "./ui/PixelLogo";
 
@@ -121,7 +120,6 @@ function ConsoleApp() {
 
   return (
     <main className="appShell">
-      <PixelDecorations variant="console" />
       <aside className="sideNav" aria-label="主导航">
         <div className="brandMark">
           <PixelLogo />
@@ -147,7 +145,7 @@ function ConsoleApp() {
         </nav>
         <AuthSessionActions />
       </aside>
-      <ConsoleUtilityBar activeView={utilityView} onOpen={openUtility} />
+      <ConsoleUtilityBar activeView={utilityView} organizationId={organizationId} onOpen={openUtility} />
 
       {activePage === "runtime" ? (
         <RuntimeFleetPage onOpenSkillTarget={navigateToSkillTarget} />
