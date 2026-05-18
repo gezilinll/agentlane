@@ -11,7 +11,7 @@ export function PixelPanel({ children, className = "", title }: PixelPanelProps)
     <section
       className={`pixel-panel${className ? ` ${className}` : ""}`}
       aria-label={title}
-      data-panel-style="cut-corner"
+      data-panel-style="precision-surface"
       role={title ? "group" : undefined}
     >
       <div className="pixel-panel__inner">
