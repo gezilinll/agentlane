@@ -215,11 +215,12 @@ export function RuntimeFleetPage({ onOpenSkillTarget }: RuntimeFleetPageProps = 
       });
       const refreshBody = (await refreshResponse.json()) as {
         commandId?: string;
+        error?: string;
         message?: string;
         status?: string;
       };
       if (!refreshResponse.ok || !refreshBody.commandId) {
-        throw new Error(refreshBody.message || `刷新请求失败: HTTP ${refreshResponse.status}`);
+        throw new Error(formatDeviceRefreshError(refreshResponse.status, refreshBody));
       }
 
       setRefreshState({ status: "running", message: "刷新命令已下发" });
@@ -352,6 +353,19 @@ export function RuntimeFleetPage({ onOpenSkillTarget }: RuntimeFleetPageProps = 
       </section>
     </section>
   );
+}
+
+function formatDeviceRefreshError(
+  status: number,
+  body: {
+    error?: string;
+    message?: string;
+  },
+): string {
+  if (status === 409 && body.error === "device_not_connected") {
+    return "设备控制通道未连接，已保留最近一次采集数据。请确认设备 Collector 在线后再刷新。";
+  }
+  return body.message || `刷新请求失败: HTTP ${status}`;
 }
 
 async function waitForRemoteRefreshCommand(deviceId: string, commandId: string): Promise<void> {

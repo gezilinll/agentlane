@@ -72,8 +72,16 @@ export function createSkillHttpApiHandler(options: SkillHttpApiHandlerOptions): 
       const membership = readOrganizationMembership(session, organizationId);
       if (!ensureOrganizationMember(response, organizationId, membership)) return;
       const deviceId = requestUrl.searchParams.get("deviceId") ?? undefined;
+      const runtimeId = requestUrl.searchParams.get("runtimeId") ?? undefined;
+      const agentId = requestUrl.searchParams.get("agentId") ?? undefined;
+      const targetId = requestUrl.searchParams.get("targetId") ?? undefined;
+      const targetType = readSkillDiscoveryTargetType(requestUrl.searchParams.get("targetType"));
+      if (targetType === "invalid") {
+        sendJson(response, 400, { error: "invalid_target_type" });
+        return;
+      }
       const skillDiscoveries = options.runtimeStore
-        ? await options.runtimeStore.listSkillDiscoveries({ deviceId })
+        ? await options.runtimeStore.listSkillDiscoveries({ agentId, deviceId, runtimeId, targetId, targetType })
         : [];
       sendJson(response, 200, { skillDiscoveries });
       return;
@@ -446,6 +454,12 @@ function readRawString(body: unknown, key: string): string {
   if (!body || typeof body !== "object") return "";
   const value = (body as Record<string, unknown>)[key];
   return typeof value === "string" ? value : "";
+}
+
+function readSkillDiscoveryTargetType(value: string | null): "device" | "runtime" | "agent" | "invalid" | undefined {
+  if (!value) return undefined;
+  if (value === "device" || value === "runtime" || value === "agent") return value;
+  return "invalid";
 }
 
 function readJsonBody(request: IncomingMessage): Promise<unknown> {

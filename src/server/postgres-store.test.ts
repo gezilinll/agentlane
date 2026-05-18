@@ -134,6 +134,19 @@ compatibility: openclaw
             targetType: "agent",
           }),
         ]);
+        await expect(store.listSkillDiscoveries({
+          targetId: "fixture-mac:openclaw:gateway-18789:agent:main",
+          targetType: "agent",
+        })).resolves.toEqual([
+          expect.objectContaining({
+            id: "fixture-mac:openclaw:gateway-18789:agent:main:skill:review",
+            name: "Review Skill",
+          }),
+        ]);
+        await expect(store.listSkillDiscoveries({
+          targetId: "fixture-mac:openclaw:gateway-18789:agent:missing",
+          targetType: "agent",
+        })).resolves.toEqual([]);
         await expect(store.readEntityCounts()).resolves.toMatchObject({
           skillDiscoveries: 1,
         });

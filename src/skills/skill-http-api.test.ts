@@ -418,6 +418,14 @@ compatibility: openclaw
 
         const listResponse = await fetch(`${baseUrl}/api/skill-discoveries?organizationId=${encodeURIComponent(organization.id)}`);
         const listPayload = await listResponse.json();
+        const targetListResponse = await fetch(
+          `${baseUrl}/api/skill-discoveries?organizationId=${encodeURIComponent(organization.id)}&targetType=agent&targetId=${encodeURIComponent("fixture-mac:openclaw:gateway-18789:agent:main")}`,
+        );
+        const targetListPayload = await targetListResponse.json();
+        const unmatchedTargetListResponse = await fetch(
+          `${baseUrl}/api/skill-discoveries?organizationId=${encodeURIComponent(organization.id)}&targetType=agent&targetId=${encodeURIComponent("fixture-mac:openclaw:gateway-18789:agent:missing")}`,
+        );
+        const unmatchedTargetListPayload = await unmatchedTargetListResponse.json();
         const promoteResponse = await postJson(
           `${baseUrl}/api/skill-discoveries/${encodeURIComponent(listPayload.skillDiscoveries[0].id)}/promote`,
           { organizationId: organization.id },
@@ -435,6 +443,17 @@ compatibility: openclaw
             }),
           ],
         });
+        expect(targetListResponse.status).toBe(200);
+        expect(targetListPayload).toMatchObject({
+          skillDiscoveries: [
+            expect.objectContaining({
+              name: "Runtime Review",
+              targetId: "fixture-mac:openclaw:gateway-18789:agent:main",
+            }),
+          ],
+        });
+        expect(unmatchedTargetListResponse.status).toBe(200);
+        expect(unmatchedTargetListPayload).toMatchObject({ skillDiscoveries: [] });
         expect(promoteResponse.status).toBe(201);
         expect(promoted).toMatchObject({
           skill: expect.objectContaining({

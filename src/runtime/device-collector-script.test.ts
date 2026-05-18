@@ -94,6 +94,48 @@ description: Review runtime changes.
     });
   });
 
+  it("discovers OpenClaw workspace Skill directories by default", () => {
+    const fakeHome = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-workspace-home-"));
+    const configDir = mkdtempSync(path.join(tmpdir(), "lorume-openclaw-workspace-config-"));
+    const openclawDir = path.join(fakeHome, ".openclaw");
+    const skillDir = path.join(openclawDir, "workspace", "skills", "runtime-review");
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(path.join(openclawDir, "openclaw.json"), JSON.stringify({
+      agents: { list: [{ id: "main", default: true }] },
+      bindings: [{ agentId: "main", match: { channel: "dingtalk", accountId: "default" } }],
+    }));
+    writeFileSync(path.join(skillDir, "SKILL.md"), `---
+name: Runtime Review
+description: Review runtime changes.
+---
+
+# Runtime Review
+`);
+    const configPath = path.join(configDir, "config.json");
+    writeFileSync(configPath, JSON.stringify({ deviceId: "skill-device" }));
+
+    const output = execFileSync(process.execPath, [
+      collectorScript,
+      "--once",
+      "--config",
+      configPath,
+      "--print-only",
+    ], {
+      encoding: "utf8",
+      env: { ...process.env, LORUME_COLLECTOR_HOME: fakeHome, PATH: "/usr/bin:/bin" },
+    });
+
+    const snapshot = JSON.parse(output);
+
+    expect(snapshot.skillDiscoveries).toContainEqual(expect.objectContaining({
+      source: "openclaw",
+      targetType: "agent",
+      targetId: "skill-device:openclaw:gateway-local:agent:main",
+      name: "Runtime Review",
+      skillPath: skillDir,
+    }));
+  });
+
   it("installs the collector from a local source path and runs a once check", () => {
     const installDir = mkdtempSync(path.join(tmpdir(), "lorume-collector-"));
 

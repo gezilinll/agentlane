@@ -215,6 +215,7 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
   const [notifications, setNotifications] = useState<NotificationThread[]>([]);
   const [skillDiscoveries, setSkillDiscoveries] = useState<SkillDiscovery[]>([]);
   const [targets, setTargets] = useState<SkillTargetOption[]>([]);
+  const [targetSkillDiscoveries, setTargetSkillDiscoveries] = useState<SkillDiscovery[]>([]);
   const [targetSkillSet, setTargetSkillSet] = useState<TargetSkillSetEntry[]>([]);
   const [targetSkillSetTarget, setTargetSkillSetTarget] = useState<TargetSkillSetResponse["target"] | null>(null);
   const [sourceType, setSourceType] = useState("markdown");
@@ -321,16 +322,21 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
 
   useEffect(() => {
     if (!organizationId || !selectedTargetValue) {
+      setTargetSkillDiscoveries([]);
       setTargetSkillSet([]);
       setTargetSkillSetTarget(null);
       return;
     }
     let cancelled = false;
     async function load() {
-      const result = await loadTargetSkillSet(selectedTargetValue);
+      const [result, discoveries] = await Promise.all([
+        loadTargetSkillSet(selectedTargetValue),
+        loadTargetSkillDiscoveries(selectedTargetValue),
+      ]);
       if (cancelled) return;
       setTargetSkillSet(result?.targetSkillSet ?? []);
       setTargetSkillSetTarget(result?.target ?? null);
+      setTargetSkillDiscoveries(discoveries);
     }
     void load();
     return () => {
@@ -355,6 +361,21 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
     }
   }
 
+  async function loadTargetSkillDiscoveries(targetValue = selectedTargetValue): Promise<SkillDiscovery[]> {
+    if (!organizationId || !targetValue) return [];
+    const selectedTarget = parseTargetOptionValue(targetValue);
+    if (!selectedTarget) return [];
+    try {
+      const payload = await fetchJson<{ skillDiscoveries?: SkillDiscovery[] }>(
+        `/api/skill-discoveries?organizationId=${encodeURIComponent(organizationId)}&targetType=${selectedTarget.type}&targetId=${encodeURIComponent(selectedTarget.id)}`,
+      );
+      return payload.skillDiscoveries ?? [];
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "读取目标本地 Skill 失败");
+      return [];
+    }
+  }
+
   async function refreshActivity() {
     if (!organizationId) return;
     const [operationsPayload, notificationsPayload, assignmentsPayload, approvalsPayload, discoveriesPayload] = await Promise.all([
@@ -374,6 +395,7 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
       setTargetSkillSet(nextTargetSkillSet.targetSkillSet ?? []);
       setTargetSkillSetTarget(nextTargetSkillSet.target ?? null);
     }
+    setTargetSkillDiscoveries(await loadTargetSkillDiscoveries());
   }
 
   async function handleSaveDraftVersion() {
@@ -812,6 +834,7 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
           operations={operations}
           selectedTargetValue={selectedTargetValue}
           skills={skills}
+          targetSkillDiscoveries={targetSkillDiscoveries}
           targetSkillSet={targetSkillSet}
           targetSkillSetTarget={targetSkillSetTarget}
           targets={targets}
@@ -822,6 +845,7 @@ export function SkillRegistryPage({ organizationId }: { organizationId?: string 
           onEditorChange={setEditorContent}
           onEditorModeChange={setEditorMode}
           onPublish={() => void handlePublish()}
+          onPromoteDiscovery={(discovery) => void handlePromoteDiscovery(discovery)}
           onSaveDraftVersion={() => void handleSaveDraftVersion()}
           onSyncAssignment={(assignment) => void handleSyncAssignment(assignment)}
           onTargetChange={setSelectedTargetValue}
@@ -851,6 +875,7 @@ function SkillDetailPanel({
   onEditorChange,
   onEditorModeChange,
   onPublish,
+  onPromoteDiscovery,
   onSaveDraftVersion,
   onSyncAssignment,
   onTargetChange,
@@ -858,6 +883,7 @@ function SkillDetailPanel({
   operations,
   selectedTargetValue,
   skills,
+  targetSkillDiscoveries,
   targetSkillSet,
   targetSkillSetTarget,
   targets,
@@ -875,6 +901,7 @@ function SkillDetailPanel({
   operations: Operation[];
   selectedTargetValue: string;
   skills: SkillSummary[];
+  targetSkillDiscoveries: SkillDiscovery[];
   targetSkillSet: TargetSkillSetEntry[];
   targetSkillSetTarget: TargetSkillSetResponse["target"] | null;
   targets: SkillTargetOption[];
@@ -885,6 +912,7 @@ function SkillDetailPanel({
   onEditorChange: (value: string) => void;
   onEditorModeChange: (mode: "source" | "preview") => void;
   onPublish: () => void;
+  onPromoteDiscovery: (discovery: SkillDiscovery) => void;
   onSaveDraftVersion: () => void;
   onSyncAssignment: (assignment: SkillAssignment) => void;
   onTargetChange: (value: string) => void;
@@ -1051,6 +1079,30 @@ function SkillDetailPanel({
                   <li key={entry.id}>
                     {skillNameById.get(entry.skillId) ?? entry.skillId} ·{" "}
                     {targetResolutionStateLabels[entry.resolutionState] ?? entry.resolutionState}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <h4>目标本地 Skill</h4>
+            {targetSkillDiscoveries.length === 0 ? (
+              <p className="mutedText">当前目标暂无设备发现 Skill。</p>
+            ) : (
+              <ul>
+                {targetSkillDiscoveries.map((discovery) => (
+                  <li key={discovery.id}>
+                    <span>
+                      {discovery.name} · {discovery.source}
+                    </span>
+                    <span className="skillInlineActions">
+                      <button
+                        className="secondaryButton compactButton"
+                        disabled={isSubmitting}
+                        type="button"
+                        onClick={() => onPromoteDiscovery(discovery)}
+                      >
+                        提升为组织 Skill
+                      </button>
+                    </span>
                   </li>
                 ))}
               </ul>

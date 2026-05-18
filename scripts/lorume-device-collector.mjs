@@ -618,6 +618,7 @@ function defaultOpenClawSkillDiscoveryTargets(inventory) {
     const sourceRef = agent.sourceRefs?.find((ref) => ref.source === "openclaw");
     if (!sourceRef) continue;
     for (const root of [
+      path.join(homeDir(), ".openclaw", "workspace", "skills"),
       path.join(homeDir(), ".openclaw", "agents", sourceRef.externalId, "skills"),
       path.join(homeDir(), ".openclaw", "skills", sourceRef.externalId),
     ]) {

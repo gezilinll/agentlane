@@ -577,10 +577,17 @@ describe("SkillRegistryPage", () => {
     await user.selectOptions(screen.getByLabelText("分配目标"), screen.getByRole("option", { name: "Agent · main" }));
 
     expect(await screen.findByText("目标 Skill Set")).toBeInTheDocument();
+    expect(await screen.findByText("目标本地 Skill")).toBeInTheDocument();
+    expect(screen.getAllByText("Review Skill").length).toBeGreaterThan(0);
     expect(screen.getByText("Cost Review · 待同步")).toBeInTheDocument();
     expect(calls.some((call) => (
       call.url.includes("/api/skill-targets/agent/gezilinll-claw%3Aopenclaw%3Agateway-local%3Aagent%3Amain/skill-set")
       && call.url.includes("organizationId=org_1")
+    ))).toBe(true);
+    expect(calls.some((call) => (
+      call.url.includes("/api/skill-discoveries")
+      && call.url.includes("targetType=agent")
+      && call.url.includes(`targetId=${encodeURIComponent("gezilinll-claw:openclaw:gateway-local:agent:main")}`)
     ))).toBe(true);
   });
 
@@ -597,10 +604,17 @@ describe("SkillRegistryPage", () => {
 
     await screen.findByRole("heading", { name: "Cost Review" });
     expect(await screen.findByText("目标 Skill Set")).toBeInTheDocument();
+    expect(await screen.findByText("目标本地 Skill")).toBeInTheDocument();
+    expect(screen.getAllByText("Review Skill").length).toBeGreaterThan(0);
     expect(screen.getByText("Cost Review · 待同步")).toBeInTheDocument();
     expect(calls.some((call) => (
       call.url.includes("/api/skill-targets/agent/gezilinll-claw%3Aopenclaw%3Agateway-local%3Aagent%3Amain/skill-set")
       && call.url.includes("organizationId=org_1")
+    ))).toBe(true);
+    expect(calls.some((call) => (
+      call.url.includes("/api/skill-discoveries")
+      && call.url.includes("targetType=agent")
+      && call.url.includes(`targetId=${encodeURIComponent(targetId)}`)
     ))).toBe(true);
   });
 

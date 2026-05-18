@@ -9,6 +9,7 @@ import type {
   LorumeRuntime,
   ManagedRuntimeAgent,
   RuntimeSkillDiscovery,
+  RuntimeSkillDiscoveryTargetType,
   RuntimeDevice,
   RuntimeInventorySnapshot,
 } from "../runtime/runtime-normalize";
@@ -125,6 +126,20 @@ export interface PostgresRuntimeWorkItemResult {
 /** Persisted target Skill package discovered by a device collector. */
 export interface PostgresSkillDiscoveryRow extends RuntimeSkillDiscovery {}
 
+/** Backend query filters for device-discovered Skill packages. */
+export interface PostgresSkillDiscoveryFilters {
+  /** Device id that reported the Skill package. */
+  deviceId?: string;
+  /** Runtime id associated with the discovered package. */
+  runtimeId?: string;
+  /** Agent id associated with the discovered package. */
+  agentId?: string;
+  /** Lorume target type that owns the discovered package on the device. */
+  targetType?: RuntimeSkillDiscoveryTargetType;
+  /** Lorume target id that owns the discovered package on the device. */
+  targetId?: string;
+}
+
 /** Postgres-backed repository for normalized runtime inventory and work-state snapshots. */
 export interface PostgresStore {
   /** Upsert a normalized inventory snapshot and record collector ingestion metadata. */
@@ -144,7 +159,7 @@ export interface PostgresStore {
   /** Query normalized work items from Postgres. */
   listRuntimeWorkItems: (filters?: PostgresRuntimeWorkItemFilters) => Promise<PostgresRuntimeWorkItemResult>;
   /** List Skill packages discovered by registered device/runtime/agent targets. */
-  listSkillDiscoveries: (filters?: { deviceId?: string }) => Promise<PostgresSkillDiscoveryRow[]>;
+  listSkillDiscoveries: (filters?: PostgresSkillDiscoveryFilters) => Promise<PostgresSkillDiscoveryRow[]>;
   /** Read one discovered target Skill package. */
   readSkillDiscovery: (id: string) => Promise<PostgresSkillDiscoveryRow | null>;
   /** Read one stored work item row. */
@@ -404,8 +419,19 @@ export function createPostgresStore(options: PostgresStoreOptions = {}): Postgre
     },
     async listSkillDiscoveries(filters = {}) {
       const values: unknown[] = [];
-      const where = filters.deviceId ? "WHERE device_id = $1" : "";
-      if (filters.deviceId) values.push(filters.deviceId);
+      const clauses: string[] = [];
+      for (const [column, value] of [
+        ["device_id", filters.deviceId],
+        ["runtime_id", filters.runtimeId],
+        ["agent_id", filters.agentId],
+        ["target_type", filters.targetType],
+        ["target_id", filters.targetId],
+      ] as const) {
+        if (!value) continue;
+        values.push(value);
+        clauses.push(`${column} = $${values.length}`);
+      }
+      const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
       const result = await pool.query<RuntimeSkillDiscoveryQueryRow>(`
         SELECT
           id,

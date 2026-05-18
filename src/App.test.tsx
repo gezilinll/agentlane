@@ -1319,6 +1319,6 @@ describe("Console shell", () => {
     expect((await screen.findAllByText("Fixture Mac")).length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: "请求设备刷新" }));
 
-    expect(await screen.findByText("device is not connected: fixture-mac")).toBeInTheDocument();
+    expect(await screen.findByText("设备控制通道未连接，已保留最近一次采集数据。请确认设备 Collector 在线后再刷新。")).toBeInTheDocument();
   });
 });
