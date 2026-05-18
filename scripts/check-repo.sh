@@ -29,6 +29,7 @@ required_paths=(
   "docs/product/runtime-work-state-probe.md"
   "docs/product/runtime-listening-acceptance-spec.md"
   "docs/product/backend-service-spec.md"
+  "docs/product/cli-device-capability-spec.md"
   "docs/product/auth-and-access-spec.md"
   "playwright.config.ts"
   "e2e/db.ts"
@@ -51,6 +52,7 @@ required_paths=(
   "scripts/check-commit-message.mjs"
   "scripts/check-commit-message.test.mjs"
   "scripts/dev-e2e.ts"
+  "scripts/lorume.mjs"
   "scripts/lorume-device-collector.mjs"
   "scripts/install-device-collector.sh"
   "fixtures/runtime/collector-snapshot.sample.json"
@@ -104,6 +106,7 @@ markdown_files = [
     Path("docs/product/runtime-work-state-probe.md"),
     Path("docs/product/runtime-listening-acceptance-spec.md"),
     Path("docs/product/backend-service-spec.md"),
+    Path("docs/product/cli-device-capability-spec.md"),
     Path("docs/product/auth-and-access-spec.md"),
 ]
 

@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "lorume": "scripts/lorume.mjs"
+  },
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "dev:backend": "tsx src/backend/backend-server.ts",
@@ -18,6 +21,7 @@
     "check": "npm run verify",
     "check:full": "npm run verify",
     "check:commit-message": "vitest run scripts/check-commit-message.test.mjs",
+    "check:cli": "vitest run src/cli",
     "check:repo": "./scripts/check-repo.sh",
     "check:backend": "vitest run src/auth/auth-crypto.test.ts src/auth/auth-http-api.test.ts src/backend src/server src/operations src/notifications src/runtime/device-collector-script.test.ts",
     "check:backend:standalone": "vitest run src/backend",

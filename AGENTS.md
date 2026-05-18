@@ -16,6 +16,7 @@ Current source of truth:
 - `docs/product/runtime-work-state-probe.md`: platform probe matrix for work items, conversations, and runtime executions.
 - `docs/product/runtime-listening-acceptance-spec.md`: TinySpec for whether OpenClaw, Multica, and Slock listening is sufficient for Runs and future task management.
 - `docs/product/backend-service-spec.md`: TinySpec for the local-first formal backend service, Postgres persistence, collector ingestion, and backend query APIs.
+- `docs/product/cli-device-capability-spec.md`: current rules for the deterministic local `lorume` CLI device capability atoms.
 - `docs/product/auth-and-access-spec.md`: TinySpec for organization-based auth/access, email-code login, invitations, sessions, and device tokens.
 - `docs/product/operation-job-runner-spec.md`: product and engineering spec for Postgres-backed asynchronous Operations, executable Jobs, retry/lease semantics, and user-visible status.
 - `docs/product/notification-spec.md`: product spec for in-app and email notifications, recipient scope, dedupe, rate limits, and recovery notifications.
@@ -49,6 +50,7 @@ Current source of truth:
 - `scripts/db-migrate.mjs`: local Postgres migration runner.
 - `scripts/check-deploy-config.mjs`: production-like deploy config smoke check.
 - `scripts/smoke-production.mjs`: deployed environment smoke check for health, readiness, Runtime Fleet, Runs, and collection health.
+- `scripts/lorume.mjs`: deterministic local CLI for device identity, snapshot-backed runtime listing, authorized connector status, and safe explicit file copy.
 - `Dockerfile.backend`, `Dockerfile.frontend`, `nginx.lorume.conf`, `docker-compose.prod-like.yml`: production-like local deployment shape before ECS.
 - `scripts/lorume-device-collector.mjs`: device-side collector / Device Agent script.
 - `scripts/install-device-collector.sh`: local-path collector installer for development and remote-device testing.
@@ -101,6 +103,7 @@ Current spec and harness mapping:
 | Runtime work state model | `src/runtime/runtime-work-state.ts`, `docs/product/runtime-work-state-probe.md` | `src/runtime/runtime-work-state.test.ts`, `npm run check:runtime` |
 | Runtime work state adapters and board query | `src/runtime/runtime-work-state-adapters.ts`, `src/runtime/runtime-work-state-query.ts`, `docs/product/runtime-work-state-probe.md` | `src/runtime/runtime-work-state-adapters.test.ts`, `src/runtime/runtime-work-state-query.test.ts`, `npm run check:runtime` |
 | Runtime work state collector | `scripts/lorume-device-collector.mjs`, `docs/product/runtime-work-state-probe.md` | `src/runtime/device-collector-script.test.ts`, `npm run check:runtime`, `npm run check:backend` |
+| CLI device capability atoms | `docs/product/cli-device-capability-spec.md`, `scripts/lorume.mjs` | `src/cli/lorume-cli.test.ts`, `npm run check:cli`, `npm run check:runtime`, `npm run check:backend`, `npm run check:quick` |
 | Runtime listening acceptance | `docs/product/runtime-listening-acceptance-spec.md`, `src/runtime/runtime-listening-acceptance.ts`, `docs/product/runtime-work-state-probe.md` | `src/runtime/runtime-listening-acceptance.test.ts`, `src/runtime/runtime-work-state-adapters.test.ts`, `npm run check:runtime` |
 | Runs / Work Board page | `src/runtime/RuntimeWorkBoardPage.tsx`, `src/runtime/runtime-work-query-api.ts`, `src/runtime/runtime-data-source.ts`, `docs/product/runtime-work-state-probe.md` | `src/App.test.tsx`, `src/runtime/runtime-work-query-api.test.ts`, `src/runtime/runtime-data-source.test.ts`, `e2e/runtime-work-board.spec.ts`, `npm run check:quick`, `npm run check:e2e` |
 | Runtime Fleet page | `docs/product/runtime-fleet-page-spec.md`, `src/runtime/runtime-inventory-query.ts`, `src/runtime/runtime-collection-health.ts`, `src/runtime/RuntimeFleetPage.tsx` | `src/runtime/runtime-inventory-query.test.ts`, `src/runtime/runtime-collection-health.test.ts`, `src/App.test.tsx`, `e2e/runtime-fleet.spec.ts`, `npm run check:quick`, `npm run check:e2e` |
@@ -115,7 +118,7 @@ Current spec and harness mapping:
 | Public entry, routing, and navigation | `src/HomePage.tsx`, `src/App.tsx`, `docs/product/ui-design.md` | `src/App.test.tsx`, `npm run check:quick`, `npm run check:e2e` |
 | Glacier Premium Precision design system | `docs/product/design/`, `src/ui/tokens.css`, `src/ui/` | `src/ui/ui-tokens.test.tsx`, `src/App.test.tsx`, `e2e/runtime-fleet.spec.ts`, `e2e/runtime-work-board.spec.ts`, `npm run check:repo`, `npm run check:quick`, `npm run check:e2e` |
 | Commit message convention | `.githooks/commit-msg`, `scripts/check-commit-message.mjs`, `scripts/check-commit-message.test.mjs` | `npm run check:commit-message`, `npm run setup:git-hooks` |
-| Repo context and docs | `AGENTS.md`, `README.md`, `docs/product/ui-design.md`, `docs/product/design/`, `docs/product/auth-and-access-spec.md`, `docs/product/operation-job-runner-spec.md`, `docs/product/notification-spec.md` | `npm run check:repo` |
+| Repo context and docs | `AGENTS.md`, `README.md`, `docs/product/ui-design.md`, `docs/product/design/`, `docs/product/auth-and-access-spec.md`, `docs/product/cli-device-capability-spec.md`, `docs/product/operation-job-runner-spec.md`, `docs/product/notification-spec.md` | `npm run check:repo` |
 
 When a user points out a missed behavior or review gap, decide whether it should become:
 
@@ -176,6 +179,7 @@ Current harness scripts:
 | `npm run db:up` | Start local Postgres through Docker Compose. | Before local backend DB development or manual migration checks. |
 | `npm run db:migrate` | Apply pending Postgres migrations to `DATABASE_URL`, defaulting to local compose Postgres. | Schema changes, local DB setup, or backend service development. |
 | `npm run check:commit-message` | Unit-check the commit message validator used by `.githooks/commit-msg`. | Commit convention, git hook, repo workflow, or package script changes. |
+| `npm run check:cli` | Deterministic local `lorume` CLI command and safety checks. | CLI command contract, file-copy safety, connector context, or package `bin` changes. |
 | `npm run check:repo` | Required source-of-truth paths and local Markdown links. | Docs, assets, agent context, or product spec changes. |
 | `npm run check:backend:standalone` | Standalone backend HTTP and WebSocket smoke tests. | Backend server composition, local backend entrypoint, or server lifecycle changes. |
 | `npm run check:db` | Starts local Postgres, runs migration/repository integration tests against temporary databases, and drops them. | Database schema, migration runner, Postgres repository, Docker Compose, or Postgres dependency changes. |

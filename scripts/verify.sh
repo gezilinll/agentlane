@@ -14,6 +14,7 @@ run_package_script() {
 
 run_package_script check:repo
 run_package_script check:commit-message
+run_package_script check:cli
 run_package_script check:db
 run_package_script check:backend
 run_package_script check:quick

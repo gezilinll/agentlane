@@ -93,6 +93,7 @@ The first product design package is available here:
 - [Runtime Work State Spec](docs/product/runtime-work-state-probe.md)
 - [Runtime Listening Acceptance Spec](docs/product/runtime-listening-acceptance-spec.md)
 - [Backend Service Spec](docs/product/backend-service-spec.md)
+- [CLI Device Capability Spec](docs/product/cli-device-capability-spec.md)
 - [Notification Spec](docs/product/notification-spec.md)
 - [Agent Network Runtime Panorama](docs/product/agent-network-runtime-panorama.png)
 - [Agent Network Build Object Map](docs/product/agent-network-build-objects.png)
