@@ -1197,8 +1197,8 @@ h1 {
 .workBoardGrid {
   align-items: start;
   display: grid;
-  gap: 14px;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 360px);
   min-width: 0;
 }
 
@@ -1254,57 +1254,63 @@ h1 {
 
 .workBoardMain {
   display: grid;
-  gap: 10px;
+  gap: 14px;
   min-width: 0;
 }
 
 .boardResultMeta {
   align-items: center;
+  background: var(--lorume-color-surface);
+  border: var(--lorume-border-hairline);
+  border-radius: var(--lorume-radius-lg);
+  box-shadow: var(--lorume-shadow-subtle);
   color: var(--lorume-color-muted);
   display: flex;
   font-size: 13px;
   gap: 12px;
   justify-content: space-between;
   min-width: 0;
+  padding: 10px 12px 10px 14px;
 }
 
 .workBoardLanes {
   display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   min-width: 0;
-  overflow: hidden;
 }
 
 .workLane {
   background: var(--lorume-color-surface);
-  border: var(--lorume-border-thin);
-  border-radius: var(--lorume-radius-none);
+  border: var(--lorume-border-hairline);
+  border-radius: var(--lorume-radius-lg);
+  box-shadow: var(--lorume-shadow-subtle);
   min-width: 0;
   overflow: hidden;
 }
 
 .workLaneHeader {
   align-items: center;
-  background: var(--lorume-color-surface-hover);
-  border-bottom: var(--lorume-border-thin);
+  background: color-mix(in srgb, var(--lorume-color-surface) 84%, var(--lorume-color-bg));
+  border-bottom: var(--lorume-border-hairline);
   display: flex;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: 13px 14px;
 }
 
 .workLaneHeader h2 {
   color: var(--lorume-color-ink);
   font-family: var(--font-sans);
   font-size: 15px;
+  font-weight: 800;
   margin: 0;
 }
 
 .workLaneHeader span {
-  background: var(--lorume-color-paper);
-  border: 2px solid var(--lorume-color-line);
-  border-radius: var(--lorume-radius-none);
-  color: var(--lorume-color-ink);
+  background: color-mix(in srgb, var(--lorume-color-action) 8%, var(--lorume-color-paper));
+  border: 1px solid color-mix(in srgb, var(--lorume-color-action) 20%, var(--lorume-color-line));
+  border-radius: var(--lorume-radius-pill);
+  color: var(--lorume-color-action);
   font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 800;
@@ -1315,31 +1321,37 @@ h1 {
 
 .workLaneItems {
   display: grid;
-  gap: 10px;
-  min-height: 180px;
+  align-content: start;
+  gap: 12px;
+  min-height: 220px;
   min-width: 0;
-  padding: 10px;
+  padding: 12px;
 }
 
 .workCard {
-  background: var(--lorume-color-field);
-  border: var(--lorume-border-thin);
-  border-radius: var(--lorume-radius-none);
+  background: color-mix(in srgb, var(--lorume-color-paper) 86%, var(--lorume-color-bg));
+  border: var(--lorume-border-hairline);
+  border-radius: var(--lorume-radius-md);
   color: var(--lorume-color-ink);
   display: grid;
   gap: 8px;
   min-width: 0;
   overflow: hidden;
-  padding: 10px;
+  padding: 12px;
   text-align: left;
+  transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
   width: 100%;
 }
 
 .workCard:hover,
 .workCardActive {
-  background: var(--lorume-color-surface-active);
-  border-color: var(--lorume-color-line);
-  box-shadow: var(--lorume-shadow-small);
+  background: var(--lorume-color-paper);
+  border-color: color-mix(in srgb, var(--lorume-color-action) 30%, var(--lorume-color-line));
+  box-shadow: var(--lorume-shadow-subtle);
+}
+
+.workCard:hover {
+  transform: translateY(-1px);
 }
 
 .workCardTopline {
@@ -1351,7 +1363,6 @@ h1 {
 }
 
 .workCard strong,
-.workCard small,
 .workCardMeta {
   display: block;
   max-width: 100%;
@@ -1363,14 +1374,28 @@ h1 {
 
 .workCard strong {
   font-family: var(--font-sans);
-  font-size: 17px;
-  line-height: 1.25;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.35;
 }
 
-.workCard small,
+.workCard > small {
+  color: var(--lorume-color-muted);
+  display: -webkit-box;
+  font-size: 12px;
+  line-height: 1.45;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .workCardMeta {
   color: var(--lorume-color-muted);
   font-size: 12px;
+  line-height: 1.45;
 }
 
 .emptyLane {
@@ -1382,8 +1407,8 @@ h1 {
 
 .loadMoreButton {
   background: var(--lorume-color-paper);
-  border: var(--lorume-border-thin);
-  border-radius: var(--lorume-radius-none);
+  border: var(--lorume-border-hairline);
+  border-radius: var(--lorume-radius-pill);
   color: var(--lorume-color-ink);
   font-family: var(--font-sans);
   font-weight: 700;
@@ -1393,8 +1418,8 @@ h1 {
 }
 
 .loadMoreButton:hover {
-  background: var(--lorume-color-yellow);
-  border-color: var(--lorume-color-line);
+  background: color-mix(in srgb, var(--lorume-color-action) 6%, var(--lorume-color-paper));
+  border-color: color-mix(in srgb, var(--lorume-color-action) 24%, var(--lorume-color-line));
 }
 
 .loadMoreButton:disabled {
